@@ -1,1 +1,3 @@
-# crisp
+# Crisp
+
+a language experiment
