@@ -17,6 +17,7 @@ const (
 	// Whitespace
 	NEWLINE
 	INDENT // tabs are the only valid indent characters
+	DEDENT
 	EOF
 
 	// Identifiers and ints
@@ -43,6 +44,7 @@ const (
 	LTE   // <=
 	GTE   // >=
 	EQUAL // ==
+	NEQ   // !=
 
 	// Delimiters
 	LPAREN   // (
@@ -70,6 +72,7 @@ func GetOperators() []Token {
 		{LTE, strings.TrimSpace("          <=    ")},
 		{GTE, strings.TrimSpace("          >=    ")},
 		{EQUAL, strings.TrimSpace("        ==    ")},
+		{NEQ, strings.TrimSpace("          !=    ")},
 		{LT, strings.TrimSpace("           <     ")},
 		{GT, strings.TrimSpace("           >     ")},
 

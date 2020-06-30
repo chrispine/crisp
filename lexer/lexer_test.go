@@ -14,23 +14,23 @@ foo = x ->
 
 module export let case [{}]
 
-a|日本語&c<=!d<>=> == ,:;`
+a|日本語&c<=!d<>=> !=== ,:;`
 
 	tests := []struct {
 		expectedType    token.TokenType
 		expectedLiteral string
 	}{
-		{token.NEWLINE, "\n"},
 		{token.ID, "foo"},
 		{token.PATMAT, "="},
 		{token.ID, "x"},
 		{token.ARROW, "->"},
 		{token.NEWLINE, "\n"},
-		{token.INDENT, "\t"},
+		{token.INDENT, "|->"},
 		{token.ID, "x"},
 		{token.PLUS, "+"},
 		{token.INT, "1"},
 		{token.NEWLINE, "\n"},
+		{token.DEDENT, "<-|"},
 
 		{token.NEWLINE, "\n"},
 		{token.LPAREN, "("},
@@ -75,6 +75,7 @@ a|日本語&c<=!d<>=> == ,:;`
 		{token.LT, "<"},
 		{token.GTE, ">="},
 		{token.GT, ">"},
+		{token.NEQ, "!="},
 		{token.EQUAL, "=="},
 		{token.COMMA, ","},
 		{token.COLON, ":"},
