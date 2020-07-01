@@ -14,6 +14,8 @@ type Token struct {
 const (
 	ILLEGAL TokenType = iota
 
+	EXPR_BLOCK // virtual token the parser needs; lexer does not emit this
+
 	// Whitespace
 	NEWLINE
 	INDENT // tabs are the only valid indent characters
@@ -25,6 +27,8 @@ const (
 	INT
 
 	// Operators
+	TBLOCK // (*)
+	LBLOCK // [*]
 	PATMAT // =
 	ARROW  // ->
 	COLON  // :
@@ -55,6 +59,7 @@ const (
 	RBRACE   // }
 
 	DOT       // .
+	AT        // @
 	COMMA     // ,
 	SEMICOLON // ;
 
@@ -63,6 +68,8 @@ const (
 	CASE
 	MODULE
 	EXPORT
+	TRUE
+	FALSE
 )
 
 // Note that the order of these is significant:
@@ -90,6 +97,8 @@ func GetOperators() []Token {
 		{OR, strings.TrimSpace("           |     ")},
 		{NOT, strings.TrimSpace("          !     ")},
 
+		{TBLOCK, strings.TrimSpace("      (*)    ")},
+		{LBLOCK, strings.TrimSpace("      [*]    ")},
 		{LPAREN, strings.TrimSpace("      (      ")},
 		{RPAREN, strings.TrimSpace("        )    ")},
 		{LBRACKET, strings.TrimSpace("    [      ")},
@@ -98,6 +107,7 @@ func GetOperators() []Token {
 		{RBRACE, strings.TrimSpace("        }    ")},
 
 		{DOT, strings.TrimSpace("          .     ")},
+		{AT, strings.TrimSpace("           @     ")},
 		{COMMA, strings.TrimSpace("        ,     ")},
 		{SEMICOLON, strings.TrimSpace("    ;     ")},
 	}
@@ -108,6 +118,8 @@ var keywords = map[string]TokenType{
 	"case":   CASE,
 	"module": MODULE,
 	"export": EXPORT,
+	"true":   TRUE,
+	"false":  FALSE,
 }
 
 func LookupID(id string) TokenType {
