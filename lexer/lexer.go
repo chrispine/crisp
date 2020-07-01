@@ -46,16 +46,16 @@ func (l *Lexer) NextToken() token.Token {
 
 		switch {
 		case delta == 1:
-			tok = newToken(token.INDENT, "|->")
+			tok = newToken(token.INDENT, "« -> »")
 			l.indentation++
 			return tok
 		case delta == -1:
-			tok = newToken(token.DEDENT, "<-|")
+			tok = newToken(token.DEDENT, "« <- »")
 			l.indentation--
 			return tok
 		case delta > 1 || delta < -1:
 			// we only allow increasing or decreasing indentation levels by 1
-			tok = newToken(token.ILLEGAL, "INDENT "+strconv.Itoa(delta))
+			tok = newToken(token.ILLEGAL, "«INDENT "+strconv.Itoa(delta)+"»")
 			return tok
 		}
 		// If we got here, the indendation level didn't change, so carry on.
@@ -65,7 +65,7 @@ func (l *Lexer) NextToken() token.Token {
 	l.consumeComment()
 
 	if l.ch == 0 {
-		tok.Literal = ""
+		tok.Literal = "«EOF»"
 		tok.Type = token.EOF
 		l.readRune()
 		return tok

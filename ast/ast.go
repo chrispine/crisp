@@ -3,13 +3,14 @@ package ast
 import (
 	"bytes"
 	"crisp/token"
+	"reflect"
 )
 
 /*
 
 Notes:
 
-* Productions preceded by '*' are abstract,
+* Productions preceded by '☉' are abstract,
   and thus do not appear in the AST.
 
 * ListBlocks are parsed as nested ConsBlock nodes.
@@ -25,7 +26,7 @@ Program ->
 // block elements
 
 
-*DeclBlock ->
+☉DeclBlock ->
 	PatMatBlock
 	FuncDeclBlock
 
@@ -35,7 +36,7 @@ PatMatBlock ->
 FuncDeclBlock ->
 	ID  (LvalAtom)*  FuncBlock              // TODO: sugar for currying and 'let'
 
-*ExprBlock ->
+☉ExprBlock ->
 	JustExprBlock
 	LetBlock
 	FuncBlock
@@ -62,33 +63,18 @@ ListBlock ->
 // inline elements
 
 
-*Expr ->
+☉Expr ->
 	Atom
 	UnopExpr
 	BinopExpr
 	FuncExpr
 
-*LvalAtom ->
-	ID
-	Int
-	Bool
-	LvalTuple
-	LvalList
-
-*Atom ->
+☉Atom ->
 	ID
 	Int
 	Bool
 	Tuple
 	List
-
-LvalTuple ->
-	'('  ')'
-	'('  LvalAtom  (','  LvalAtom)*  ')'
-
-LvalList ->
-	'['  ']'
-	'['  LvalAtom  (','  LvalAtom)*  (';'  LvalAtom)?  ']'
 
 Tuple ->
 	'('  ')'
@@ -106,6 +92,26 @@ BinopExpr ->
 
 FuncExpr ->
 	LvalAtom  '->'  Expr
+
+
+// lval elements
+
+
+☉LvalAtom ->
+	ID
+	Int
+	Bool
+	LvalTuple
+	LvalList
+
+LvalTuple ->
+	'('  ')'
+	'('  LvalAtom  (','  LvalAtom)*  ')'
+
+LvalList ->
+	'['  ']'
+	'['  LvalAtom  (','  LvalAtom)*  (';'  LvalAtom)?  ']'
+
 
 
 */
@@ -325,7 +331,11 @@ type InlineTuple struct {
 func (it *InlineTuple) inlineNode()          {}
 func (it *InlineTuple) TokenLiteral() string { return it.Token.Literal }
 func (it *InlineTuple) String() string {
-	if len(it.Exprs) <= 0 {
+	if isNil(it) {
+		return "(☣ parser error: *InlineTuple was nil ☣)"
+	}
+
+	if isNil(it.Exprs) {
 		return "()"
 	}
 
@@ -355,11 +365,18 @@ func (ic *InlineCons) TokenLiteral() string { return ic.Token.Literal }
 func (ic *InlineCons) String() string {
 	var out bytes.Buffer
 
-	out.WriteString("[")
-	out.WriteString(ic.Head.String())
-	out.WriteString("; ")
-	out.WriteString(ic.Tail.String())
-	out.WriteString("]")
+	if isNil(ic) {
+		out.WriteString("[]")
+	} else {
+		out.WriteString("[")
+		out.WriteString(ic.Head.String())
+
+		if !isNil(ic.Tail) {
+			out.WriteString("; ")
+			out.WriteString(ic.Tail.String())
+		}
+		out.WriteString("]")
+	}
 
 	return out.String()
 }
@@ -403,4 +420,8 @@ func (ibe *InlineBinopExpr) String() string {
 	out.WriteString(")")
 
 	return out.String()
+}
+
+func isNil(i interface{}) bool {
+	return i == nil || reflect.ValueOf(i).IsNil()
 }
