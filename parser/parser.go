@@ -320,7 +320,24 @@ func (p *Parser) ParseExpr() ast.Inline { // TODO: don't export this
 }
 func (p *Parser) parseExpression(precedence int) ast.Inline {
 	if precedence >= len(binops) {
-		return p.parseAtom()
+		atom := p.parseAtom()
+
+		if p.curToken.Type == token.ARROW {
+			tok := p.curToken
+			p.expectToken(token.ARROW)
+
+			if !atom.IsLval() {
+				p.error(fmt.Sprintf("atom %v is not an l-value", atom))
+			}
+
+			return &ast.InlineFunc{
+				Token: tok,
+				Lval:  atom,
+				Expr:  p.ParseExpr(), // note that this resets the precedence; this is why token.ARROW is treated specially
+			}
+		}
+
+		return atom
 	}
 
 	higherPrecAST := p.parseExpression(precedence + 1)
@@ -342,11 +359,6 @@ func (p *Parser) parseExpression(precedence int) ast.Inline {
 			RExpr: samePrecAST,
 		}
 	}
-
-	// switch p.curToken.Type {
-	// case token.ID:
-	// 	asdf
-	// }
 
 	return higherPrecAST
 }

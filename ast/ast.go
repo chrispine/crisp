@@ -137,7 +137,7 @@ type Block interface {
 // All inline nodes implement this
 type Inline interface {
 	Node
-	inlineNode()
+	IsLval() bool
 }
 
 type Program struct {
@@ -289,7 +289,7 @@ type InlineID struct {
 	Name  string
 }
 
-func (ii *InlineID) inlineNode()          {}
+func (ii *InlineID) IsLval() bool         { return true }
 func (ii *InlineID) TokenLiteral() string { return ii.Token.Literal }
 func (ii *InlineID) String() string       { return ii.Name }
 
@@ -298,7 +298,7 @@ type InlineInt struct {
 	Value int
 }
 
-func (ii *InlineInt) inlineNode()          {}
+func (ii *InlineInt) IsLval() bool         { return true }
 func (ii *InlineInt) TokenLiteral() string { return ii.Token.Literal }
 func (ii *InlineInt) String() string       { return ii.Token.Literal }
 
@@ -307,7 +307,7 @@ type InlineBool struct {
 	Value bool
 }
 
-func (ib *InlineBool) inlineNode()          {}
+func (ib *InlineBool) IsLval() bool         { return true }
 func (ib *InlineBool) TokenLiteral() string { return ib.Token.Literal }
 func (ib *InlineBool) String() string       { return ib.Token.Literal }
 
@@ -317,7 +317,7 @@ type InlineFunc struct {
 	Expr  Inline
 }
 
-func (iFunc *InlineFunc) inlineNode()          {}
+func (iFunc *InlineFunc) IsLval() bool         { return false }
 func (iFunc *InlineFunc) TokenLiteral() string { return iFunc.Token.Literal }
 func (iFunc *InlineFunc) String() string {
 	var out bytes.Buffer
@@ -334,7 +334,15 @@ type InlineTuple struct {
 	Exprs []Inline
 }
 
-func (it *InlineTuple) inlineNode()          {}
+func (it *InlineTuple) IsLval() bool {
+	for _, expr := range it.Exprs {
+		if !expr.IsLval() {
+			return false
+		}
+	}
+
+	return true
+}
 func (it *InlineTuple) TokenLiteral() string { return it.Token.Literal }
 func (it *InlineTuple) String() string {
 	if isNil(it) {
@@ -366,7 +374,7 @@ type InlineCons struct {
 	Tail  Inline
 }
 
-func (ic *InlineCons) inlineNode()          {}
+func (ic *InlineCons) IsLval() bool         { return ic.Head.IsLval() && (isNil(ic.Tail) || ic.Tail.IsLval()) }
 func (ic *InlineCons) TokenLiteral() string { return ic.Token.Literal }
 func (ic *InlineCons) String() string {
 	var out bytes.Buffer
@@ -392,7 +400,7 @@ type InlineUnopExpr struct {
 	Expr  Inline
 }
 
-func (iue *InlineUnopExpr) inlineNode()          {}
+func (iue *InlineUnopExpr) IsLval() bool         { return false }
 func (iue *InlineUnopExpr) Op() token.TokenType  { return iue.Token.Type }
 func (iue *InlineUnopExpr) TokenLiteral() string { return iue.Token.Literal }
 func (iue *InlineUnopExpr) String() string {
@@ -413,7 +421,7 @@ type InlineBinopExpr struct {
 	RExpr Inline
 }
 
-func (ibe *InlineBinopExpr) inlineNode()          {}
+func (ibe *InlineBinopExpr) IsLval() bool         { return false }
 func (ibe *InlineBinopExpr) Op() token.TokenType  { return ibe.Token.Type }
 func (ibe *InlineBinopExpr) TokenLiteral() string { return ibe.Token.Literal }
 func (ibe *InlineBinopExpr) String() string {

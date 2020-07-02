@@ -43,6 +43,12 @@ func TestExprs(t *testing.T) {
 		{"foo * bar^2^3", "(foo * (bar ^ (2 ^ 3)))"},
 		{"a&b|c", "((a & b) | c)"},
 		{"a|b&c", "(a | (b & c))"},
+
+		{"x -> 0", "x -> 0"},
+		{"x -> x+1", "x -> (x + 1)"},
+		{"(x) -> x+1", "x -> (x + 1)"},
+		{"(a,b) -> a+b", "(a, b) -> (a + b)"},
+		{"[a,b] -> a+b", "[a; [b]] -> (a + b)"},
 	}
 
 	for _, tt := range atomTests {
@@ -83,6 +89,11 @@ func TestExprs(t *testing.T) {
 			binopStr := ast.String()
 			if tt.value != binopStr {
 				t.Errorf("parsed wrong binop: expected %v, got %v", tt.value, binopStr)
+			}
+		case *ast.InlineFunc:
+			funcStr := ast.String()
+			if tt.value != funcStr {
+				t.Errorf("parsed wrong func: expected %v, got %v", tt.value, funcStr)
 			}
 		default:
 			t.Errorf("unrecognized expression %v of type %T", atomAST, atomAST)
