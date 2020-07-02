@@ -131,6 +131,26 @@ func (p *Parser) noPrefixParseFnError(t token.TokenType) {
 	p.error(fmt.Sprintf("no prefix parse function for %v found", t))
 }
 
+func (p *Parser) ParseProgram() *ast.Program {
+	program := &ast.Program{Expr: &ast.JustExprBlock{
+		Token: token.ExprBlock,
+		Expr:  p.parseExpr(),
+	}}
+
+	// scan for unconsumed tokens
+	tokens := []token.Token{}
+	for p.curToken.Type != token.EOF {
+		tokens = append(tokens, p.curToken)
+		p.nextToken()
+	}
+
+	if len(tokens) > 0 {
+		p.error(fmt.Sprintf("failed to consume all tokens; tokens remaining: %v", tokens))
+	}
+
+	return program
+}
+
 /*
 ☉Atom ->
 	ID
@@ -213,7 +233,7 @@ func (p *Parser) parseTuple() ast.Inline {
 	exprs := []ast.Inline{}
 Loop:
 	for {
-		exprs = append(exprs, p.ParseExpr())
+		exprs = append(exprs, p.parseExpr())
 
 		switch p.curToken.Type {
 		case token.RPAREN:
@@ -255,11 +275,11 @@ func (p *Parser) parseList() *ast.InlineCons {
 		return nil
 	}
 
-	lit.Head = p.ParseExpr()
+	lit.Head = p.parseExpr()
 
 	if p.curToken.Type == token.SEMICOLON {
 		p.expectToken(token.SEMICOLON)
-		lit.Tail = p.ParseExpr()
+		lit.Tail = p.parseExpr()
 		p.expectToken(token.RBRACKET)
 
 		return lit
@@ -315,7 +335,7 @@ ApplyExpr ->
 	Expr  '.'  Expr
 	Expr  Expr
 */
-func (p *Parser) ParseExpr() ast.Inline { // TODO: don't export this
+func (p *Parser) parseExpr() ast.Inline {
 	return p.parseExpression(0)
 }
 func (p *Parser) parseExpression(precedence int) ast.Inline {
@@ -333,7 +353,7 @@ func (p *Parser) parseExpression(precedence int) ast.Inline {
 			return &ast.InlineFunc{
 				Token: tok,
 				Lval:  atom,
-				Expr:  p.ParseExpr(), // note that this resets the precedence; this is why token.ARROW is treated specially
+				Expr:  p.parseExpr(), // note that this resets the precedence; this is why token.ARROW is treated specially
 			}
 		}
 

@@ -49,12 +49,15 @@ func TestExprs(t *testing.T) {
 		{"(x) -> x+1", "x -> (x + 1)"},
 		{"(a,b) -> a+b", "(a, b) -> (a + b)"},
 		{"[a,b] -> a+b", "[a; [b]] -> (a + b)"},
+
+		//{"foo bar", "(foo @ bar)"},
+		//{"inc(5) ", "(inc @ 5)"},
 	}
 
 	for _, tt := range atomTests {
 		l := lexer.New(tt.input)
 		p := New(l)
-		atomAST := p.ParseExpr()
+		atomAST := p.ParseProgram().Expr.(*ast.JustExprBlock).Expr
 		checkParserErrors(t, p)
 
 		switch ast := atomAST.(type) {
@@ -117,7 +120,7 @@ func TestUnopExprs(t *testing.T) {
 	for _, tt := range prefixTests {
 		l := lexer.New(tt.input)
 		p := New(l)
-		exprAST := p.ParseExpr()
+		exprAST := p.ParseProgram().Expr.(*ast.JustExprBlock).Expr
 		checkParserErrors(t, p)
 
 		switch ast := exprAST.(type) {

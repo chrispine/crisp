@@ -11,6 +11,11 @@ type Token struct {
 	Literal string
 }
 
+var ExprBlock = Token{
+	Type:    EXPR_BLOCK,
+	Literal: "«ExprBlock»",
+}
+
 const (
 	ILLEGAL TokenType = iota
 

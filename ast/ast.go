@@ -140,6 +140,7 @@ type Inline interface {
 	IsLval() bool
 }
 
+// neither Block nor Inline
 type Program struct {
 	Decls []Block
 	Expr  Block
