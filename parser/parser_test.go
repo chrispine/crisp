@@ -3,6 +3,7 @@ package parser
 import (
 	"crisp/ast"
 	"crisp/lexer"
+	"crisp/token"
 	"fmt"
 	"testing"
 )
@@ -12,11 +13,11 @@ func TestAtoms(t *testing.T) {
 		input string
 		value interface{}
 	}{
-		{"5", 5},
-		{"true", true},
+		{"5  ", 5},
+		{"true ", true},
 		{"false", false},
-		{"foo", "foo"},
-		{"()", "()"},
+		{"foo ", "foo"},
+		{"( ) ", "()"},
 		{"(bar)", "bar"},
 		{"(x, y)", "(x, y)"},
 		{"(5, ((true), abs))", "(5, (true, abs))"},
@@ -27,12 +28,18 @@ func TestAtoms(t *testing.T) {
 		{"[foo; bar]", "[foo; bar]"},
 		{"[1; [2; [3; []]]]", "[1; [2; [3]]]"},
 		{"[ 5, [[true], abs] ]", "[5; [[[true]; [abs]]]]"},
+		{"-90210", "(- 90210)"},
+		{"-bar  ", "(- bar)"},
+		{"!true ", "(! true)"},
+		{"!false", "(! false)"},
+		{"!foo  ", "(! foo)"},
 	}
 
 	for _, tt := range atomTests {
 		l := lexer.New(tt.input)
 		p := New(l)
-		atomAST := p.ParseAtom()
+		atomAST := p.ParseExpr()
+		checkParserErrors(t, p)
 
 		switch ast := atomAST.(type) {
 		case *ast.InlineInt:
@@ -57,11 +64,45 @@ func TestAtoms(t *testing.T) {
 			if tt.value != consStr {
 				t.Errorf("parsed wrong cons: expected %v, got %v", tt.value, consStr)
 			}
+		case *ast.InlineUnopExpr:
+			unopStr := ast.String()
+			if tt.value != unopStr {
+				t.Errorf("parsed wrong cons: expected %v, got %v", tt.value, unopStr)
+			}
 		default:
 			t.Errorf("unrecognized atom %v of type %T", atomAST, atomAST)
 		}
+	}
+}
 
+func TestUnopExprs(t *testing.T) {
+	prefixTests := []struct {
+		input string
+		op    token.TokenType
+		value interface{}
+	}{
+		{"-90210", token.MINUS, 90210},
+		{"-bar  ", token.MINUS, "bar"},
+		{"!true ", token.NOT, true},
+		{"!false", token.NOT, false},
+		{"!foo  ", token.NOT, "foo"},
+	}
+
+	for _, tt := range prefixTests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		exprAST := p.ParseExpr()
 		checkParserErrors(t, p)
+
+		switch ast := exprAST.(type) {
+		case *ast.InlineUnopExpr:
+			if tt.op != ast.Op() {
+				t.Errorf("parsed wrong unop operator: expected %v, got %v", tt.op, ast.Op())
+			}
+			testAtom(t, ast.Expr, tt.value)
+		default:
+			t.Errorf("unrecognized unop expr %v of type %T", exprAST, exprAST)
+		}
 	}
 }
 
@@ -69,12 +110,10 @@ func testAtom(t *testing.T, exp ast.Inline, expected interface{}) bool {
 	switch v := expected.(type) {
 	case int:
 		return testInlineInt(t, exp, v)
-	case int64:
-		return testInlineInt(t, exp, int(v))
-	case string:
-		return testInlineID(t, exp, v)
 	case bool:
 		return testInlineBool(t, exp, v)
+	case string:
+		return testInlineID(t, exp, v)
 	}
 	t.Errorf("type of exp not handled. got=%T", exp)
 	return false

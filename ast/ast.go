@@ -65,9 +65,9 @@ ListBlock ->
 
 ☉Expr ->
 	Atom
-	UnopExpr
 	BinopExpr
 	FuncExpr
+	ApplyExpr
 
 ☉Atom ->
 	ID
@@ -75,6 +75,7 @@ ListBlock ->
 	Bool
 	Tuple
 	List
+	UnopExpr
 
 Tuple ->
 	'('  ')'
@@ -85,13 +86,18 @@ List ->
 	'['  Expr  (','  Expr)*  (';'  Expr)?  ']'
 
 UnopExpr ->
-	[+-!]  Expr
+	[-!]  Atom
 
 BinopExpr ->
 	Expr  [+-*%/^&|.@]  Expr
 
 FuncExpr ->
 	LvalAtom  '->'  Expr
+
+ApplyExpr ->
+	Expr  '@'  Expr
+	Expr  '.'  Expr
+	Expr  Expr
 
 
 // lval elements
@@ -383,17 +389,17 @@ func (ic *InlineCons) String() string {
 
 type InlineUnopExpr struct {
 	Token token.Token // the unop token, e.g. !
-	Op    string
 	Expr  Inline
 }
 
 func (iue *InlineUnopExpr) inlineNode()          {}
+func (iue *InlineUnopExpr) Op() token.TokenType  { return iue.Token.Type }
 func (iue *InlineUnopExpr) TokenLiteral() string { return iue.Token.Literal }
 func (iue *InlineUnopExpr) String() string {
 	var out bytes.Buffer
 
 	out.WriteString("(")
-	out.WriteString(iue.Op)
+	out.WriteString(iue.Token.Literal)
 	out.WriteString(" ")
 	out.WriteString(iue.Expr.String())
 	out.WriteString(")")
@@ -404,18 +410,18 @@ func (iue *InlineUnopExpr) String() string {
 type InlineBinopExpr struct {
 	Token token.Token // the operator token, e.g. +
 	lExpr Inline
-	Op    string
 	rExpr Inline
 }
 
 func (ibe *InlineBinopExpr) inlineNode()          {}
+func (ibe *InlineBinopExpr) Op() token.TokenType  { return ibe.Token.Type }
 func (ibe *InlineBinopExpr) TokenLiteral() string { return ibe.Token.Literal }
 func (ibe *InlineBinopExpr) String() string {
 	var out bytes.Buffer
 
 	out.WriteString("(")
 	out.WriteString(ibe.lExpr.String())
-	out.WriteString(" " + ibe.Op + " ")
+	out.WriteString(" " + ibe.Token.Literal + " ")
 	out.WriteString(ibe.rExpr.String())
 	out.WriteString(")")
 

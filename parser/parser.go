@@ -9,6 +9,21 @@ import (
 	"strconv"
 )
 
+var unops = []token.TokenType{
+	token.MINUS, //  -
+	token.NOT,   //  !
+}
+
+/*
+(true ,   |   ||
+(true ,   &   &&
+(true ,   ==  !=
+(true ,   <   <=  >   >=
+(true ,   +   ++  -   --
+(true ,   *   **  /   //  %   %%
+(false,   ^   ^^
+*/
+
 type (
 	parseUnopFn  func() ast.Inline
 	parseBinopFn func(ast.Inline) ast.Inline
@@ -89,8 +104,9 @@ func (p *Parser) noPrefixParseFnError(t token.TokenType) {
 	Bool
 	Tuple
 	List
+	UnopExpr
 */
-func (p *Parser) ParseAtom() ast.Inline { // TODO: don't export this
+func (p *Parser) parseAtom() ast.Inline {
 	switch p.curToken.Type {
 	case token.ID:
 		return p.parseID()
@@ -104,9 +120,7 @@ func (p *Parser) ParseAtom() ast.Inline { // TODO: don't export this
 		return p.parseList()
 	}
 
-	p.error(fmt.Sprintf("failed to parse %v as atom", p.curToken))
-
-	return nil
+	return p.parseUnopExpr()
 }
 
 func (p *Parser) parseID() *ast.InlineID {
@@ -165,7 +179,7 @@ func (p *Parser) parseTuple() ast.Inline {
 	exprs := []ast.Inline{}
 Loop:
 	for {
-		exprs = append(exprs, p.parseExpr())
+		exprs = append(exprs, p.ParseExpr())
 
 		switch p.curToken.Type {
 		case token.RPAREN:
@@ -207,11 +221,11 @@ func (p *Parser) parseList() *ast.InlineCons {
 		return nil
 	}
 
-	lit.Head = p.parseExpr()
+	lit.Head = p.ParseExpr()
 
 	if p.curToken.Type == token.SEMICOLON {
 		p.expectToken(token.SEMICOLON)
-		lit.Tail = p.parseExpr()
+		lit.Tail = p.ParseExpr()
 		p.expectToken(token.RBRACKET)
 
 		return lit
@@ -230,26 +244,51 @@ func (p *Parser) parseList() *ast.InlineCons {
 }
 
 /*
-☉Expr ->
-	Atom
-	UnopExpr
-	BinopExpr
-	FuncExpr
+UnopExpr ->
+	[-!]  Atom
 */
-func (p *Parser) parseExpr() ast.Inline {
-	return p.ParseAtom()
+
+func (p *Parser) parseUnopExpr() *ast.InlineUnopExpr {
+	for _, op := range unops {
+		if p.curToken.Type == op {
+			lit := &ast.InlineUnopExpr{Token: p.curToken}
+			p.expectToken(op)
+			lit.Expr = p.parseAtom()
+
+			return lit
+		}
+	}
+
+	p.error(fmt.Sprintf("failed to parse %v as atom", p.curToken))
+	return nil
 }
 
 /*
+☉Expr ->
+	Atom
+	BinopExpr
+	FuncExpr
+	ApplyExpr
+*/
+func (p *Parser) ParseExpr() ast.Inline { // TODO: don't export this
+	return p.parseExpression(0)
+}
+func (p *Parser) parseExpression(precedence int) ast.Inline {
+	return p.parseAtom()
+}
 
-UnopExpr ->
-	[+-!]  Expr
+/*
 
 BinopExpr ->
 	Expr  [+-*%/^&|.@]  Expr
 
 FuncExpr ->
 	LvalAtom  '->'  Expr
+
+ApplyExpr ->
+	Expr  '@'  Expr
+	Expr  '.'  Expr
+	Expr  Expr
 
 */
 
