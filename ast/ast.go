@@ -409,8 +409,8 @@ func (iue *InlineUnopExpr) String() string {
 
 type InlineBinopExpr struct {
 	Token token.Token // the operator token, e.g. +
-	lExpr Inline
-	rExpr Inline
+	LExpr Inline
+	RExpr Inline
 }
 
 func (ibe *InlineBinopExpr) inlineNode()          {}
@@ -420,9 +420,9 @@ func (ibe *InlineBinopExpr) String() string {
 	var out bytes.Buffer
 
 	out.WriteString("(")
-	out.WriteString(ibe.lExpr.String())
+	out.WriteString(ibe.LExpr.String())
 	out.WriteString(" " + ibe.Token.Literal + " ")
-	out.WriteString(ibe.rExpr.String())
+	out.WriteString(ibe.RExpr.String())
 	out.WriteString(")")
 
 	return out.String()

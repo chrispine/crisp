@@ -33,9 +33,18 @@ const (
 	ARROW  // ->
 	COLON  // :
 
+	DBLPLUS  // ++
+	DBLMINUS // --
+	DBLMULT  // **
+	DBLDIV   // //
+	DBLMOD   // %%
+	DBLEXP   // ^^
+	DBLAND   // &&
+	DBLOR    // ||
+
 	PLUS  // +
 	MINUS // -
-	MULT  // +
+	MULT  // *
 	DIV   // /
 	MOD   // %
 	EXP   // ^
@@ -86,6 +95,15 @@ func GetOperators() []Token {
 		{PATMAT, strings.TrimSpace("       =     ")},
 		{ARROW, strings.TrimSpace("        ->    ")},
 		{COLON, strings.TrimSpace("        :     ")},
+
+		{DBLPLUS, strings.TrimSpace("      ++    ")},
+		{DBLMINUS, strings.TrimSpace("     --    ")},
+		{DBLMULT, strings.TrimSpace("      **    ")},
+		{DBLDIV, strings.TrimSpace("       //    ")},
+		{DBLMOD, strings.TrimSpace("       %%    ")},
+		{DBLEXP, strings.TrimSpace("       ^^    ")},
+		{DBLAND, strings.TrimSpace("       &&    ")},
+		{DBLOR, strings.TrimSpace("        ||    ")},
 
 		{PLUS, strings.TrimSpace("         +     ")},
 		{MINUS, strings.TrimSpace("        -     ")},

@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestAtoms(t *testing.T) {
+func TestExprs(t *testing.T) {
 	atomTests := []struct {
 		input string
 		value interface{}
@@ -28,11 +28,21 @@ func TestAtoms(t *testing.T) {
 		{"[foo; bar]", "[foo; bar]"},
 		{"[1; [2; [3; []]]]", "[1; [2; [3]]]"},
 		{"[ 5, [[true], abs] ]", "[5; [[[true]; [abs]]]]"},
+
 		{"-90210", "(- 90210)"},
 		{"-bar  ", "(- bar)"},
 		{"!true ", "(! true)"},
 		{"!false", "(! false)"},
 		{"!foo  ", "(! foo)"},
+
+		{"x+1", "(x + 1)"},
+		{"a+b+c", "((a + b) + c)"},
+		{"a+b*c", "(a + (b * c))"},
+		{"a*b+c", "((a * b) + c)"},
+		{"foo * bar^2", "(foo * (bar ^ 2))"},
+		{"foo * bar^2^3", "(foo * (bar ^ (2 ^ 3)))"},
+		{"a&b|c", "((a & b) | c)"},
+		{"a|b&c", "(a | (b & c))"},
 	}
 
 	for _, tt := range atomTests {
@@ -67,10 +77,15 @@ func TestAtoms(t *testing.T) {
 		case *ast.InlineUnopExpr:
 			unopStr := ast.String()
 			if tt.value != unopStr {
-				t.Errorf("parsed wrong cons: expected %v, got %v", tt.value, unopStr)
+				t.Errorf("parsed wrong unop: expected %v, got %v", tt.value, unopStr)
+			}
+		case *ast.InlineBinopExpr:
+			binopStr := ast.String()
+			if tt.value != binopStr {
+				t.Errorf("parsed wrong binop: expected %v, got %v", tt.value, binopStr)
 			}
 		default:
-			t.Errorf("unrecognized atom %v of type %T", atomAST, atomAST)
+			t.Errorf("unrecognized expression %v of type %T", atomAST, atomAST)
 		}
 	}
 }

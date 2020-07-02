@@ -14,20 +14,60 @@ var unops = []token.TokenType{
 	token.NOT,   //  !
 }
 
-/*
-(true ,   |   ||
-(true ,   &   &&
-(true ,   ==  !=
-(true ,   <   <=  >   >=
-(true ,   +   ++  -   --
-(true ,   *   **  /   //  %   %%
-(false,   ^   ^^
-*/
+type BinopPrecList struct {
+	lAssoc bool
+	ops    []token.TokenType
+}
 
-type (
-	parseUnopFn  func() ast.Inline
-	parseBinopFn func(ast.Inline) ast.Inline
-)
+func (bpl *BinopPrecList) Contains(tok token.TokenType) bool {
+	for _, tokenType := range bpl.ops {
+		if tok == tokenType {
+			return true
+		}
+	}
+
+	return false
+}
+
+// NOTE: this holds the binops *in order of precedence*
+var binops = []BinopPrecList{
+	BinopPrecList{lAssoc: true, ops: []token.TokenType{ //  |  ||
+		token.OR,
+		token.DBLOR,
+	}},
+	BinopPrecList{lAssoc: true, ops: []token.TokenType{ //  &  &&
+		token.AND,
+		token.DBLAND,
+	}},
+	BinopPrecList{lAssoc: true, ops: []token.TokenType{ //  ==  !=
+		token.EQUAL,
+		token.NEQ,
+	}},
+	BinopPrecList{lAssoc: true, ops: []token.TokenType{ //  <  <=  >  >=
+		token.LT,
+		token.LTE,
+		token.GT,
+		token.GTE,
+	}},
+	BinopPrecList{lAssoc: true, ops: []token.TokenType{ //  +  ++  -  --
+		token.PLUS,
+		token.DBLPLUS,
+		token.MINUS,
+		token.DBLMINUS,
+	}},
+	BinopPrecList{lAssoc: true, ops: []token.TokenType{ //  *  **  /  //  %  %%
+		token.MULT,
+		token.DBLMULT,
+		token.DIV,
+		token.DBLDIV,
+		token.MOD,
+		token.DBLMOD,
+	}},
+	BinopPrecList{lAssoc: false, ops: []token.TokenType{ //  ^  ^^
+		token.EXP,
+		token.DBLEXP,
+	}},
+}
 
 type Parser struct {
 	l      *lexer.Lexer
@@ -37,9 +77,6 @@ type Parser struct {
 
 	curToken  token.Token
 	peekToken token.Token
-
-	parseUnopFns  map[token.TokenType]parseUnopFn
-	parseBinopFns map[token.TokenType]parseBinopFn
 }
 
 func New(l *lexer.Lexer) *Parser {
@@ -50,9 +87,6 @@ func New(l *lexer.Lexer) *Parser {
 			Token: token.Token{Type: token.LPAREN, Literal: "("},
 		},
 	}
-
-	p.parseUnopFns = make(map[token.TokenType]parseUnopFn)
-	p.parseBinopFns = make(map[token.TokenType]parseBinopFn)
 
 	// Read two tokens, so curToken and peekToken are both set
 	p.nextToken()
@@ -269,18 +303,9 @@ func (p *Parser) parseUnopExpr() *ast.InlineUnopExpr {
 	BinopExpr
 	FuncExpr
 	ApplyExpr
-*/
-func (p *Parser) ParseExpr() ast.Inline { // TODO: don't export this
-	return p.parseExpression(0)
-}
-func (p *Parser) parseExpression(precedence int) ast.Inline {
-	return p.parseAtom()
-}
-
-/*
 
 BinopExpr ->
-	Expr  [+-*%/^&|.@]  Expr
+	Expr  [+-*%/^&|]  Expr
 
 FuncExpr ->
 	LvalAtom  '->'  Expr
@@ -289,15 +314,60 @@ ApplyExpr ->
 	Expr  '@'  Expr
 	Expr  '.'  Expr
 	Expr  Expr
-
 */
+func (p *Parser) ParseExpr() ast.Inline { // TODO: don't export this
+	return p.parseExpression(0)
+}
+func (p *Parser) parseExpression(precedence int) ast.Inline {
+	if precedence >= len(binops) {
+		return p.parseAtom()
+	}
 
-func (p *Parser) registerUnop(tokenType token.TokenType, fn parseUnopFn) {
-	p.parseUnopFns[tokenType] = fn
+	higherPrecAST := p.parseExpression(precedence + 1)
+
+	if binops[precedence].Contains(p.curToken.Type) {
+		tok := p.curToken
+
+		if binops[precedence].lAssoc {
+			return p.parseExpressionLeft(precedence, higherPrecAST)
+		}
+
+		p.nextToken()
+
+		samePrecAST := p.parseExpression(precedence)
+
+		return &ast.InlineBinopExpr{
+			Token: tok,
+			LExpr: higherPrecAST,
+			RExpr: samePrecAST,
+		}
+	}
+
+	// switch p.curToken.Type {
+	// case token.ID:
+	// 	asdf
+	// }
+
+	return higherPrecAST
 }
 
-func (p *Parser) registerBinop(tokenType token.TokenType, fn parseBinopFn) {
-	p.parseBinopFns[tokenType] = fn
+func (p *Parser) parseExpressionLeft(precedence int, prevAST ast.Inline) ast.Inline {
+	tok := p.curToken
+	p.nextToken()
+
+	higherPrecAST := p.parseExpression(precedence + 1)
+
+	samePrecAST := &ast.InlineBinopExpr{
+		Token: tok,
+		LExpr: prevAST,
+		RExpr: higherPrecAST,
+	}
+
+	if binops[precedence].Contains(p.curToken.Type) {
+		return p.parseExpressionLeft(precedence, samePrecAST)
+	}
+
+	return samePrecAST
 }
 
 func isNil(i interface{}) bool {
