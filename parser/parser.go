@@ -126,13 +126,14 @@ func calculateEndOfExprMap() map[token.TokenType]bool {
 		eoes[i] = false
 	}
 
-	// then set all of the binary ops to true
+	// then set these to true
 	eoes[token.EOF] = true
 	eoes[token.COMMA] = true
 	eoes[token.SEMICOLON] = true
 	eoes[token.RPAREN] = true
 	eoes[token.RBRACKET] = true
 	eoes[token.RBRACE] = true
+	// TODO: also add NEWLINE? DEDENT? INDENT??
 
 	return eoes
 }
@@ -174,11 +175,17 @@ func (p *Parser) noPrefixParseFnError(t token.TokenType) {
 	p.error(fmt.Sprintf("no prefix parse function for %v found", t))
 }
 
+/*
+Program ->
+	DeclBlock*  ExprBlock
+*/
 func (p *Parser) ParseProgram() *ast.Program {
-	program := &ast.Program{Expr: &ast.JustExprBlock{
-		Token: token.ExprBlock,
-		Expr:  p.parseExpr(),
-	}}
+	atom, decls := p.parseDecls()
+
+	program := &ast.Program{
+		Decls: decls,
+		Expr:  p.parseExprBlock(atom),
+	}
 
 	// scan for unconsumed tokens
 	tokens := []token.Token{}
@@ -193,6 +200,84 @@ func (p *Parser) ParseProgram() *ast.Program {
 
 	return program
 }
+
+func (p *Parser) parseDecls() (ast.Inline, []ast.Block) {
+	decls := []ast.Block{}
+	atom := p.parseAtom()
+
+	// for p.curToken.Type == token.PATMAT {
+	// 	var decl ast.Block
+
+	// 	atom, decl = p.parseDeclBlock(atom)
+	// 	decls = append(decls, decl)
+	// }
+
+	return atom, decls
+}
+
+/* TODO: this
+☉DeclBlock ->
+	PatMatBlock
+	FuncDeclBlock
+*/
+
+/* TODO: Is it possible to parse this without infinite token look-ahead?
+FuncDeclBlock ->
+	ID  (LvalAtom)*  FuncBlock              // TODO: sugar for currying and 'let'
+*/
+
+/* TODO: parse this
+PatMatBlock ->
+	LvalAtom  '='  ExprBlock
+*/
+
+/*
+☉ExprBlock ->
+	JustExprBlock
+	LetBlock
+	FuncBlock
+	TupleBlock
+	ListBlock
+*/
+func (p *Parser) parseExprBlock(atom ast.Inline) ast.Block {
+	// TODO: parse other block types
+	return p.parseJustExprBlock(atom)
+}
+
+/*
+JustExprBlock ->
+		Expr  '\n'                   // TODO: allow (by collapsing) multi-line expr
+*/
+func (p *Parser) parseJustExprBlock(atom ast.Inline) ast.Block {
+	lit := &ast.JustExprBlock{
+		Token: token.ExprBlockToken,
+		Expr:  p.parseExprRest(atom),
+	}
+
+	if p.curToken.Type != token.EOF {
+		p.expectToken(token.NEWLINE)
+	}
+
+	return lit
+}
+
+/* TODO: parse this
+LetBlock ->
+	'let'  '\n'  '|->'  DeclsAndExpr  '<-|'
+*/
+/* TODO: parse this
+FuncBlock ->
+	LvalAtom  '->'  ExprBlock
+	LvalAtom  '->'  '\n'  '|->'  DeclsAndExpr  '<-|'     // TODO: sugar for 'let'
+*/
+/* TODO: parse this
+TupleBlock ->
+	'(*)'  '\n'  '|->'  ExprBlock+  '<-|'
+*/
+/* TODO: parse this
+ListBlock ->
+	'[*]'  '\n'  '|->'  ExprBlock+  (';'  ExprBlock)?  '<-|'
+*/
 
 /*
 ☉Atom ->
@@ -381,10 +466,14 @@ ApplyExpr ->
 func (p *Parser) parseExpr() ast.Inline {
 	return p.parseExpression(0)
 }
+func (p *Parser) parseExprRest(atom ast.Inline) ast.Inline {
+	return p.parseExpressionRest(0, atom)
+}
 func (p *Parser) parseExpression(precedence int) ast.Inline {
+	return p.parseExpressionRest(precedence, p.parseAtom())
+}
+func (p *Parser) parseExpressionRest(precedence int, atom ast.Inline) ast.Inline {
 	if precedence >= len(binopPrecs) {
-		atom := p.parseAtom()
-
 		if p.curToken.Type == token.ARROW {
 			tok := p.curToken
 			p.expectToken(token.ARROW)
@@ -412,7 +501,7 @@ func (p *Parser) parseExpression(precedence int) ast.Inline {
 		return p.parseFuncsAndApplyExprs(atom)
 	}
 
-	higherPrecAST := p.parseExpression(precedence + 1)
+	higherPrecAST := p.parseExpressionRest(precedence+1, atom)
 
 	if binopPrecs[precedence].Contains(p.curToken.Type) {
 		tok := p.curToken
@@ -467,7 +556,7 @@ func (p *Parser) parseFuncsAndApplyExprs(prevAST ast.Inline) ast.Inline {
 	}
 
 	applyExpr := &ast.InlineBinopExpr{
-		Token: token.Token{Type: token.AT, Literal: "@"},
+		Token: token.AtToken,
 		LExpr: fn,
 		RExpr: arg,
 	}

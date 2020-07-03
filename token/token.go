@@ -11,9 +11,14 @@ type Token struct {
 	Literal string
 }
 
-var ExprBlock = Token{
+var ExprBlockToken = Token{
 	Type:    EXPR_BLOCK,
 	Literal: "«ExprBlock»",
+}
+
+var AtToken = Token{
+	Type:    AT,
+	Literal: "@",
 }
 
 const (
