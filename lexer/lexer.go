@@ -9,18 +9,87 @@ import (
 
 type Lexer struct {
 	input         string
-	position      int  // current position in input (points to current char)
-	readPosition  int  // current reading position in input (after current char)
-	ch            rune // current char under examination
-	atStartOfLine bool // current position is at beginning of line
-	indentation   int  // indentation depth of this line
+	position      int            // current position in input (points to current char)
+	readPosition  int            // current reading position in input (after current char)
+	ch            rune           // current char under examination
+	atStartOfLine bool           // current position is at beginning of line
+	indentation   int            // indentation depth of this line
+	blockLenStack []*token.Token // holds number of lines for each indentation level
+	allTokens     []*token.Token // holds all of the tokens; needed for calculating BLOCK_LEN tokens
+	nextTokenIdx  int
+	eofToken      *token.Token
 }
 
 func New(input string) *Lexer {
 	l := &Lexer{input: input}
 	l.readRune()
 	l.atStartOfLine = true
+	l.blockLenStack = []*token.Token{}
+	l.allTokens = []*token.Token{}
+
+	l.blockLenPush()
+
+	// Sadly, we have to get all of the tokens now, because the
+	// BLOCK_LEN tokens (which we absolutely need for the parser)
+	// do not hold correct values until the end of lexing.
+Loop:
+	for {
+		tok := l.nextToken()
+
+		switch tok.Type {
+		case token.EOF:
+			l.eofToken = tok
+
+			// remove last token if it was a NEWLINE
+			if l.allTokens[len(l.allTokens)-1].Type == token.NEWLINE {
+				l.allTokens = l.allTokens[:len(l.allTokens)-1]
+				// and because we did that, we need to decrement NumLines
+				l.blockLenStack[len(l.blockLenStack)-1].NumLines--
+			}
+			break Loop
+		case token.INDENT:
+			l.allTokens = append(l.allTokens, tok)
+			l.blockLenPush()
+		case token.DEDENT:
+			l.allTokens = append(l.allTokens, tok)
+			l.blockLenPop()
+		default:
+			l.allTokens = append(l.allTokens, tok)
+		}
+	}
+
 	return l
+}
+
+func (l *Lexer) NextToken() *token.Token {
+	if l.nextTokenIdx >= len(l.allTokens) {
+		return l.eofToken
+	}
+
+	tok := l.allTokens[l.nextTokenIdx]
+	l.nextTokenIdx++
+
+	return tok
+}
+
+func (l *Lexer) blockLenInc() {
+	l.blockLenStack[len(l.blockLenStack)-1].NumLines++
+}
+func (l *Lexer) blockLenPush() {
+	tok := &token.Token{
+		Type:     token.BLOCK_LEN,
+		Literal:  "«BLOCK_LEN»",
+		NumLines: 1,
+	}
+	l.blockLenStack = append(l.blockLenStack, tok)
+	l.allTokens = append(l.allTokens, tok)
+}
+func (l *Lexer) blockLenPop() {
+	// since we're dedenting, that last NEWLINE wasn't actually
+	// a new line, so we need to decrement NumLines first
+	l.blockLenStack[len(l.blockLenStack)-1].NumLines--
+
+	l.blockLenStack = l.blockLenStack[:len(l.blockLenStack)-1]
 }
 
 func (l *Lexer) readRune() {
@@ -36,8 +105,8 @@ func (l *Lexer) readRune() {
 	}
 }
 
-func (l *Lexer) NextToken() token.Token {
-	var tok token.Token
+func (l *Lexer) nextToken() *token.Token {
+	tok := &token.Token{}
 
 	if l.atStartOfLine {
 		newIndent := l.consumeIndentation()
@@ -46,6 +115,9 @@ func (l *Lexer) NextToken() token.Token {
 
 		switch {
 		case delta == 1:
+			// pop the last NEWLINE
+			l.allTokens = l.allTokens[:len(l.allTokens)-1]
+
 			tok = newToken(token.INDENT, "« -> »")
 			l.indentation++
 			return tok
@@ -72,16 +144,21 @@ func (l *Lexer) NextToken() token.Token {
 	}
 
 	if isNewline(l.ch) {
-		tok = newToken(token.NEWLINE, "\n")
-		l.atStartOfLine = true
 		l.readRune()
-		return tok
+
+		// make sure we never emit two NEWLINEs in a row, and never
+		// after DEDENT, as that implies NEWLINE
+		if l.allTokens[len(l.allTokens)-1].Type != token.NEWLINE && l.allTokens[len(l.allTokens)-1].Type != token.DEDENT {
+			tok = newToken(token.NEWLINE, "\n")
+			l.blockLenInc()
+			l.atStartOfLine = true
+			return tok
+		}
 	}
 
-	pTok := l.consumeOperatorOrRewind()
-	if pTok != nil {
-		tok = *pTok
-		return tok
+	maybeNilTok := l.consumeOperatorOrRewind()
+	if maybeNilTok != nil {
+		return maybeNilTok
 	}
 
 	if isLetter(l.ch) {
@@ -102,8 +179,8 @@ func (l *Lexer) NextToken() token.Token {
 	return tok
 }
 
-func newToken(tokenType token.TokenType, str string) token.Token {
-	return token.Token{Type: tokenType, Literal: str}
+func newToken(tokenType token.TokenType, str string) *token.Token {
+	return &token.Token{Type: tokenType, Literal: str}
 }
 
 func (l *Lexer) readIdentifier() string {
