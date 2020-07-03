@@ -2,8 +2,9 @@ package repl
 
 import (
 	"bufio"
+	"crisp/ast"
 	"crisp/lexer"
-	"crisp/token"
+	"crisp/parser"
 	"fmt"
 	"io"
 )
@@ -22,9 +23,17 @@ func Start(in io.Reader, out io.Writer) {
 
 		line := scanner.Text()
 		l := lexer.New(line)
+		p := parser.New(l)
+		exprAST := p.ParseProgram().Expr.(*ast.JustExprBlock).Expr
 
-		for tok := l.NextToken(); tok.Type != token.EOF; tok = l.NextToken() {
-			fmt.Fprintf(out, "%+v\n", tok)
+		// check for parse errors
+		errors := p.Errors()
+		if len(errors) > 0 {
+			for _, msg := range errors {
+				fmt.Fprintf(out, "   parser error: %q\n", msg)
+			}
 		}
+
+		fmt.Fprintf(out, "   %+v\n", exprAST)
 	}
 }
