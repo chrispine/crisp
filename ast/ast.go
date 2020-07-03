@@ -20,7 +20,10 @@ Notes:
 
 
 Program ->
-	DeclBlock*  ExprBlock
+	DeclsAndExpr
+
+DeclsAndExpr ->
+	«BLOCK_LEN»  DeclBlock*  ExprBlock
 
 
 // block elements
@@ -34,7 +37,7 @@ PatMatBlock ->
 	LvalAtom  '='  ExprBlock
 
 FuncDeclBlock ->
-	ID  (LvalAtom)*  FuncBlock              // TODO: sugar for currying and 'let'
+	ID  (LvalAtom)*  FuncBlock                   // sugar for currying and 'let'
 
 ☉ExprBlock ->
 	JustExprBlock
@@ -47,17 +50,17 @@ JustExprBlock ->
 		Expr  '\n'                   // TODO: allow (by collapsing) multi-line expr
 
 LetBlock ->
-	'let'  '\n'  '|->'  DeclsAndExpr  '<-|'
+	'let'  '|->'  DeclsAndExpr  '<-|'
 
 FuncBlock ->
 	LvalAtom  '->'  ExprBlock
-	LvalAtom  '->'  '\n'  '|->'  DeclsAndExpr  '<-|'     // TODO: sugar for 'let'
+	LvalAtom  '->'  |->'  DeclsAndExpr  '<-|'                  // sugar for 'let'
 
 TupleBlock ->
-	'(*)'  '\n'  '|->'  ExprBlock+  '<-|'
+	'(*)'  |->'  ExprBlock+  '<-|'
 
 ListBlock ->
-	'[*]'  '\n'  '|->'  ExprBlock+  (';'  ExprBlock)?  '<-|'
+	'[*]'  |->'  ExprBlock+  (';'  ExprBlock)?  '<-|'
 
 
 // inline elements

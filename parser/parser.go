@@ -77,8 +77,8 @@ type Parser struct {
 
 	unit *ast.InlineTuple
 
-	curToken  token.Token
-	peekToken token.Token
+	curToken  *token.Token
+	peekToken *token.Token
 }
 
 func New(l *lexer.Lexer) *Parser {
@@ -177,59 +177,77 @@ func (p *Parser) noPrefixParseFnError(t token.TokenType) {
 
 /*
 Program ->
-	DeclBlock*  ExprBlock
+	DeclsAndExpr
 */
 func (p *Parser) ParseProgram() *ast.Program {
-	atom, decls := p.parseDecls()
+	decls, expr := p.parseDeclsAndExpr()
 
 	program := &ast.Program{
 		Decls: decls,
-		Expr:  p.parseExprBlock(atom),
+		Expr:  expr,
 	}
 
 	// scan for unconsumed tokens
-	tokens := []token.Token{}
+	leftoverTokens := []*token.Token{}
 	for p.curToken.Type != token.EOF {
-		tokens = append(tokens, p.curToken)
+		leftoverTokens = append(leftoverTokens, p.curToken)
 		p.nextToken()
 	}
 
-	if len(tokens) > 0 {
-		p.error(fmt.Sprintf("failed to consume all tokens; tokens remaining: %v", tokens))
+	if len(leftoverTokens) > 0 {
+		p.error(fmt.Sprintf("failed to consume all tokens; tokens remaining: %v", leftoverTokens))
 	}
 
 	return program
 }
 
-func (p *Parser) parseDecls() (ast.Inline, []ast.Block) {
+/*
+DeclsAndExpr ->
+	«BLOCK_LEN»  DeclBlock*  ExprBlock
+*/
+func (p *Parser) parseDeclsAndExpr() ([]ast.Block, ast.Block) {
 	decls := []ast.Block{}
-	atom := p.parseAtom()
 
-	// for p.curToken.Type == token.PATMAT {
-	// 	var decl ast.Block
+	numDecls := p.curToken.NumLines - 1
+	p.expectToken(token.BLOCK_LEN)
 
-	// 	atom, decl = p.parseDeclBlock(atom)
-	// 	decls = append(decls, decl)
-	// }
+	for i := 0; i < numDecls; i++ {
+		decls = append(decls, p.parseDeclBlock())
+	}
 
-	return atom, decls
+	return decls, p.parseExprBlock()
 }
 
-/* TODO: this
+/*
 ☉DeclBlock ->
 	PatMatBlock
 	FuncDeclBlock
 */
+func (p *Parser) parseDeclBlock() ast.Block {
+	atom := p.parseAtom()
 
-/* TODO: Is it possible to parse this without infinite token look-ahead?
-FuncDeclBlock ->
-	ID  (LvalAtom)*  FuncBlock              // TODO: sugar for currying and 'let'
-*/
+	if p.curToken.Type == token.PATMAT {
+		return p.parsePatMatBlock(atom)
+	}
 
-/* TODO: parse this
+	return p.parseFuncDeclBlock(atom)
+}
+
+/*
 PatMatBlock ->
 	LvalAtom  '='  ExprBlock
 */
+func (p *Parser) parsePatMatBlock(atom ast.Inline) ast.Block {
+	return nil // TODO
+}
+
+/*
+FuncDeclBlock ->
+	ID  (LvalAtom)*  FuncBlock  // sugar for currying and 'let'
+*/
+func (p *Parser) parseFuncDeclBlock(atom ast.Inline) ast.Block {
+	return nil // TODO
+}
 
 /*
 ☉ExprBlock ->
@@ -239,19 +257,19 @@ PatMatBlock ->
 	TupleBlock
 	ListBlock
 */
-func (p *Parser) parseExprBlock(atom ast.Inline) ast.Block {
+func (p *Parser) parseExprBlock() ast.Block {
 	// TODO: parse other block types
-	return p.parseJustExprBlock(atom)
+	return p.parseJustExprBlock()
 }
 
 /*
 JustExprBlock ->
 		Expr  '\n'                   // TODO: allow (by collapsing) multi-line expr
 */
-func (p *Parser) parseJustExprBlock(atom ast.Inline) ast.Block {
+func (p *Parser) parseJustExprBlock() ast.Block {
 	lit := &ast.JustExprBlock{
 		Token: token.ExprBlockToken,
-		Expr:  p.parseExprRest(atom),
+		Expr:  p.parseExpr(),
 	}
 
 	if p.curToken.Type != token.EOF {
@@ -263,20 +281,20 @@ func (p *Parser) parseJustExprBlock(atom ast.Inline) ast.Block {
 
 /* TODO: parse this
 LetBlock ->
-	'let'  '\n'  '|->'  DeclsAndExpr  '<-|'
+	'let'  '|->'  DeclsAndExpr  '<-|'
 */
 /* TODO: parse this
 FuncBlock ->
 	LvalAtom  '->'  ExprBlock
-	LvalAtom  '->'  '\n'  '|->'  DeclsAndExpr  '<-|'     // TODO: sugar for 'let'
+	LvalAtom  '->'  |->'  DeclsAndExpr  '<-|'     // TODO: sugar for 'let'
 */
 /* TODO: parse this
 TupleBlock ->
-	'(*)'  '\n'  '|->'  ExprBlock+  '<-|'
+	'(*)'  |->'  ExprBlock+  '<-|'
 */
 /* TODO: parse this
 ListBlock ->
-	'[*]'  '\n'  '|->'  ExprBlock+  (';'  ExprBlock)?  '<-|'
+	'[*]'  |->'  ExprBlock+  (';'  ExprBlock)?  '<-|'
 */
 
 /*
@@ -306,7 +324,7 @@ func (p *Parser) parseAtom() ast.Inline {
 }
 
 func (p *Parser) parseID() *ast.InlineID {
-	lit := &ast.InlineID{Token: p.curToken, Name: p.curToken.Literal}
+	lit := &ast.InlineID{Token: *p.curToken, Name: p.curToken.Literal}
 
 	p.expectToken(token.ID)
 
@@ -314,7 +332,7 @@ func (p *Parser) parseID() *ast.InlineID {
 }
 
 func (p *Parser) parseInt() *ast.InlineInt {
-	lit := &ast.InlineInt{Token: p.curToken}
+	lit := &ast.InlineInt{Token: *p.curToken}
 
 	i, err := strconv.ParseInt(p.curToken.Literal, 0, 0)
 	if !isNil(err) {
@@ -330,7 +348,7 @@ func (p *Parser) parseInt() *ast.InlineInt {
 }
 
 func (p *Parser) parseBool() *ast.InlineBool {
-	lit := &ast.InlineBool{Token: p.curToken}
+	lit := &ast.InlineBool{Token: *p.curToken}
 
 	lit.Value = p.curToken.Type == token.TRUE
 
@@ -348,7 +366,7 @@ Note that there are no 1-tuples, as those are just parenthesized
 expressions. In that case, parseTuple may not return a *ast.InlineTuple.
 */
 func (p *Parser) parseTuple() ast.Inline {
-	lit := &ast.InlineTuple{Token: p.curToken}
+	lit := &ast.InlineTuple{Token: *p.curToken}
 
 	p.expectToken(token.LPAREN)
 
@@ -393,7 +411,7 @@ List ->
 Note that this is a recursive function.
 */
 func (p *Parser) parseList() *ast.InlineCons {
-	lit := &ast.InlineCons{Token: p.curToken}
+	lit := &ast.InlineCons{Token: *p.curToken}
 
 	p.expectToken(token.LBRACKET, token.COMMA)
 
@@ -433,7 +451,7 @@ UnopExpr ->
 func (p *Parser) parseUnopExpr() *ast.InlineUnopExpr {
 	for _, op := range unops {
 		if p.curToken.Type == op {
-			lit := &ast.InlineUnopExpr{Token: p.curToken}
+			lit := &ast.InlineUnopExpr{Token: *p.curToken}
 			p.expectToken(op)
 			lit.Expr = p.parseAtom()
 
@@ -483,7 +501,7 @@ func (p *Parser) parseExpressionRest(precedence int, atom ast.Inline) ast.Inline
 			}
 
 			return &ast.InlineFunc{
-				Token: tok,
+				Token: *tok,
 				Lval:  atom,
 				Expr:  p.parseExpr(), // note that this resets the precedence; this is why token.ARROW is not treated as just another binop
 			}
@@ -515,7 +533,7 @@ func (p *Parser) parseExpressionRest(precedence int, atom ast.Inline) ast.Inline
 		samePrecAST := p.parseExpression(precedence)
 
 		return &ast.InlineBinopExpr{
-			Token: tok,
+			Token: *tok,
 			LExpr: higherPrecAST,
 			RExpr: samePrecAST,
 		}
@@ -531,7 +549,7 @@ func (p *Parser) parseExpressionLeft(precedence int, prevAST ast.Inline) ast.Inl
 	higherPrecAST := p.parseExpression(precedence + 1)
 
 	samePrecAST := &ast.InlineBinopExpr{
-		Token: tok,
+		Token: *tok,
 		LExpr: prevAST,
 		RExpr: higherPrecAST,
 	}
