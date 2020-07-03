@@ -192,9 +192,11 @@ func (flb *FuncBlock) TokenLiteral() string { return flb.Token.Literal }
 func (flb *FuncBlock) String() string {
 	var out bytes.Buffer
 
+	out.WriteString("(")
 	out.WriteString(flb.Lval.String())
 	out.WriteString(" -> ")
 	out.WriteString(flb.Expr.String())
+	out.WriteString(")")
 
 	return out.String()
 }
@@ -323,9 +325,11 @@ func (iFunc *InlineFunc) TokenLiteral() string { return iFunc.Token.Literal }
 func (iFunc *InlineFunc) String() string {
 	var out bytes.Buffer
 
+	out.WriteString("(")
 	out.WriteString(iFunc.Lval.String())
 	out.WriteString(" -> ")
 	out.WriteString(iFunc.Expr.String())
+	out.WriteString(")")
 
 	return out.String()
 }

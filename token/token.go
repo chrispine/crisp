@@ -84,6 +84,9 @@ const (
 	EXPORT
 	TRUE
 	FALSE
+
+	// Unused
+	NUM_TOKEN_TYPES
 )
 
 // Note that the order of these is significant:

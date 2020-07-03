@@ -14,6 +14,8 @@ var unops = []token.TokenType{
 	token.NOT,   //  !
 }
 
+var isBinop, isEndOfExpr map[token.TokenType]bool
+
 type BinopPrecList struct {
 	lAssoc bool
 	ops    []token.TokenType
@@ -30,7 +32,7 @@ func (bpl *BinopPrecList) Contains(tok token.TokenType) bool {
 }
 
 // NOTE: this holds the binops *in order of precedence*
-var binops = []BinopPrecList{
+var binopPrecs = []BinopPrecList{
 	BinopPrecList{lAssoc: true, ops: []token.TokenType{ //  |  ||
 		token.OR,
 		token.DBLOR,
@@ -88,11 +90,51 @@ func New(l *lexer.Lexer) *Parser {
 		},
 	}
 
+	isBinop = calculateBinopMap()
+	isEndOfExpr = calculateEndOfExprMap()
+
 	// Read two tokens, so curToken and peekToken are both set
 	p.nextToken()
 	p.nextToken()
 
 	return p
+}
+
+func calculateBinopMap() map[token.TokenType]bool {
+	bops := map[token.TokenType]bool{}
+
+	// first set all token types to false
+	for i := token.TokenType(0); i < token.NUM_TOKEN_TYPES; i++ {
+		bops[i] = false
+	}
+
+	// then set all of the binary ops to true
+	for _, bp := range binopPrecs {
+		for _, op := range bp.ops {
+			bops[op] = true
+		}
+	}
+
+	return bops
+}
+
+func calculateEndOfExprMap() map[token.TokenType]bool {
+	eoes := map[token.TokenType]bool{}
+
+	// first set all token types to false
+	for i := token.TokenType(0); i < token.NUM_TOKEN_TYPES; i++ {
+		eoes[i] = false
+	}
+
+	// then set all of the binary ops to true
+	eoes[token.EOF] = true
+	eoes[token.COMMA] = true
+	eoes[token.SEMICOLON] = true
+	eoes[token.RPAREN] = true
+	eoes[token.RBRACKET] = true
+	eoes[token.RBRACE] = true
+
+	return eoes
 }
 
 func (p *Parser) nextToken() {
@@ -125,6 +167,7 @@ func (p *Parser) Errors() []string {
 
 func (p *Parser) error(err string) {
 	p.errors = append(p.errors, err)
+	panic(err) // TODO: remove this line when parser is stable
 }
 
 func (p *Parser) noPrefixParseFnError(t token.TokenType) {
@@ -339,7 +382,7 @@ func (p *Parser) parseExpr() ast.Inline {
 	return p.parseExpression(0)
 }
 func (p *Parser) parseExpression(precedence int) ast.Inline {
-	if precedence >= len(binops) {
+	if precedence >= len(binopPrecs) {
 		atom := p.parseAtom()
 
 		if p.curToken.Type == token.ARROW {
@@ -353,19 +396,28 @@ func (p *Parser) parseExpression(precedence int) ast.Inline {
 			return &ast.InlineFunc{
 				Token: tok,
 				Lval:  atom,
-				Expr:  p.parseExpr(), // note that this resets the precedence; this is why token.ARROW is treated specially
+				Expr:  p.parseExpr(), // note that this resets the precedence; this is why token.ARROW is not treated as just another binop
 			}
 		}
 
-		return atom
+		// Now what? Depends on what the next token is.
+		// If it's a binop, or otherwise ends the expression,
+		// then we should return.
+		if isBinop[p.curToken.Type] || isEndOfExpr[p.curToken.Type] {
+			return atom
+		}
+
+		// If we got here, then the next token indicates that
+		// this should be a function call.
+		return p.parseFuncsAndApplyExprs(atom)
 	}
 
 	higherPrecAST := p.parseExpression(precedence + 1)
 
-	if binops[precedence].Contains(p.curToken.Type) {
+	if binopPrecs[precedence].Contains(p.curToken.Type) {
 		tok := p.curToken
 
-		if binops[precedence].lAssoc {
+		if binopPrecs[precedence].lAssoc {
 			return p.parseExpressionLeft(precedence, higherPrecAST)
 		}
 
@@ -395,11 +447,38 @@ func (p *Parser) parseExpressionLeft(precedence int, prevAST ast.Inline) ast.Inl
 		RExpr: higherPrecAST,
 	}
 
-	if binops[precedence].Contains(p.curToken.Type) {
+	if binopPrecs[precedence].Contains(p.curToken.Type) {
 		return p.parseExpressionLeft(precedence, samePrecAST)
 	}
 
 	return samePrecAST
+}
+
+func (p *Parser) parseFuncsAndApplyExprs(prevAST ast.Inline) ast.Inline {
+	var fn, arg ast.Inline
+
+	if p.curToken.Type == token.DOT {
+		p.expectToken(token.DOT)
+		fn = p.parseAtom()
+		arg = prevAST
+	} else {
+		fn = prevAST
+		arg = p.parseAtom()
+	}
+
+	applyExpr := &ast.InlineBinopExpr{
+		Token: token.Token{Type: token.AT, Literal: "@"},
+		LExpr: fn,
+		RExpr: arg,
+	}
+
+	if isBinop[p.curToken.Type] || isEndOfExpr[p.curToken.Type] {
+		return applyExpr
+	}
+
+	// TODO: more arrow handling here?
+
+	return p.parseFuncsAndApplyExprs(applyExpr)
 }
 
 func isNil(i interface{}) bool {

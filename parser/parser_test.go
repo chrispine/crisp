@@ -44,14 +44,16 @@ func TestExprs(t *testing.T) {
 		{"a&b|c", "((a & b) | c)"},
 		{"a|b&c", "(a | (b & c))"},
 
-		{"x -> 0", "x -> 0"},
-		{"x -> x+1", "x -> (x + 1)"},
-		{"(x) -> x+1", "x -> (x + 1)"},
-		{"(a,b) -> a+b", "(a, b) -> (a + b)"},
-		{"[a,b] -> a+b", "[a; [b]] -> (a + b)"},
+		{"x -> 0", "(x -> 0)"},
+		{"x -> x+1", "(x -> (x + 1))"},
+		{"(x) -> x+1", "(x -> (x + 1))"},
+		{"(a,b) -> a+b", "((a, b) -> (a + b))"},
+		{"[a,b] -> a+b", "([a; [b]] -> (a + b))"},
+		{"a -> b -> c -> d", "(a -> (b -> (c -> d)))"},
 
-		//{"foo bar", "(foo @ bar)"},
-		//{"inc(5) ", "(inc @ 5)"},
+		{"foo bar", "(foo @ bar)"},
+		{"inc(5) ", "(inc @ 5)"},
+		{"(foo bar baz) (a+b^c)", "(((foo @ bar) @ baz) @ (a + (b ^ c)))"},
 	}
 
 	for _, tt := range atomTests {
