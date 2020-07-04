@@ -58,6 +58,9 @@ func TestExprs(t *testing.T) {
 		{"x=99\nx->x^2", "x = 99\nx -> (x ^ 2)"},
 
 		{"(*)\n\t1\n\t2", "(*) {\n1\n2\n}"},
+		{"[*]\n\t1", "[*] {\n1\n}"},
+		{"[*]\n\t1\n\t2", "[*] {\n1\n; [*] {\n2\n}\n}"},
+		{"[*]\n\t1\n\t; [*]\n\t\t2", "[*] {\n1\n; [*] {\n2\n}\n}"},
 	}
 
 	for _, tt := range atomTests {

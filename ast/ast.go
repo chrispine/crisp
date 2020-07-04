@@ -259,7 +259,10 @@ func (cb *ConsBlock) String() string {
 	out.WriteString("[*] {\n")
 
 	out.WriteString(cb.Head.String())
-	out.WriteString("; " + cb.Tail.String())
+
+	if !isNil(cb.Tail) {
+		out.WriteString("; " + cb.Tail.String())
+	}
 
 	out.WriteString("}\n")
 
@@ -390,8 +393,7 @@ func (ic *InlineCons) String() string {
 		out.WriteString(ic.Head.String())
 
 		if !isNil(ic.Tail) {
-			out.WriteString("; ")
-			out.WriteString(ic.Tail.String())
+			out.WriteString("; " + ic.Tail.String())
 		}
 		out.WriteString("]")
 	}

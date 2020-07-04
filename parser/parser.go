@@ -380,8 +380,48 @@ ListBlock ->
 	'[*]'  |->'  ExprBlock+  (';'  ExprBlock)?  '<-|'
 */
 func (p *Parser) parseListBlock() ast.Block {
-	// TODO: parse this
-	return nil
+	lBlockToken := *p.curToken
+	p.expectToken(token.LBLOCK)
+	p.expectToken(token.INDENT)
+	numElems := p.curToken.NumLines
+	p.expectToken(token.BLOCK_LEN)
+
+	if numElems <= 0 {
+		p.error(fmt.Sprintf("invalide ListBlock parsed with %v elements", numElems))
+	}
+
+	var heads []ast.Block
+	var tail ast.Block
+
+	// End before numElems-1 because the last line may be a semicolon (tail), so needs special treatment.
+	for i := 0; i < numElems-1; i++ {
+		heads = append(heads, p.parseExprBlock())
+	}
+
+	// Now let's check that last line
+	if p.curToken.Type == token.SEMICOLON {
+		p.expectToken(token.SEMICOLON)
+		tail = p.parseExprBlock()
+	} else {
+		heads = append(heads, p.parseExprBlock())
+		// and tail stays nil
+	}
+
+	p.expectToken(token.DEDENT)
+
+	return makeNestedConsBlocks(lBlockToken, heads, tail)
+}
+
+func makeNestedConsBlocks(lBlockToken token.Token, heads []ast.Block, tail ast.Block) ast.Block {
+	if len(heads) <= 0 {
+		return tail
+	}
+
+	return &ast.ConsBlock{
+		Token: lBlockToken,
+		Head:  heads[0],
+		Tail:  makeNestedConsBlocks(lBlockToken, heads[1:], tail),
+	}
 }
 
 /*
