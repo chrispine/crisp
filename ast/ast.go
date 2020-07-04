@@ -121,8 +121,6 @@ LvalList ->
 	'['  ']'
 	'['  LvalAtom  (','  LvalAtom)*  (';'  LvalAtom)?  ']'
 
-
-
 */
 
 // The base Node interface
@@ -195,11 +193,9 @@ func (flb *FuncBlock) TokenLiteral() string { return flb.Token.Literal }
 func (flb *FuncBlock) String() string {
 	var out bytes.Buffer
 
-	out.WriteString("(")
 	out.WriteString(flb.Lval.String())
 	out.WriteString(" -> ")
 	out.WriteString(flb.Expr.String())
-	out.WriteString(")")
 
 	return out.String()
 }

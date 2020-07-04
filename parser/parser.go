@@ -269,18 +269,32 @@ func (p *Parser) parseFuncDeclBlock(atom ast.Inline) ast.Block {
 	ListBlock
 */
 func (p *Parser) parseExprBlock() ast.Block {
-	// TODO: parse other block types
-	return p.parseJustExprBlock()
+	switch p.curToken.Type {
+	case token.LET:
+		return p.parseLetBlock()
+	case token.TBLOCK:
+		return p.parseTupleBlock()
+	case token.LBLOCK:
+		return p.parseListBlock()
+	}
+	// so it's either a FuncBlock or a JustExprBlock
+	atom := p.parseAtom()
+
+	if p.curToken.Type == token.ARROW {
+		return p.parseFuncBlock(atom)
+	}
+
+	return p.parseJustExprBlock(atom)
 }
 
 /*
 JustExprBlock ->
 		Expr  '\n'                   // TODO: allow (by collapsing) multi-line expr
 */
-func (p *Parser) parseJustExprBlock() ast.Block {
+func (p *Parser) parseJustExprBlock(atom ast.Inline) ast.Block {
 	lit := &ast.JustExprBlock{
 		Token: token.ExprBlockToken,
-		Expr:  p.parseExpr(),
+		Expr:  p.parseExprRest(atom),
 	}
 
 	if p.curToken.Type != token.EOF {
@@ -290,23 +304,71 @@ func (p *Parser) parseJustExprBlock() ast.Block {
 	return lit
 }
 
-/* TODO: parse this
+/*
 LetBlock ->
 	'let'  '|->'  DeclsAndExpr  '<-|'
 */
-/* TODO: parse this
+func (p *Parser) parseLetBlock() ast.Block {
+	lit := &ast.LetBlock{
+		Token: *p.curToken,
+	}
+	p.expectToken(token.LET)
+	p.expectToken(token.INDENT)
+
+	lit.Decls, lit.Expr = p.parseDeclsAndExpr()
+
+	return lit
+}
+
+/*
 FuncBlock ->
 	LvalAtom  '->'  ExprBlock
-	LvalAtom  '->'  |->'  DeclsAndExpr  '<-|'     // TODO: sugar for 'let'
+	LvalAtom  '->'  |->'  DeclsAndExpr  '<-|'                  // sugar for 'let'
 */
-/* TODO: parse this
+func (p *Parser) parseFuncBlock(atom ast.Inline) ast.Block {
+	p.expectToken(token.ARROW)
+
+	if !atom.IsLval() {
+		p.error(fmt.Sprintf("atom %v is not an l-value", atom))
+	}
+
+	lit := &ast.FuncBlock{
+		Token: *p.curToken,
+		Lval:  atom,
+	}
+
+	if p.curToken.Type == token.INDENT {
+		p.expectToken(token.INDENT)
+		letBlock := &ast.LetBlock{Token: token.Token{
+			Type:    token.LET,
+			Literal: "let",
+		}}
+		letBlock.Decls, letBlock.Expr = p.parseDeclsAndExpr()
+		lit.Expr = letBlock
+	} else {
+		lit.Expr = p.parseExprBlock()
+	}
+
+	return lit
+}
+
+/*
 TupleBlock ->
 	'(*)'  |->'  ExprBlock+  '<-|'
 */
-/* TODO: parse this
+func (p *Parser) parseTupleBlock() ast.Block {
+	// TODO: parse this
+	return nil
+}
+
+/*
 ListBlock ->
 	'[*]'  |->'  ExprBlock+  (';'  ExprBlock)?  '<-|'
 */
+func (p *Parser) parseListBlock() ast.Block {
+	// TODO: parse this
+	return nil
+}
 
 /*
 ☉Atom ->
