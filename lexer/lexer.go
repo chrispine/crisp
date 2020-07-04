@@ -40,19 +40,37 @@ Loop:
 		case token.EOF:
 			l.eofToken = tok
 
-			// remove last token if it was a NEWLINE
-			if l.allTokens[len(l.allTokens)-1].Type == token.NEWLINE {
-				l.allTokens = l.allTokens[:len(l.allTokens)-1]
-				// and because we did that, we need to decrement NumLines
-				l.blockLenStack[len(l.blockLenStack)-1].NumLines--
+			// token stream must end with:  NEWLINE  DEDENT*
+			// if file ends too soon, we add them in now
+
+			if l.indentation > 0 {
+				prevTokenType := l.allTokens[len(l.allTokens)-1].Type
+				if prevTokenType != token.NEWLINE && prevTokenType != token.DEDENT {
+					l.allTokens = append(l.allTokens, l.createNewlineToken())
+				}
+				for l.indentation > 0 {
+					tok = newToken(token.DEDENT, "« <- »")
+					l.allTokens = append(l.allTokens, tok)
+					l.indentation--
+					l.blockLenPop()
+				}
+			} else {
+				prevTokenType := l.allTokens[len(l.allTokens)-1].Type
+				if prevTokenType != token.NEWLINE && prevTokenType != token.DEDENT {
+					l.allTokens = append(l.allTokens, l.createNewlineToken())
+				}
 			}
+
 			break Loop
 		case token.INDENT:
 			l.allTokens = append(l.allTokens, tok)
 			l.blockLenPush()
 		case token.DEDENT:
-			l.allTokens = append(l.allTokens, tok)
-			l.blockLenPop()
+			for tok.NumLines > 0 { // this is how we "return" multiple dedent tokens at once
+				tok.NumLines--
+				l.allTokens = append(l.allTokens, tok)
+				l.blockLenPop()
+			}
 		default:
 			l.allTokens = append(l.allTokens, tok)
 		}
@@ -79,17 +97,20 @@ func (l *Lexer) blockLenPush() {
 	tok := &token.Token{
 		Type:     token.BLOCK_LEN,
 		Literal:  "«BLOCK_LEN»",
-		NumLines: 1,
+		NumLines: 0,
 	}
 	l.blockLenStack = append(l.blockLenStack, tok)
 	l.allTokens = append(l.allTokens, tok)
 }
 func (l *Lexer) blockLenPop() {
-	// since we're dedenting, that last NEWLINE wasn't actually
-	// a new line, so we need to decrement NumLines first
-	l.blockLenStack[len(l.blockLenStack)-1].NumLines--
-
 	l.blockLenStack = l.blockLenStack[:len(l.blockLenStack)-1]
+}
+
+func (l *Lexer) createNewlineToken() *token.Token {
+	tok := newToken(token.NEWLINE, "\n")
+	l.blockLenInc()
+	l.atStartOfLine = true
+	return tok
 }
 
 func (l *Lexer) readRune() {
@@ -119,18 +140,19 @@ func (l *Lexer) nextToken() *token.Token {
 			l.allTokens = l.allTokens[:len(l.allTokens)-1]
 
 			tok = newToken(token.INDENT, "« -> »")
-			l.indentation++
+			l.indentation += delta
 			return tok
-		case delta == -1:
+		case delta < 0:
 			tok = newToken(token.DEDENT, "« <- »")
-			l.indentation--
+			tok.NumLines = -delta // this is how we "return" multiple DEDENT tokens at once
+			l.indentation += delta
 			return tok
-		case delta > 1 || delta < -1:
-			// we only allow increasing or decreasing indentation levels by 1
+		case delta > 1:
+			// we only allow increasing indentation levels by 1 at a time
 			tok = newToken(token.ILLEGAL, "«INDENT "+strconv.Itoa(delta)+"»")
 			return tok
 		}
-		// If we got here, the indendation level didn't change, so carry on.
+		// If we got here, the indentation level didn't change, so carry on.
 	}
 
 	l.consumeWhitespace()
@@ -148,11 +170,9 @@ func (l *Lexer) nextToken() *token.Token {
 
 		// make sure we never emit two NEWLINEs in a row, and never
 		// after DEDENT, as that implies NEWLINE
-		if l.allTokens[len(l.allTokens)-1].Type != token.NEWLINE && l.allTokens[len(l.allTokens)-1].Type != token.DEDENT {
-			tok = newToken(token.NEWLINE, "\n")
-			l.blockLenInc()
-			l.atStartOfLine = true
-			return tok
+		prevTokenType := l.allTokens[len(l.allTokens)-1].Type
+		if prevTokenType != token.NEWLINE && prevTokenType != token.DEDENT {
+			return l.createNewlineToken()
 		}
 	}
 

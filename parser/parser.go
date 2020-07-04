@@ -357,8 +357,19 @@ TupleBlock ->
 	'(*)'  |->'  ExprBlock+  '<-|'
 */
 func (p *Parser) parseTupleBlock() ast.Block {
-	// TODO: parse this
-	return nil
+	lit := &ast.TupleBlock{Token: *p.curToken}
+	p.expectToken(token.TBLOCK)
+	p.expectToken(token.INDENT)
+	numElems := p.curToken.NumLines
+	p.expectToken(token.BLOCK_LEN)
+
+	for i := 0; i < numElems; i++ {
+		lit.Exprs = append(lit.Exprs, p.parseExprBlock())
+	}
+
+	p.expectToken(token.DEDENT)
+
+	return lit
 }
 
 /*

@@ -56,6 +56,8 @@ func TestExprs(t *testing.T) {
 		{"(foo bar baz) (a+b^c)", "(((foo @ bar) @ baz) @ (a + (b ^ c)))"},
 		{"x=99\nx", "x = 99\nx"},
 		{"x=99\nx->x^2", "x = 99\nx -> (x ^ 2)"},
+
+		{"(*)\n\t1\n\t2", "(*) {\n1\n2\n}"},
 	}
 
 	for _, tt := range atomTests {

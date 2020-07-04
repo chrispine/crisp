@@ -7,9 +7,9 @@ import (
 type TokenType int
 
 type Token struct {
+	NumLines int // only used for BLOCK_LEN tokens
 	Type     TokenType
 	Literal  string
-	NumLines int // only used for BLOCK_LEN tokens
 }
 
 var ExprBlockToken = Token{
@@ -101,49 +101,49 @@ const (
 // e.g. "->" must come before "-"
 func GetOperators() []Token {
 	return []Token{
-		{LTE, strings.TrimSpace("          <=    "), 0},
-		{GTE, strings.TrimSpace("          >=    "), 0},
-		{EQUAL, strings.TrimSpace("        ==    "), 0},
-		{NEQ, strings.TrimSpace("          !=    "), 0},
-		{LT, strings.TrimSpace("           <     "), 0},
-		{GT, strings.TrimSpace("           >     "), 0},
+		{0, LTE, strings.TrimSpace("          <=    ")},
+		{0, GTE, strings.TrimSpace("          >=    ")},
+		{0, EQUAL, strings.TrimSpace("        ==    ")},
+		{0, NEQ, strings.TrimSpace("          !=    ")},
+		{0, LT, strings.TrimSpace("           <     ")},
+		{0, GT, strings.TrimSpace("           >     ")},
 
-		{PATMAT, strings.TrimSpace("       =     "), 0},
-		{ARROW, strings.TrimSpace("        ->    "), 0},
-		{COLON, strings.TrimSpace("        :     "), 0},
+		{0, PATMAT, strings.TrimSpace("       =     ")},
+		{0, ARROW, strings.TrimSpace("        ->    ")},
+		{0, COLON, strings.TrimSpace("        :     ")},
 
-		{DBLPLUS, strings.TrimSpace("      ++    "), 0},
-		{DBLMINUS, strings.TrimSpace("     --    "), 0},
-		{DBLMULT, strings.TrimSpace("      **    "), 0},
-		{DBLDIV, strings.TrimSpace("       //    "), 0},
-		{DBLMOD, strings.TrimSpace("       %%    "), 0},
-		{DBLEXP, strings.TrimSpace("       ^^    "), 0},
-		{DBLAND, strings.TrimSpace("       &&    "), 0},
-		{DBLOR, strings.TrimSpace("        ||    "), 0},
+		{0, DBLPLUS, strings.TrimSpace("      ++    ")},
+		{0, DBLMINUS, strings.TrimSpace("     --    ")},
+		{0, DBLMULT, strings.TrimSpace("      **    ")},
+		{0, DBLDIV, strings.TrimSpace("       //    ")},
+		{0, DBLMOD, strings.TrimSpace("       %%    ")},
+		{0, DBLEXP, strings.TrimSpace("       ^^    ")},
+		{0, DBLAND, strings.TrimSpace("       &&    ")},
+		{0, DBLOR, strings.TrimSpace("        ||    ")},
 
-		{PLUS, strings.TrimSpace("         +     "), 0},
-		{MINUS, strings.TrimSpace("        -     "), 0},
-		{MULT, strings.TrimSpace("         *     "), 0},
-		{DIV, strings.TrimSpace("          /     "), 0},
-		{MOD, strings.TrimSpace("          %     "), 0},
-		{EXP, strings.TrimSpace("          ^     "), 0},
-		{AND, strings.TrimSpace("          &     "), 0},
-		{OR, strings.TrimSpace("           |     "), 0},
-		{NOT, strings.TrimSpace("          !     "), 0},
+		{0, PLUS, strings.TrimSpace("         +     ")},
+		{0, MINUS, strings.TrimSpace("        -     ")},
+		{0, MULT, strings.TrimSpace("         *     ")},
+		{0, DIV, strings.TrimSpace("          /     ")},
+		{0, MOD, strings.TrimSpace("          %     ")},
+		{0, EXP, strings.TrimSpace("          ^     ")},
+		{0, AND, strings.TrimSpace("          &     ")},
+		{0, OR, strings.TrimSpace("           |     ")},
+		{0, NOT, strings.TrimSpace("          !     ")},
 
-		{TBLOCK, strings.TrimSpace("      (*)    "), 0},
-		{LBLOCK, strings.TrimSpace("      [*]    "), 0},
-		{LPAREN, strings.TrimSpace("      (      "), 0},
-		{RPAREN, strings.TrimSpace("        )    "), 0},
-		{LBRACKET, strings.TrimSpace("    [      "), 0},
-		{RBRACKET, strings.TrimSpace("      ]    "), 0},
-		{LBRACE, strings.TrimSpace("      {      "), 0},
-		{RBRACE, strings.TrimSpace("        }    "), 0},
+		{0, TBLOCK, strings.TrimSpace("      (*)    ")},
+		{0, LBLOCK, strings.TrimSpace("      [*]    ")},
+		{0, LPAREN, strings.TrimSpace("      (      ")},
+		{0, RPAREN, strings.TrimSpace("        )    ")},
+		{0, LBRACKET, strings.TrimSpace("    [      ")},
+		{0, RBRACKET, strings.TrimSpace("      ]    ")},
+		{0, LBRACE, strings.TrimSpace("      {      ")},
+		{0, RBRACE, strings.TrimSpace("        }    ")},
 
-		{DOT, strings.TrimSpace("          .     "), 0},
-		{AT, strings.TrimSpace("           @     "), 0},
-		{COMMA, strings.TrimSpace("        ,     "), 0},
-		{SEMICOLON, strings.TrimSpace("    ;     "), 0},
+		{0, DOT, strings.TrimSpace("          .     ")},
+		{0, AT, strings.TrimSpace("           @     ")},
+		{0, COMMA, strings.TrimSpace("        ,     ")},
+		{0, SEMICOLON, strings.TrimSpace("    ;     ")},
 	}
 }
 

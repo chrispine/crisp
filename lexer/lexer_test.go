@@ -5,8 +5,9 @@ import (
 	"testing"
 )
 
-func TestNextToken(t *testing.T) {
-	input := `# test program
+func TestVariousTokens(t *testing.T) {
+	input := `main
+
 foo = x ->
 	x + 1
 
@@ -16,12 +17,11 @@ module export let case [{}]
 
 a|日本語&c<=!d<>=> !=== ,:;`
 
-	tests := []struct {
-		expectedNumLines int
-		expectedType     token.TokenType
-		expectedLiteral  string
-	}{
-		{4, token.BLOCK_LEN, "«BLOCK_LEN»"},
+	expectedTokens := []token.Token{
+		{5, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.ID, "main"},
+		{0, token.NEWLINE, "\n"},
+
 		{0, token.ID, "foo"},
 		{0, token.PATMAT, "="},
 		{0, token.ID, "x"},
@@ -79,14 +79,196 @@ a|日本語&c<=!d<>=> !=== ,:;`
 		{0, token.COMMA, ","},
 		{0, token.COLON, ":"},
 		{0, token.SEMICOLON, ";"},
+		{0, token.NEWLINE, "\n"},
 		{0, token.EOF, "«EOF»"},
 	}
 
+	testInput(t, input, expectedTokens)
+}
+
+func TestTokenizingBlocks1(t *testing.T) {
+	input := `(*)
+	1
+	2`
+
+	expectedTokens := []token.Token{
+		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.TBLOCK, "(*)"},
+		{0, token.INDENT, "« -> »"},
+		{2, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.INT, "1"},
+		{0, token.NEWLINE, "\n"},
+		{0, token.INT, "2"},
+		{0, token.NEWLINE, "\n"},
+		{0, token.DEDENT, "« <- »"},
+		{0, token.EOF, "«EOF»"},
+	}
+
+	testInput(t, input, expectedTokens)
+}
+
+func TestTokenizingBlocks2(t *testing.T) {
+	input := `# comment
+(*)
+	1
+	2
+`
+
+	expectedTokens := []token.Token{
+		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.TBLOCK, "(*)"},
+		{0, token.INDENT, "« -> »"},
+		{2, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.INT, "1"},
+		{0, token.NEWLINE, "\n"},
+		{0, token.INT, "2"},
+		{0, token.NEWLINE, "\n"},
+		{0, token.DEDENT, "« <- »"},
+		{0, token.EOF, "«EOF»"},
+	}
+
+	testInput(t, input, expectedTokens)
+}
+
+func TestTokenizingBlocks3(t *testing.T) {
+	input := `(*)
+	1
+x
+`
+
+	expectedTokens := []token.Token{
+		{2, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.TBLOCK, "(*)"},
+		{0, token.INDENT, "« -> »"},
+		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.INT, "1"},
+		{0, token.NEWLINE, "\n"},
+		{0, token.DEDENT, "« <- »"},
+
+		{0, token.ID, "x"},
+		{0, token.NEWLINE, "\n"},
+		{0, token.EOF, "«EOF»"},
+	}
+
+	testInput(t, input, expectedTokens)
+}
+
+func TestTokenizingBlocks4(t *testing.T) {
+	input := `# comment
+(*)
+	1
+x`
+
+	expectedTokens := []token.Token{
+		{2, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.TBLOCK, "(*)"},
+		{0, token.INDENT, "« -> »"},
+		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.INT, "1"},
+		{0, token.NEWLINE, "\n"},
+		{0, token.DEDENT, "« <- »"},
+
+		{0, token.ID, "x"},
+		{0, token.NEWLINE, "\n"},
+		{0, token.EOF, "«EOF»"},
+	}
+
+	testInput(t, input, expectedTokens)
+}
+
+func TestTokenizingBlocks5(t *testing.T) {
+	input := `# comment
+(*)
+	1
+	(*)
+		2`
+
+	expectedTokens := []token.Token{
+		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.TBLOCK, "(*)"},
+		{0, token.INDENT, "« -> »"},
+		{2, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.INT, "1"},
+		{0, token.NEWLINE, "\n"},
+		{0, token.TBLOCK, "(*)"},
+		{0, token.INDENT, "« -> »"},
+		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.INT, "2"},
+		{0, token.NEWLINE, "\n"},
+		{0, token.DEDENT, "« <- »"},
+		{0, token.DEDENT, "« <- »"},
+		{0, token.EOF, "«EOF»"},
+	}
+
+	testInput(t, input, expectedTokens)
+}
+
+func TestTokenizingBlocks6(t *testing.T) {
+	input := `# comment
+(*)
+	1
+	(*)
+		2
+`
+
+	expectedTokens := []token.Token{
+		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.TBLOCK, "(*)"},
+		{0, token.INDENT, "« -> »"},
+		{2, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.INT, "1"},
+		{0, token.NEWLINE, "\n"},
+		{0, token.TBLOCK, "(*)"},
+		{0, token.INDENT, "« -> »"},
+		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.INT, "2"},
+		{0, token.NEWLINE, "\n"},
+		{0, token.DEDENT, "« <- »"},
+		{0, token.DEDENT, "« <- »"},
+		{0, token.EOF, "«EOF»"},
+	}
+
+	testInput(t, input, expectedTokens)
+}
+
+func TestTokenizingBlocks7(t *testing.T) {
+	input := `# comment
+(*)
+	1
+	(*)
+		2
+
+x`
+
+	expectedTokens := []token.Token{
+		{2, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.TBLOCK, "(*)"},
+		{0, token.INDENT, "« -> »"},
+		{2, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.INT, "1"},
+		{0, token.NEWLINE, "\n"},
+		{0, token.TBLOCK, "(*)"},
+		{0, token.INDENT, "« -> »"},
+		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.INT, "2"},
+		{0, token.NEWLINE, "\n"},
+		{0, token.DEDENT, "« <- »"},
+		{0, token.DEDENT, "« <- »"},
+
+		{0, token.ID, "x"},
+		{0, token.NEWLINE, "\n"},
+		{0, token.EOF, "«EOF»"},
+	}
+
+	testInput(t, input, expectedTokens)
+}
+
+func testInput(t *testing.T, input string, expectedTokens []token.Token) {
 	l := New(input)
 
 	var numNewlines, numIndents, numDedents, sumBlockLens int
 
-	for i, tt := range tests {
+	for i, tt := range expectedTokens {
 		tok := l.NextToken()
 
 		switch tok.Type {
@@ -100,23 +282,27 @@ a|日本語&c<=!d<>=> !=== ,:;`
 			sumBlockLens += tok.NumLines
 		}
 
-		if tok.Literal != tt.expectedLiteral {
+		if tok.Literal != tt.Literal {
 			t.Fatalf("tests[%d] - literal wrong. expected=%q, got=%q",
-				i, tt.expectedLiteral, tok.Literal)
+				i, tt.Literal, tok.Literal)
 		}
 
-		if tok.NumLines != tt.expectedNumLines {
+		if tok.NumLines != tt.NumLines {
 			t.Fatalf("tests[%d] - numLines wrong. expected=%v, got=%v",
-				i, tt.expectedNumLines, tok.NumLines)
+				i, tt.NumLines, tok.NumLines)
 		}
 
-		if tok.Type != tt.expectedType {
+		if tok.Type != tt.Type {
 			t.Fatalf("tests[%d] - tokentype wrong. expected=%q, got=%q",
-				i, tt.expectedType, tok.Type)
+				i, tt.Type, tok.Type)
 		}
 	}
 
-	if numNewlines+numIndents+numDedents != sumBlockLens {
-		t.Fatalf("newlines(%v)+indents(%v)+dedents(%v) != blockLens(%v)", numNewlines, numIndents, numDedents, sumBlockLens)
+	if numIndents != numDedents {
+		t.Fatalf("indents(%v) != dedents(%v)", numIndents, numDedents)
+	}
+
+	if numNewlines+numIndents != sumBlockLens {
+		t.Fatalf("newlines(%v)+indents(%v) != blockLens(%v)", numNewlines, numIndents, sumBlockLens)
 	}
 }
