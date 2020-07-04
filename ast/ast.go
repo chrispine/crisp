@@ -226,7 +226,7 @@ func (lb *LetBlock) String() string {
 
 type TupleBlock struct {
 	Token token.Token // the token.TBLOCK token
-	Exprs []Block     // TODO: ensure this is never empty
+	Exprs []Block
 }
 
 func (tb *TupleBlock) blockNode()           {}

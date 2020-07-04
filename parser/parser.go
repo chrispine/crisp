@@ -363,6 +363,9 @@ func (p *Parser) parseTupleBlock() ast.Block {
 	numElems := p.curToken.NumLines
 	p.expectToken(token.BLOCK_LEN)
 
+	if numElems <= 0 {
+		p.error(fmt.Sprintf("invalide TupleBlock parsed with %v elements", numElems))
+	}
 	for i := 0; i < numElems; i++ {
 		lit.Exprs = append(lit.Exprs, p.parseExprBlock())
 	}
