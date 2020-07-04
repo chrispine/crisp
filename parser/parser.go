@@ -33,31 +33,31 @@ func (bpl *BinopPrecList) Contains(tok token.TokenType) bool {
 
 // NOTE: this holds the binops *in order of precedence*
 var binopPrecs = []BinopPrecList{
-	BinopPrecList{lAssoc: true, ops: []token.TokenType{ //  |  ||
+	{lAssoc: true, ops: []token.TokenType{ //  |  ||
 		token.OR,
 		token.DBLOR,
 	}},
-	BinopPrecList{lAssoc: true, ops: []token.TokenType{ //  &  &&
+	{lAssoc: true, ops: []token.TokenType{ //  &  &&
 		token.AND,
 		token.DBLAND,
 	}},
-	BinopPrecList{lAssoc: true, ops: []token.TokenType{ //  ==  !=
+	{lAssoc: true, ops: []token.TokenType{ //  ==  !=
 		token.EQUAL,
 		token.NEQ,
 	}},
-	BinopPrecList{lAssoc: true, ops: []token.TokenType{ //  <  <=  >  >=
+	{lAssoc: true, ops: []token.TokenType{ //  <  <=  >  >=
 		token.LT,
 		token.LTE,
 		token.GT,
 		token.GTE,
 	}},
-	BinopPrecList{lAssoc: true, ops: []token.TokenType{ //  +  ++  -  --
+	{lAssoc: true, ops: []token.TokenType{ //  +  ++  -  --
 		token.PLUS,
 		token.DBLPLUS,
 		token.MINUS,
 		token.DBLMINUS,
 	}},
-	BinopPrecList{lAssoc: true, ops: []token.TokenType{ //  *  **  /  //  %  %%
+	{lAssoc: true, ops: []token.TokenType{ //  *  **  /  //  %  %%
 		token.MULT,
 		token.DBLMULT,
 		token.DIV,
@@ -65,7 +65,7 @@ var binopPrecs = []BinopPrecList{
 		token.MOD,
 		token.DBLMOD,
 	}},
-	BinopPrecList{lAssoc: false, ops: []token.TokenType{ //  ^  ^^
+	{lAssoc: false, ops: []token.TokenType{ //  ^  ^^
 		token.EXP,
 		token.DBLEXP,
 	}},
@@ -133,7 +133,8 @@ func calculateEndOfExprMap() map[token.TokenType]bool {
 	eoes[token.RPAREN] = true
 	eoes[token.RBRACKET] = true
 	eoes[token.RBRACE] = true
-	// TODO: also add NEWLINE? DEDENT? INDENT??
+	eoes[token.NEWLINE] = true
+	// TODO: also add DEDENT? INDENT??
 
 	return eoes
 }
@@ -188,7 +189,7 @@ func (p *Parser) ParseProgram() *ast.Program {
 	}
 
 	// scan for unconsumed tokens
-	leftoverTokens := []*token.Token{}
+	var leftoverTokens []*token.Token
 	for p.curToken.Type != token.EOF {
 		leftoverTokens = append(leftoverTokens, p.curToken)
 		p.nextToken()
@@ -206,7 +207,7 @@ DeclsAndExpr ->
 	«BLOCK_LEN»  DeclBlock*  ExprBlock
 */
 func (p *Parser) parseDeclsAndExpr() ([]ast.Block, ast.Block) {
-	decls := []ast.Block{}
+	var decls []ast.Block
 
 	numDecls := p.curToken.NumLines - 1
 	p.expectToken(token.BLOCK_LEN)
@@ -238,7 +239,17 @@ PatMatBlock ->
 	LvalAtom  '='  ExprBlock
 */
 func (p *Parser) parsePatMatBlock(atom ast.Inline) ast.Block {
-	return nil // TODO
+	if !atom.IsLval() {
+		p.error(fmt.Sprintf("atom %v is not an l-value", atom))
+	}
+
+	lit := &ast.PatMatBlock{Token: *p.curToken, Lval: atom}
+
+	p.expectToken(token.PATMAT)
+
+	lit.Expr = p.parseExprBlock()
+
+	return lit
 }
 
 /*
@@ -376,7 +387,7 @@ func (p *Parser) parseTuple() ast.Inline {
 		return p.unit
 	}
 
-	exprs := []ast.Inline{}
+	var exprs []ast.Inline
 Loop:
 	for {
 		exprs = append(exprs, p.parseExpr())

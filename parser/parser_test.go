@@ -11,11 +11,11 @@ import (
 func TestExprs(t *testing.T) {
 	atomTests := []struct {
 		input string
-		value interface{}
+		value string
 	}{
-		{"5  ", 5},
-		{"true ", true},
-		{"false", false},
+		{"5  ", "5"},
+		{"true ", "true"},
+		{"false", "false"},
 		{"foo ", "foo"},
 		{"( ) ", "()"},
 		{"(bar)", "bar"},
@@ -54,54 +54,19 @@ func TestExprs(t *testing.T) {
 		{"foo bar", "(foo @ bar)"},
 		{"inc(5) ", "(inc @ 5)"},
 		{"(foo bar baz) (a+b^c)", "(((foo @ bar) @ baz) @ (a + (b ^ c)))"},
+		{"x=99\nx", "x = 99\nx"},
 	}
 
 	for _, tt := range atomTests {
 		l := lexer.New(tt.input)
 		p := New(l)
-		atomAST := p.ParseProgram().Expr.(*ast.JustExprBlock).Expr
+		program := p.ParseProgram()
 		checkParserErrors(t, p)
 
-		switch ast := atomAST.(type) {
-		case *ast.InlineInt:
-			if tt.value != ast.Value {
-				t.Errorf("parsed wrong int: expected %v, got %v", tt.value, ast.Value)
-			}
-		case *ast.InlineBool:
-			if tt.value != ast.Value {
-				t.Errorf("parsed wrong bool: expected %v, got %v", tt.value, ast.Value)
-			}
-		case *ast.InlineID:
-			if tt.value != ast.Name {
-				t.Errorf("parsed wrong ID: expected %v, got %v", tt.value, ast.Name)
-			}
-		case *ast.InlineTuple:
-			tupleStr := ast.String()
-			if tt.value != tupleStr {
-				t.Errorf("parsed wrong tuple: expected %v, got %v", tt.value, tupleStr)
-			}
-		case *ast.InlineCons:
-			consStr := ast.String()
-			if tt.value != consStr {
-				t.Errorf("parsed wrong cons: expected %v, got %v", tt.value, consStr)
-			}
-		case *ast.InlineUnopExpr:
-			unopStr := ast.String()
-			if tt.value != unopStr {
-				t.Errorf("parsed wrong unop: expected %v, got %v", tt.value, unopStr)
-			}
-		case *ast.InlineBinopExpr:
-			binopStr := ast.String()
-			if tt.value != binopStr {
-				t.Errorf("parsed wrong binop: expected %v, got %v", tt.value, binopStr)
-			}
-		case *ast.InlineFunc:
-			funcStr := ast.String()
-			if tt.value != funcStr {
-				t.Errorf("parsed wrong func: expected %v, got %v", tt.value, funcStr)
-			}
-		default:
-			t.Errorf("unrecognized expression %v of type %T", atomAST, atomAST)
+		progStr := program.String()
+
+		if tt.value+"\n" != progStr {
+			t.Errorf("parse test fail\n\texpected:\n%v\n\tgot:\n%v", tt.value, progStr)
 		}
 	}
 }
@@ -125,12 +90,12 @@ func TestUnopExprs(t *testing.T) {
 		exprAST := p.ParseProgram().Expr.(*ast.JustExprBlock).Expr
 		checkParserErrors(t, p)
 
-		switch ast := exprAST.(type) {
+		switch unopAST := exprAST.(type) {
 		case *ast.InlineUnopExpr:
-			if tt.op != ast.Op() {
-				t.Errorf("parsed wrong unop operator: expected %v, got %v", tt.op, ast.Op())
+			if tt.op != unopAST.Op() {
+				t.Errorf("parsed wrong unop operator: expected %v, got %v", tt.op, unopAST.Op())
 			}
-			testAtom(t, ast.Expr, tt.value)
+			testAtom(t, unopAST.Expr, tt.value)
 		default:
 			t.Errorf("unrecognized unop expr %v of type %T", exprAST, exprAST)
 		}
