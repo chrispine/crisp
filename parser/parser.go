@@ -77,8 +77,7 @@ type Parser struct {
 
 	unit *parse_tree.InlineTuple
 
-	curToken  *token.Token
-	peekToken *token.Token
+	curToken *token.Token
 }
 
 func New(l *lexer.Lexer) *Parser {
@@ -93,8 +92,7 @@ func New(l *lexer.Lexer) *Parser {
 	isBinop = calculateBinopMap()
 	isEndOfExpr = calculateEndOfExprMap()
 
-	// Read two tokens, so curToken and peekToken are both set
-	p.nextToken()
+	// read in first token
 	p.nextToken()
 
 	return p
@@ -140,8 +138,7 @@ func calculateEndOfExprMap() map[token.TokType]bool {
 }
 
 func (p *Parser) nextToken() {
-	p.curToken = p.peekToken
-	p.peekToken = p.l.NextToken()
+	p.curToken = p.l.NextToken()
 }
 
 func (p *Parser) expectToken(ts ...token.TokType) {
@@ -152,15 +149,11 @@ func (p *Parser) expectToken(ts ...token.TokType) {
 		}
 	}
 
-	p.error(fmt.Sprintf("expected next token to be in %v, got %v instead", ts, p.peekToken))
+	p.error(fmt.Sprintf("expected next token to be in %v, got %v instead", ts, p.curToken))
 }
 
 func (p *Parser) curTokenIs(t token.TokType) bool {
 	return p.curToken.Type == t
-}
-
-func (p *Parser) peekTokenIs(t token.TokType) bool {
-	return p.peekToken.Type == t
 }
 
 func (p *Parser) Errors() []string {
@@ -190,7 +183,7 @@ func (p *Parser) ParseProgram() *parse_tree.Program {
 
 	// scan for unconsumed tokens
 	var leftoverTokens []*token.Token
-	for p.curToken.Type != token.EOF {
+	for !p.curTokenIs(token.EOF) {
 		leftoverTokens = append(leftoverTokens, p.curToken)
 		p.nextToken()
 	}
@@ -227,7 +220,7 @@ func (p *Parser) parseDeclsAndExpr() ([]parse_tree.Block, parse_tree.Block) {
 func (p *Parser) parseDeclBlock() parse_tree.Block {
 	atom := p.parseAtom()
 
-	if p.curToken.Type == token.PatMat {
+	if p.curTokenIs(token.PatMat) {
 		return p.parsePatMatBlock(atom)
 	}
 
@@ -271,7 +264,7 @@ func (p *Parser) parseFuncDeclBlock(atom parse_tree.Inline) parse_tree.Block {
 	var args []parse_tree.Inline
 
 	// read LvalAtoms up to token.Arrow
-	for p.curToken.Type != token.Arrow {
+	for !p.curTokenIs(token.Arrow) {
 		arg := p.parseAtom()
 		if !arg.IsLval() {
 			p.error(fmt.Sprintf("arg is not an l-value: %v", arg))
@@ -325,7 +318,7 @@ func (p *Parser) parseExprBlock() parse_tree.Block {
 	// so it's either a FuncBlock or a JustExprBlock
 	atom := p.parseAtom()
 
-	if p.curToken.Type == token.Arrow {
+	if p.curTokenIs(token.Arrow) {
 		return p.parseFuncBlock(atom)
 	}
 
@@ -342,7 +335,7 @@ func (p *Parser) parseJustExprBlock(atom parse_tree.Inline) parse_tree.Block {
 		Expr:  p.parseExprRest(atom),
 	}
 
-	if p.curToken.Type != token.EOF {
+	if !p.curTokenIs(token.EOF) {
 		p.expectToken(token.NewLine)
 	}
 
@@ -384,7 +377,7 @@ func (p *Parser) parseFuncBlock(atom parse_tree.Inline) parse_tree.Block {
 		Lval:  atom,
 	}
 
-	if p.curToken.Type == token.Indent {
+	if p.curTokenIs(token.Indent) {
 		p.expectToken(token.Indent)
 		letBlock := &parse_tree.LetBlock{Token: token.Token{
 			Type:    token.Let,
@@ -447,7 +440,7 @@ func (p *Parser) parseListBlock() parse_tree.Block {
 	}
 
 	// Now let's check that last line
-	if p.curToken.Type == token.Semicolon {
+	if p.curTokenIs(token.Semicolon) {
 		p.expectToken(token.Semicolon)
 		tail = p.parseExprBlock()
 	} else {
@@ -525,7 +518,7 @@ func (p *Parser) parseInt() *parse_tree.InlineInt {
 func (p *Parser) parseBool() *parse_tree.InlineBool {
 	lit := &parse_tree.InlineBool{Token: *p.curToken}
 
-	lit.Value = p.curToken.Type == token.True
+	lit.Value = p.curTokenIs(token.True)
 
 	p.expectToken(token.True, token.False)
 
@@ -546,7 +539,7 @@ func (p *Parser) parseTuple() parse_tree.Inline {
 	p.expectToken(token.LParen)
 
 	// check for unit (empty tuple)
-	if p.curToken.Type == token.RParen {
+	if p.curTokenIs(token.RParen) {
 		p.expectToken(token.RParen)
 		return p.unit
 	}
@@ -591,14 +584,14 @@ func (p *Parser) parseList() *parse_tree.InlineCons {
 	p.expectToken(token.LBracket, token.Comma)
 
 	// check for nil (empty list)
-	if p.curToken.Type == token.RBracket {
+	if p.curTokenIs(token.RBracket) {
 		p.expectToken(token.RBracket)
 		return nil
 	}
 
 	lit.Head = p.parseExpr()
 
-	if p.curToken.Type == token.Semicolon {
+	if p.curTokenIs(token.Semicolon) {
 		p.expectToken(token.Semicolon)
 		lit.Tail = p.parseExpr()
 		p.expectToken(token.RBracket)
@@ -607,7 +600,7 @@ func (p *Parser) parseList() *parse_tree.InlineCons {
 	}
 
 	// check for end of list
-	if p.curToken.Type == token.RBracket {
+	if p.curTokenIs(token.RBracket) {
 		p.expectToken(token.RBracket)
 		lit.Tail = nil
 		return lit
@@ -625,7 +618,7 @@ UnopExpr ->
 
 func (p *Parser) parseUnopExpr() *parse_tree.InlineUnopExpr {
 	for _, op := range unops {
-		if p.curToken.Type == op {
+		if p.curTokenIs(op) {
 			lit := &parse_tree.InlineUnopExpr{Token: *p.curToken}
 			p.expectToken(op)
 			lit.Expr = p.parseAtom()
@@ -667,7 +660,7 @@ func (p *Parser) parseExpression(precedence int) parse_tree.Inline {
 }
 func (p *Parser) parseExpressionRest(precedence int, atom parse_tree.Inline) parse_tree.Inline {
 	if precedence >= len(binopPrecs) {
-		if p.curToken.Type == token.Arrow {
+		if p.curTokenIs(token.Arrow) {
 			tok := p.curToken
 			p.expectToken(token.Arrow)
 
@@ -694,57 +687,57 @@ func (p *Parser) parseExpressionRest(precedence int, atom parse_tree.Inline) par
 		return p.parseFuncsAndApplyExprs(atom)
 	}
 
-	higherPrecAST := p.parseExpressionRest(precedence+1, atom)
+	higherPrecTree := p.parseExpressionRest(precedence+1, atom)
 
 	if binopPrecs[precedence].Contains(p.curToken.Type) {
 		tok := p.curToken
 
 		if binopPrecs[precedence].lAssoc {
-			return p.parseExpressionLeft(precedence, higherPrecAST)
+			return p.parseExpressionLeft(precedence, higherPrecTree)
 		}
 
 		p.nextToken()
 
-		samePrecAST := p.parseExpression(precedence)
+		samePrecTree := p.parseExpression(precedence)
 
 		return &parse_tree.InlineBinopExpr{
 			Token: *tok,
-			LExpr: higherPrecAST,
-			RExpr: samePrecAST,
+			LExpr: higherPrecTree,
+			RExpr: samePrecTree,
 		}
 	}
 
-	return higherPrecAST
+	return higherPrecTree
 }
 
-func (p *Parser) parseExpressionLeft(precedence int, prevAST parse_tree.Inline) parse_tree.Inline {
+func (p *Parser) parseExpressionLeft(precedence int, prevTree parse_tree.Inline) parse_tree.Inline {
 	tok := p.curToken
 	p.nextToken()
 
-	higherPrecAST := p.parseExpression(precedence + 1)
+	higherPrecTree := p.parseExpression(precedence + 1)
 
-	samePrecAST := &parse_tree.InlineBinopExpr{
+	samePrecTree := &parse_tree.InlineBinopExpr{
 		Token: *tok,
-		LExpr: prevAST,
-		RExpr: higherPrecAST,
+		LExpr: prevTree,
+		RExpr: higherPrecTree,
 	}
 
 	if binopPrecs[precedence].Contains(p.curToken.Type) {
-		return p.parseExpressionLeft(precedence, samePrecAST)
+		return p.parseExpressionLeft(precedence, samePrecTree)
 	}
 
-	return samePrecAST
+	return samePrecTree
 }
 
-func (p *Parser) parseFuncsAndApplyExprs(prevAST parse_tree.Inline) parse_tree.Inline {
+func (p *Parser) parseFuncsAndApplyExprs(prevTree parse_tree.Inline) parse_tree.Inline {
 	var fn, arg parse_tree.Inline
 
-	if p.curToken.Type == token.Dot {
+	if p.curTokenIs(token.Dot) {
 		p.expectToken(token.Dot)
 		fn = p.parseAtom()
-		arg = prevAST
+		arg = prevTree
 	} else {
-		fn = prevAST
+		fn = prevTree
 		arg = p.parseAtom()
 	}
 

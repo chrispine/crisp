@@ -11,7 +11,7 @@ import (
 Notes:
 
 * Productions preceded by '☉' are abstract,
-  and thus do not appear in the AST.
+  and thus do not appear in the parse tree.
 
 * ListBlocks are parsed as nested ConsBlock nodes.
 

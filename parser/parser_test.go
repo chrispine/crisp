@@ -64,6 +64,7 @@ func TestExprs(t *testing.T) {
 		{"[*]\n\t1\n\t; [*]\n\t\t2", "[*] {\n1\n; [*] {\n2\n}\n}"},
 
 		{"let\n\ta=4\n\ta+1", "let {\na = 4\n(a + 1)\n}"},
+		{"let\n\tlet\n\t\t5", "let {\nlet {\n5\n}\n}"},
 		{"x -> let\n\ty=x\n\ty", "x -> let {\ny = x\ny\n}"},
 		{"x ->\n\ty=x\n\ty", "x -> let {\ny = x\ny\n}"},
 
@@ -100,17 +101,17 @@ func TestUnopExprs(t *testing.T) {
 	for _, tt := range prefixTests {
 		l := lexer.New(tt.input)
 		p := New(l)
-		exprAST := p.ParseProgram().Expr.(*parse_tree.JustExprBlock).Expr
+		exprTree := p.ParseProgram().Expr.(*parse_tree.JustExprBlock).Expr
 		checkParserErrors(t, p)
 
-		switch unopAST := exprAST.(type) {
+		switch unopTree := exprTree.(type) {
 		case *parse_tree.InlineUnopExpr:
-			if tt.op != unopAST.Op() {
-				t.Errorf("parsed wrong unop operator: expected %v, got %v", tt.op, unopAST.Op())
+			if tt.op != unopTree.Op() {
+				t.Errorf("parsed wrong unop operator: expected %v, got %v", tt.op, unopTree.Op())
 			}
-			testAtom(t, unopAST.Expr, tt.value)
+			testAtom(t, unopTree.Expr, tt.value)
 		default:
-			t.Errorf("unrecognized unop expr %v of type %T", exprAST, exprAST)
+			t.Errorf("unrecognized unop expr %v of type %T", exprTree, exprTree)
 		}
 	}
 }

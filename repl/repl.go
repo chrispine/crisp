@@ -2,9 +2,11 @@ package repl
 
 import (
 	"bufio"
+	"crisp/ast"
+	"crisp/eval"
 	"crisp/lexer"
-	"crisp/parse_tree"
 	"crisp/parser"
+	"crisp/value"
 	"fmt"
 	"io"
 )
@@ -15,7 +17,10 @@ func Start(in io.Reader, out io.Writer) {
 	scanner := bufio.NewScanner(in)
 
 	for {
-		fmt.Fprintf(out, PROMPT)
+		_, err := fmt.Fprintf(out, PROMPT)
+		if err != nil {
+			fmt.Print(err)
+		}
 		scanned := scanner.Scan()
 		if !scanned {
 			return
@@ -24,16 +29,38 @@ func Start(in io.Reader, out io.Writer) {
 		line := scanner.Text()
 		l := lexer.New(line)
 		p := parser.New(l)
-		exprAST := p.ParseProgram().Expr.(*parse_tree.JustExprBlock).Expr
+		pTree := p.ParseProgram()
 
 		// check for parse errors
 		errors := p.Errors()
 		if len(errors) > 0 {
 			for _, msg := range errors {
-				fmt.Fprintf(out, "   parser error: %q\n", msg)
+				_, err = fmt.Fprintf(out, "   parser error: %q\n", msg)
+				if err != nil {
+					fmt.Print(err)
+				}
 			}
 		}
 
-		fmt.Fprintf(out, "   %+v\n", exprAST)
+		tr := ast.NewTranslator()
+		program := tr.Translate(pTree)
+		// check for translation errors
+		errors = tr.Errors()
+		if len(errors) > 0 {
+			for _, msg := range errors {
+				_, err = fmt.Fprintf(out, "   translator error: %q\n", msg)
+				if err != nil {
+					fmt.Print(err)
+				}
+			}
+		}
+
+		evaluated := eval.Eval(value.TopLevelEnv, program)
+		if evaluated != nil {
+			_, err = io.WriteString(out, evaluated.Inspect()+"\n")
+			if err != nil {
+				fmt.Print(err)
+			}
+		}
 	}
 }
