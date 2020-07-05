@@ -45,6 +45,32 @@ func TestEvalIntExpr(t *testing.T) {
 	}
 }
 
+func TestEvalBoolExpr(t *testing.T) {
+	tests := []struct {
+		program  string
+		expected bool
+	}{
+		{"true", true},
+		{"false", false},
+		{"!true", false},
+		{"!false", true},
+		{"false & (true | true)", false},
+		{"(false & true) | true", true},
+		{"false & true | true", true},
+	}
+
+	for _, tt := range tests {
+		val := testEval(t, tt.program)
+		boolVal, ok := val.(*value.Bool)
+
+		if !ok {
+			t.Fatalf("wow, expected a bool, got %v", val.Inspect())
+		} else if boolVal.Value != tt.expected {
+			t.Fatalf("wrong bool value: expected %v, got %v", tt.expected, boolVal)
+		}
+	}
+}
+
 func testEval(t *testing.T, input string) value.Value {
 	l := lexer.New(input)
 	p := parser.New(l)

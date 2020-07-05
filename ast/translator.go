@@ -2,6 +2,7 @@ package ast
 
 import (
 	"crisp/parse_tree"
+	"crisp/value"
 	"fmt"
 )
 
@@ -17,7 +18,8 @@ func NewTranslator() *Translator { return &Translator{} }
 func (tr *Translator) Translate(program *parse_tree.Program) Expr {
 
 	le := &LetExpr{
-		Expr: tr.convertBlock(program.Expr),
+		Env:  value.TopLevelEnv,
+		Expr: tr.translateBlock(program.Expr),
 	}
 
 	for _, decl := range program.Decls {
@@ -27,30 +29,32 @@ func (tr *Translator) Translate(program *parse_tree.Program) Expr {
 	return le
 }
 
-func (tr *Translator) convertBlock(blockTree parse_tree.Block) Expr {
+func (tr *Translator) translateBlock(blockTree parse_tree.Block) Expr {
 	switch block := blockTree.(type) {
 	case *parse_tree.JustExprBlock:
-		return tr.convertInline(block.Expr)
+		return tr.translateInline(block.Expr)
 	}
 
 	tr.error(fmt.Sprintf("Translator Error: unhandled Block %v of type %T", blockTree, blockTree))
 	return nil
 }
 
-func (tr *Translator) convertInline(inlineTree parse_tree.Inline) Expr {
+func (tr *Translator) translateInline(inlineTree parse_tree.Inline) Expr {
 	switch inline := inlineTree.(type) {
 	case *parse_tree.InlineInt:
 		return &IntExpr{Value: inline.Value}
+	case *parse_tree.InlineBool:
+		return &BoolExpr{Value: inline.Value}
 	case *parse_tree.InlineUnopExpr:
 		return &UnopExpr{
 			Token: inline.Token,
-			Expr:  tr.convertInline(inline.Expr),
+			Expr:  tr.translateInline(inline.Expr),
 		}
 	case *parse_tree.InlineBinopExpr:
 		return &BinopExpr{
 			Token: inline.Token,
-			LExpr: tr.convertInline(inline.LExpr),
-			RExpr: tr.convertInline(inline.RExpr),
+			LExpr: tr.translateInline(inline.LExpr),
+			RExpr: tr.translateInline(inline.RExpr),
 		}
 	}
 

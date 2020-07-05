@@ -10,13 +10,11 @@ import (
 func Eval(env *value.Env, someExpr ast.Expr) value.Value {
 	switch expr := someExpr.(type) {
 	case *ast.LetExpr:
-		if len(expr.Asserts) > 0 {
-			// TODO check expr.Asserts
-			panic("come on, Chris: time to implement LetExpr assert evaluation")
-		}
-		return Eval(expr.Env, expr.Expr)
+		return evalLetExpr(env, expr)
 	case *ast.IntExpr:
-		return &value.Int{Value: expr.Value}
+		return evalIntExpr(env, expr)
+	case *ast.BoolExpr:
+		return evalBoolExpr(env, expr)
 	case *ast.UnopExpr:
 		return evalUnopExpr(env, expr)
 	case *ast.BinopExpr:
@@ -27,6 +25,14 @@ func Eval(env *value.Env, someExpr ast.Expr) value.Value {
 	return nil
 }
 
+func evalIntExpr(_ *value.Env, expr *ast.IntExpr) value.Value {
+	return &value.Int{Value: expr.Value}
+}
+
+func evalBoolExpr(_ *value.Env, expr *ast.BoolExpr) value.Value {
+	return &value.Bool{Value: expr.Value}
+}
+
 func evalUnopExpr(env *value.Env, expr *ast.UnopExpr) value.Value {
 	someVal := Eval(env, expr.Expr)
 
@@ -34,6 +40,10 @@ func evalUnopExpr(env *value.Env, expr *ast.UnopExpr) value.Value {
 	case *value.Int:
 		if expr.Token.Type == token.Minus {
 			return &value.Int{Value: -val.Value}
+		}
+	case *value.Bool:
+		if expr.Token.Type == token.Not {
+			return &value.Bool{Value: !val.Value}
 		}
 	}
 
@@ -74,8 +84,30 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 				}
 			}
 		}
+	case *value.Bool:
+		rightVal, ok := someRightVal.(*value.Bool)
+
+		if ok {
+			l := leftVal.Value
+			r := rightVal.Value
+
+			switch expr.Token.Type {
+			case token.And:
+				return &value.Bool{Value: l && r}
+			case token.Or:
+				return &value.Bool{Value: l || r}
+			}
+		}
 	}
 
 	panic(fmt.Sprintf("RuntimeError: illegal unop expr: %v", expr))
 	return nil
+}
+
+func evalLetExpr(env *value.Env, expr *ast.LetExpr) value.Value {
+	if len(expr.Asserts) > 0 {
+		// TODO check expr.Asserts
+		panic("come on, Chris: time to implement LetExpr assert evaluation")
+	}
+	return Eval(expr.Env, expr.Expr)
 }

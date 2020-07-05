@@ -10,21 +10,19 @@ type Expr interface {
 	expr()
 }
 
-type LetExpr struct {
-	Env     *value.Env
-	Asserts []Expr
-	Expr    Expr
-}
-
-func (le *LetExpr) expr()          {}
-func (le *LetExpr) String() string { return "LetExpr" }
-
 type IntExpr struct {
 	Value int
 }
 
 func (le *IntExpr) expr()          {}
 func (le *IntExpr) String() string { return "IntExpr" }
+
+type BoolExpr struct {
+	Value bool
+}
+
+func (le *BoolExpr) expr()          {}
+func (le *BoolExpr) String() string { return "BoolExpr" }
 
 type UnopExpr struct {
 	Token token.Token // the unop token, e.g. !
@@ -42,3 +40,12 @@ type BinopExpr struct {
 
 func (le *BinopExpr) expr()          {}
 func (le *BinopExpr) String() string { return "BinopExpr" }
+
+type LetExpr struct {
+	Env     *value.Env
+	Asserts []Expr
+	Expr    Expr
+}
+
+func (le *LetExpr) expr()          {}
+func (le *LetExpr) String() string { return "LetExpr" }

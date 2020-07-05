@@ -25,4 +25,11 @@ type Int struct {
 }
 
 func (i *Int) Class() Class    { return IntClass }
-func (i *Int) Inspect() string { return fmt.Sprintf("%d", i.Value) }
+func (i *Int) Inspect() string { return fmt.Sprintf("%v", i.Value) }
+
+type Bool struct {
+	Value bool
+}
+
+func (b *Bool) Class() Class    { return BoolClass }
+func (b *Bool) Inspect() string { return fmt.Sprintf("%v", b.Value) }
