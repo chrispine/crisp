@@ -61,6 +61,10 @@ func TestExprs(t *testing.T) {
 		{"[*]\n\t1", "[*] {\n1\n}"},
 		{"[*]\n\t1\n\t2", "[*] {\n1\n; [*] {\n2\n}\n}"},
 		{"[*]\n\t1\n\t; [*]\n\t\t2", "[*] {\n1\n; [*] {\n2\n}\n}"},
+
+		{"let\n\ta=4\n\ta+1", "let {\na = 4\n(a + 1)\n}"},
+
+		//{"sum a b ->\n\tc = a+b\n\tc\nx", "sum = a -> b -> let {\nc = (a + b)\nc\n}\nx"},
 	}
 
 	for _, tt := range atomTests {

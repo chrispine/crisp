@@ -257,6 +257,17 @@ FuncDeclBlock ->
 	ID  (LvalAtom)*  FuncBlock  // sugar for currying and 'let'
 */
 func (p *Parser) parseFuncDeclBlock(atom ast.Inline) ast.Block {
+	// type assert that atom is an ast.ID
+
+	// create PATMAT node, with `atom` as patmat.Lval
+
+	// read LvalAtoms up to token.ARROW
+	// and validate that they are all l-values
+
+	// recursively build nested FuncBlocks, like we did for ListBlocks
+
+	// don't forget to write the tests!
+
 	return nil // TODO
 }
 
@@ -316,6 +327,8 @@ func (p *Parser) parseLetBlock() ast.Block {
 	p.expectToken(token.INDENT)
 
 	lit.Decls, lit.Expr = p.parseDeclsAndExpr()
+
+	p.expectToken(token.DEDENT)
 
 	return lit
 }
