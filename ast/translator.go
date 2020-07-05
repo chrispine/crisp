@@ -33,7 +33,7 @@ func (tr *Translator) convertBlock(blockTree parse_tree.Block) Expr {
 		return tr.convertInline(block.Expr)
 	}
 
-	tr.error(fmt.Sprintf("unhandled Block %v of type %T", blockTree, blockTree))
+	tr.error(fmt.Sprintf("Translator Error: unhandled Block %v of type %T", blockTree, blockTree))
 	return nil
 }
 
@@ -41,9 +41,20 @@ func (tr *Translator) convertInline(inlineTree parse_tree.Inline) Expr {
 	switch inline := inlineTree.(type) {
 	case *parse_tree.InlineInt:
 		return &IntExpr{Value: inline.Value}
+	case *parse_tree.InlineUnopExpr:
+		return &UnopExpr{
+			Token: inline.Token,
+			Expr:  tr.convertInline(inline.Expr),
+		}
+	case *parse_tree.InlineBinopExpr:
+		return &BinopExpr{
+			Token: inline.Token,
+			LExpr: tr.convertInline(inline.LExpr),
+			RExpr: tr.convertInline(inline.RExpr),
+		}
 	}
 
-	tr.error(fmt.Sprintf("unhandled Inline %v of type %T", inlineTree, inlineTree))
+	tr.error(fmt.Sprintf("Translator Error: unhandled Inline %v of type %T", inlineTree, inlineTree))
 	return nil
 }
 
