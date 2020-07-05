@@ -50,6 +50,7 @@ func TestExprs(t *testing.T) {
 		{"(a,b) -> a+b", "(a, b) -> (a + b)"},
 		{"[a,b] -> a+b", "[a; [b]] -> (a + b)"},
 		{"a -> b -> c -> d", "a -> b -> c -> d"},
+		{"(a -> 1, a -> 2)", "((a -> 1), (a -> 2))"},
 
 		{"foo bar", "(foo @ bar)"},
 		{"inc(5) ", "(inc @ 5)"},
@@ -63,8 +64,10 @@ func TestExprs(t *testing.T) {
 		{"[*]\n\t1\n\t; [*]\n\t\t2", "[*] {\n1\n; [*] {\n2\n}\n}"},
 
 		{"let\n\ta=4\n\ta+1", "let {\na = 4\n(a + 1)\n}"},
+		{"x -> let\n\ty=x\n\ty", "x -> let {\ny = x\ny\n}"},
+		{"x ->\n\ty=x\n\ty", "x -> let {\ny = x\ny\n}"},
 
-		//{"sum a b ->\n\tc = a+b\n\tc\nx", "sum = a -> b -> let {\nc = (a + b)\nc\n}\nx"},
+		{"sum a b ->\n\tc = a+b\n\tc\nx", "sum = a -> b -> let {\nc = (a + b)\nc\n}\nx"},
 	}
 
 	for _, tt := range atomTests {
@@ -76,7 +79,7 @@ func TestExprs(t *testing.T) {
 		progStr := program.String()
 
 		if tt.value+"\n" != progStr {
-			t.Errorf("parse test fail\n\texpected:\n%v\n\tgot:\n%v", tt.value, progStr)
+			t.Errorf("parse test fail\n\tinput:\n%v\n\texpected:\n%v\n\tgot:\n%v", tt.input, tt.value, progStr)
 		}
 	}
 }

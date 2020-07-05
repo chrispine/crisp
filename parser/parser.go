@@ -257,18 +257,51 @@ FuncDeclBlock ->
 	ID  (LvalAtom)*  FuncBlock  // sugar for currying and 'let'
 */
 func (p *Parser) parseFuncDeclBlock(atom ast.Inline) ast.Block {
-	// type assert that atom is an ast.ID
+	// `atom` must be an identifier
+	_, ok := atom.(*ast.InlineID)
+	if !ok {
+		p.error(fmt.Sprintf("not a valid identifier: %v", atom))
+	}
 
-	// create PATMAT node, with `atom` as patmat.Lval
+	patmat := &ast.PatMatBlock{
+		Token: token.Token{0, token.PATMAT, "="},
+		Lval:  atom,
+	}
+
+	var args []ast.Inline
 
 	// read LvalAtoms up to token.ARROW
-	// and validate that they are all l-values
+	for p.curToken.Type != token.ARROW {
+		arg := p.parseAtom()
+		if !arg.IsLval() {
+			p.error(fmt.Sprintf("arg is not an l-value: %v", arg))
+		}
+		args = append(args, arg)
+	}
 
-	// recursively build nested FuncBlocks, like we did for ListBlocks
+	if len(args) < 1 {
+		p.error("should not be possible to get here in parseFuncDeclBlock!")
+	}
 
-	// don't forget to write the tests!
+	innermostFunc := p.parseFuncBlock(args[len(args)-1])
 
-	return nil // TODO
+	patmat.Expr = makeNestedFuncBlocks(
+		innermostFunc.(*ast.FuncBlock).Token,
+		args[:len(args)-1],
+		innermostFunc)
+
+	return patmat
+}
+func makeNestedFuncBlocks(arrowToken token.Token, args []ast.Inline, inner ast.Block) ast.Block {
+	if len(args) <= 0 {
+		return inner
+	}
+
+	return &ast.FuncBlock{
+		Token: arrowToken,
+		Lval:  args[0],
+		Expr:  makeNestedFuncBlocks(arrowToken, args[1:], inner),
+	}
 }
 
 /*
@@ -358,6 +391,7 @@ func (p *Parser) parseFuncBlock(atom ast.Inline) ast.Block {
 		}}
 		letBlock.Decls, letBlock.Expr = p.parseDeclsAndExpr()
 		lit.Expr = letBlock
+		p.expectToken(token.DEDENT)
 	} else {
 		lit.Expr = p.parseExprBlock()
 	}
