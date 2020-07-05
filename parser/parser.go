@@ -1,27 +1,27 @@
 package parser
 
 import (
-	"crisp/ast"
 	"crisp/lexer"
+	"crisp/parse_tree"
 	"crisp/token"
 	"fmt"
 	"reflect"
 	"strconv"
 )
 
-var unops = []token.TokenType{
-	token.MINUS, //  -
-	token.NOT,   //  !
+var unops = []token.TokType{
+	token.Minus, //  -
+	token.Not,   //  !
 }
 
-var isBinop, isEndOfExpr map[token.TokenType]bool
+var isBinop, isEndOfExpr map[token.TokType]bool
 
 type BinopPrecList struct {
 	lAssoc bool
-	ops    []token.TokenType
+	ops    []token.TokType
 }
 
-func (bpl *BinopPrecList) Contains(tok token.TokenType) bool {
+func (bpl *BinopPrecList) Contains(tok token.TokType) bool {
 	for _, tokenType := range bpl.ops {
 		if tok == tokenType {
 			return true
@@ -33,41 +33,41 @@ func (bpl *BinopPrecList) Contains(tok token.TokenType) bool {
 
 // NOTE: this holds the binops *in order of precedence*
 var binopPrecs = []BinopPrecList{
-	{lAssoc: true, ops: []token.TokenType{ //  |  ||
-		token.OR,
-		token.DBLOR,
+	{lAssoc: true, ops: []token.TokType{ //  |  ||
+		token.Or,
+		token.DblOr,
 	}},
-	{lAssoc: true, ops: []token.TokenType{ //  &  &&
-		token.AND,
-		token.DBLAND,
+	{lAssoc: true, ops: []token.TokType{ //  &  &&
+		token.And,
+		token.DblAnd,
 	}},
-	{lAssoc: true, ops: []token.TokenType{ //  ==  !=
-		token.EQUAL,
-		token.NEQ,
+	{lAssoc: true, ops: []token.TokType{ //  ==  !=
+		token.Equal,
+		token.NEq,
 	}},
-	{lAssoc: true, ops: []token.TokenType{ //  <  <=  >  >=
+	{lAssoc: true, ops: []token.TokType{ //  <  <=  >  >=
 		token.LT,
 		token.LTE,
 		token.GT,
 		token.GTE,
 	}},
-	{lAssoc: true, ops: []token.TokenType{ //  +  ++  -  --
-		token.PLUS,
-		token.DBLPLUS,
-		token.MINUS,
-		token.DBLMINUS,
+	{lAssoc: true, ops: []token.TokType{ //  +  ++  -  --
+		token.Plus,
+		token.DblPlus,
+		token.Minus,
+		token.DblMinus,
 	}},
-	{lAssoc: true, ops: []token.TokenType{ //  *  **  /  //  %  %%
-		token.MULT,
-		token.DBLMULT,
-		token.DIV,
-		token.DBLDIV,
-		token.MOD,
-		token.DBLMOD,
+	{lAssoc: true, ops: []token.TokType{ //  *  **  /  //  %  %%
+		token.Mult,
+		token.DblMult,
+		token.Div,
+		token.DblDiv,
+		token.Mod,
+		token.DblMod,
 	}},
-	{lAssoc: false, ops: []token.TokenType{ //  ^  ^^
-		token.EXP,
-		token.DBLEXP,
+	{lAssoc: false, ops: []token.TokType{ //  ^  ^^
+		token.Exp,
+		token.DblExp,
 	}},
 }
 
@@ -75,7 +75,7 @@ type Parser struct {
 	l      *lexer.Lexer
 	errors []string
 
-	unit *ast.InlineTuple
+	unit *parse_tree.InlineTuple
 
 	curToken  *token.Token
 	peekToken *token.Token
@@ -85,8 +85,8 @@ func New(l *lexer.Lexer) *Parser {
 	p := &Parser{
 		l:      l,
 		errors: []string{},
-		unit: &ast.InlineTuple{
-			Token: token.Token{Type: token.LPAREN, Literal: "("},
+		unit: &parse_tree.InlineTuple{
+			Token: token.Token{Type: token.LParen, Literal: "("},
 		},
 	}
 
@@ -100,11 +100,11 @@ func New(l *lexer.Lexer) *Parser {
 	return p
 }
 
-func calculateBinopMap() map[token.TokenType]bool {
-	bops := map[token.TokenType]bool{}
+func calculateBinopMap() map[token.TokType]bool {
+	bops := map[token.TokType]bool{}
 
 	// first set all token types to false
-	for i := token.TokenType(0); i < token.NUM_TOKEN_TYPES; i++ {
+	for i := token.TokType(0); i < token.NumTokenTypes; i++ {
 		bops[i] = false
 	}
 
@@ -118,23 +118,23 @@ func calculateBinopMap() map[token.TokenType]bool {
 	return bops
 }
 
-func calculateEndOfExprMap() map[token.TokenType]bool {
-	eoes := map[token.TokenType]bool{}
+func calculateEndOfExprMap() map[token.TokType]bool {
+	eoes := map[token.TokType]bool{}
 
 	// first set all token types to false
-	for i := token.TokenType(0); i < token.NUM_TOKEN_TYPES; i++ {
+	for i := token.TokType(0); i < token.NumTokenTypes; i++ {
 		eoes[i] = false
 	}
 
 	// then set these to true
 	eoes[token.EOF] = true
-	eoes[token.COMMA] = true
-	eoes[token.SEMICOLON] = true
-	eoes[token.RPAREN] = true
-	eoes[token.RBRACKET] = true
-	eoes[token.RBRACE] = true
-	eoes[token.NEWLINE] = true
-	// TODO: also add DEDENT? INDENT??
+	eoes[token.Comma] = true
+	eoes[token.Semicolon] = true
+	eoes[token.RParen] = true
+	eoes[token.RBracket] = true
+	eoes[token.RBrace] = true
+	eoes[token.NewLine] = true
+	// TODO: also add Dedent? Indent??
 
 	return eoes
 }
@@ -144,7 +144,7 @@ func (p *Parser) nextToken() {
 	p.peekToken = p.l.NextToken()
 }
 
-func (p *Parser) expectToken(ts ...token.TokenType) {
+func (p *Parser) expectToken(ts ...token.TokType) {
 	for _, t := range ts {
 		if p.curTokenIs(t) {
 			p.nextToken()
@@ -155,11 +155,11 @@ func (p *Parser) expectToken(ts ...token.TokenType) {
 	p.error(fmt.Sprintf("expected next token to be in %v, got %v instead", ts, p.peekToken))
 }
 
-func (p *Parser) curTokenIs(t token.TokenType) bool {
+func (p *Parser) curTokenIs(t token.TokType) bool {
 	return p.curToken.Type == t
 }
 
-func (p *Parser) peekTokenIs(t token.TokenType) bool {
+func (p *Parser) peekTokenIs(t token.TokType) bool {
 	return p.peekToken.Type == t
 }
 
@@ -172,7 +172,7 @@ func (p *Parser) error(err string) {
 	panic(err) // TODO: remove this line when parser is stable
 }
 
-func (p *Parser) noPrefixParseFnError(t token.TokenType) {
+func (p *Parser) noPrefixParseFnError(t token.TokType) {
 	p.error(fmt.Sprintf("no prefix parse function for %v found", t))
 }
 
@@ -180,10 +180,10 @@ func (p *Parser) noPrefixParseFnError(t token.TokenType) {
 Program ->
 	DeclsAndExpr
 */
-func (p *Parser) ParseProgram() *ast.Program {
+func (p *Parser) ParseProgram() *parse_tree.Program {
 	decls, expr := p.parseDeclsAndExpr()
 
-	program := &ast.Program{
+	program := &parse_tree.Program{
 		Decls: decls,
 		Expr:  expr,
 	}
@@ -204,13 +204,13 @@ func (p *Parser) ParseProgram() *ast.Program {
 
 /*
 DeclsAndExpr ->
-	«BLOCK_LEN»  DeclBlock*  ExprBlock
+	«BlockLen»  DeclBlock*  ExprBlock
 */
-func (p *Parser) parseDeclsAndExpr() ([]ast.Block, ast.Block) {
-	var decls []ast.Block
+func (p *Parser) parseDeclsAndExpr() ([]parse_tree.Block, parse_tree.Block) {
+	var decls []parse_tree.Block
 
 	numDecls := p.curToken.NumLines - 1
-	p.expectToken(token.BLOCK_LEN)
+	p.expectToken(token.BlockLen)
 
 	for i := 0; i < numDecls; i++ {
 		decls = append(decls, p.parseDeclBlock())
@@ -224,10 +224,10 @@ func (p *Parser) parseDeclsAndExpr() ([]ast.Block, ast.Block) {
 	PatMatBlock
 	FuncDeclBlock
 */
-func (p *Parser) parseDeclBlock() ast.Block {
+func (p *Parser) parseDeclBlock() parse_tree.Block {
 	atom := p.parseAtom()
 
-	if p.curToken.Type == token.PATMAT {
+	if p.curToken.Type == token.PatMat {
 		return p.parsePatMatBlock(atom)
 	}
 
@@ -238,14 +238,14 @@ func (p *Parser) parseDeclBlock() ast.Block {
 PatMatBlock ->
 	LvalAtom  '='  ExprBlock
 */
-func (p *Parser) parsePatMatBlock(atom ast.Inline) ast.Block {
+func (p *Parser) parsePatMatBlock(atom parse_tree.Inline) parse_tree.Block {
 	if !atom.IsLval() {
 		p.error(fmt.Sprintf("atom %v is not an l-value", atom))
 	}
 
-	lit := &ast.PatMatBlock{Token: *p.curToken, Lval: atom}
+	lit := &parse_tree.PatMatBlock{Token: *p.curToken, Lval: atom}
 
-	p.expectToken(token.PATMAT)
+	p.expectToken(token.PatMat)
 
 	lit.Expr = p.parseExprBlock()
 
@@ -256,22 +256,22 @@ func (p *Parser) parsePatMatBlock(atom ast.Inline) ast.Block {
 FuncDeclBlock ->
 	ID  (LvalAtom)*  FuncBlock  // sugar for currying and 'let'
 */
-func (p *Parser) parseFuncDeclBlock(atom ast.Inline) ast.Block {
+func (p *Parser) parseFuncDeclBlock(atom parse_tree.Inline) parse_tree.Block {
 	// `atom` must be an identifier
-	_, ok := atom.(*ast.InlineID)
+	_, ok := atom.(*parse_tree.InlineID)
 	if !ok {
 		p.error(fmt.Sprintf("not a valid identifier: %v", atom))
 	}
 
-	patmat := &ast.PatMatBlock{
-		Token: token.Token{0, token.PATMAT, "="},
+	patmat := &parse_tree.PatMatBlock{
+		Token: token.Token{Type: token.PatMat, Literal: "="},
 		Lval:  atom,
 	}
 
-	var args []ast.Inline
+	var args []parse_tree.Inline
 
-	// read LvalAtoms up to token.ARROW
-	for p.curToken.Type != token.ARROW {
+	// read LvalAtoms up to token.Arrow
+	for p.curToken.Type != token.Arrow {
 		arg := p.parseAtom()
 		if !arg.IsLval() {
 			p.error(fmt.Sprintf("arg is not an l-value: %v", arg))
@@ -279,25 +279,26 @@ func (p *Parser) parseFuncDeclBlock(atom ast.Inline) ast.Block {
 		args = append(args, arg)
 	}
 
-	if len(args) < 1 {
+	var innermostFunc parse_tree.Block
+	if len(args) > 0 {
+		innermostFunc = p.parseFuncBlock(args[len(args)-1])
+	} else {
 		p.error("should not be possible to get here in parseFuncDeclBlock!")
 	}
 
-	innermostFunc := p.parseFuncBlock(args[len(args)-1])
-
 	patmat.Expr = makeNestedFuncBlocks(
-		innermostFunc.(*ast.FuncBlock).Token,
+		innermostFunc.(*parse_tree.FuncBlock).Token,
 		args[:len(args)-1],
 		innermostFunc)
 
 	return patmat
 }
-func makeNestedFuncBlocks(arrowToken token.Token, args []ast.Inline, inner ast.Block) ast.Block {
+func makeNestedFuncBlocks(arrowToken token.Token, args []parse_tree.Inline, inner parse_tree.Block) parse_tree.Block {
 	if len(args) <= 0 {
 		return inner
 	}
 
-	return &ast.FuncBlock{
+	return &parse_tree.FuncBlock{
 		Token: arrowToken,
 		Lval:  args[0],
 		Expr:  makeNestedFuncBlocks(arrowToken, args[1:], inner),
@@ -312,19 +313,19 @@ func makeNestedFuncBlocks(arrowToken token.Token, args []ast.Inline, inner ast.B
 	TupleBlock
 	ListBlock
 */
-func (p *Parser) parseExprBlock() ast.Block {
+func (p *Parser) parseExprBlock() parse_tree.Block {
 	switch p.curToken.Type {
-	case token.LET:
+	case token.Let:
 		return p.parseLetBlock()
-	case token.TBLOCK:
+	case token.TBlock:
 		return p.parseTupleBlock()
-	case token.LBLOCK:
+	case token.LBlock:
 		return p.parseListBlock()
 	}
 	// so it's either a FuncBlock or a JustExprBlock
 	atom := p.parseAtom()
 
-	if p.curToken.Type == token.ARROW {
+	if p.curToken.Type == token.Arrow {
 		return p.parseFuncBlock(atom)
 	}
 
@@ -335,14 +336,14 @@ func (p *Parser) parseExprBlock() ast.Block {
 JustExprBlock ->
 		Expr  '\n'                   // TODO: allow (by collapsing) multi-line expr
 */
-func (p *Parser) parseJustExprBlock(atom ast.Inline) ast.Block {
-	lit := &ast.JustExprBlock{
+func (p *Parser) parseJustExprBlock(atom parse_tree.Inline) parse_tree.Block {
+	lit := &parse_tree.JustExprBlock{
 		Token: token.ExprBlockToken,
 		Expr:  p.parseExprRest(atom),
 	}
 
 	if p.curToken.Type != token.EOF {
-		p.expectToken(token.NEWLINE)
+		p.expectToken(token.NewLine)
 	}
 
 	return lit
@@ -352,16 +353,16 @@ func (p *Parser) parseJustExprBlock(atom ast.Inline) ast.Block {
 LetBlock ->
 	'let'  '|->'  DeclsAndExpr  '<-|'
 */
-func (p *Parser) parseLetBlock() ast.Block {
-	lit := &ast.LetBlock{
+func (p *Parser) parseLetBlock() parse_tree.Block {
+	lit := &parse_tree.LetBlock{
 		Token: *p.curToken,
 	}
-	p.expectToken(token.LET)
-	p.expectToken(token.INDENT)
+	p.expectToken(token.Let)
+	p.expectToken(token.Indent)
 
 	lit.Decls, lit.Expr = p.parseDeclsAndExpr()
 
-	p.expectToken(token.DEDENT)
+	p.expectToken(token.Dedent)
 
 	return lit
 }
@@ -371,27 +372,27 @@ FuncBlock ->
 	LvalAtom  '->'  ExprBlock
 	LvalAtom  '->'  |->'  DeclsAndExpr  '<-|'                  // sugar for 'let'
 */
-func (p *Parser) parseFuncBlock(atom ast.Inline) ast.Block {
-	p.expectToken(token.ARROW)
+func (p *Parser) parseFuncBlock(atom parse_tree.Inline) parse_tree.Block {
+	p.expectToken(token.Arrow)
 
 	if !atom.IsLval() {
 		p.error(fmt.Sprintf("atom %v is not an l-value", atom))
 	}
 
-	lit := &ast.FuncBlock{
+	lit := &parse_tree.FuncBlock{
 		Token: *p.curToken,
 		Lval:  atom,
 	}
 
-	if p.curToken.Type == token.INDENT {
-		p.expectToken(token.INDENT)
-		letBlock := &ast.LetBlock{Token: token.Token{
-			Type:    token.LET,
+	if p.curToken.Type == token.Indent {
+		p.expectToken(token.Indent)
+		letBlock := &parse_tree.LetBlock{Token: token.Token{
+			Type:    token.Let,
 			Literal: "let",
 		}}
 		letBlock.Decls, letBlock.Expr = p.parseDeclsAndExpr()
 		lit.Expr = letBlock
-		p.expectToken(token.DEDENT)
+		p.expectToken(token.Dedent)
 	} else {
 		lit.Expr = p.parseExprBlock()
 	}
@@ -403,12 +404,12 @@ func (p *Parser) parseFuncBlock(atom ast.Inline) ast.Block {
 TupleBlock ->
 	'(*)'  |->'  ExprBlock+  '<-|'
 */
-func (p *Parser) parseTupleBlock() ast.Block {
-	lit := &ast.TupleBlock{Token: *p.curToken}
-	p.expectToken(token.TBLOCK)
-	p.expectToken(token.INDENT)
+func (p *Parser) parseTupleBlock() parse_tree.Block {
+	lit := &parse_tree.TupleBlock{Token: *p.curToken}
+	p.expectToken(token.TBlock)
+	p.expectToken(token.Indent)
 	numElems := p.curToken.NumLines
-	p.expectToken(token.BLOCK_LEN)
+	p.expectToken(token.BlockLen)
 
 	if numElems <= 0 {
 		p.error(fmt.Sprintf("invalide TupleBlock parsed with %v elements", numElems))
@@ -417,7 +418,7 @@ func (p *Parser) parseTupleBlock() ast.Block {
 		lit.Exprs = append(lit.Exprs, p.parseExprBlock())
 	}
 
-	p.expectToken(token.DEDENT)
+	p.expectToken(token.Dedent)
 
 	return lit
 }
@@ -426,19 +427,19 @@ func (p *Parser) parseTupleBlock() ast.Block {
 ListBlock ->
 	'[*]'  |->'  ExprBlock+  (';'  ExprBlock)?  '<-|'
 */
-func (p *Parser) parseListBlock() ast.Block {
+func (p *Parser) parseListBlock() parse_tree.Block {
 	lBlockToken := *p.curToken
-	p.expectToken(token.LBLOCK)
-	p.expectToken(token.INDENT)
+	p.expectToken(token.LBlock)
+	p.expectToken(token.Indent)
 	numElems := p.curToken.NumLines
-	p.expectToken(token.BLOCK_LEN)
+	p.expectToken(token.BlockLen)
 
 	if numElems <= 0 {
 		p.error(fmt.Sprintf("invalide ListBlock parsed with %v elements", numElems))
 	}
 
-	var heads []ast.Block
-	var tail ast.Block
+	var heads []parse_tree.Block
+	var tail parse_tree.Block
 
 	// End before numElems-1 because the last line may be a semicolon (tail), so needs special treatment.
 	for i := 0; i < numElems-1; i++ {
@@ -446,25 +447,25 @@ func (p *Parser) parseListBlock() ast.Block {
 	}
 
 	// Now let's check that last line
-	if p.curToken.Type == token.SEMICOLON {
-		p.expectToken(token.SEMICOLON)
+	if p.curToken.Type == token.Semicolon {
+		p.expectToken(token.Semicolon)
 		tail = p.parseExprBlock()
 	} else {
 		heads = append(heads, p.parseExprBlock())
 		// and tail stays nil
 	}
 
-	p.expectToken(token.DEDENT)
+	p.expectToken(token.Dedent)
 
 	return makeNestedConsBlocks(lBlockToken, heads, tail)
 }
 
-func makeNestedConsBlocks(lBlockToken token.Token, heads []ast.Block, tail ast.Block) ast.Block {
+func makeNestedConsBlocks(lBlockToken token.Token, heads []parse_tree.Block, tail parse_tree.Block) parse_tree.Block {
 	if len(heads) <= 0 {
 		return tail
 	}
 
-	return &ast.ConsBlock{
+	return &parse_tree.ConsBlock{
 		Token: lBlockToken,
 		Head:  heads[0],
 		Tail:  makeNestedConsBlocks(lBlockToken, heads[1:], tail),
@@ -480,33 +481,33 @@ func makeNestedConsBlocks(lBlockToken token.Token, heads []ast.Block, tail ast.B
 	List
 	UnopExpr
 */
-func (p *Parser) parseAtom() ast.Inline {
+func (p *Parser) parseAtom() parse_tree.Inline {
 	switch p.curToken.Type {
 	case token.ID:
 		return p.parseID()
-	case token.INT:
+	case token.Int:
 		return p.parseInt()
-	case token.TRUE, token.FALSE:
+	case token.True, token.False:
 		return p.parseBool()
-	case token.LPAREN:
+	case token.LParen:
 		return p.parseTuple()
-	case token.LBRACKET:
+	case token.LBracket:
 		return p.parseList()
 	}
 
 	return p.parseUnopExpr()
 }
 
-func (p *Parser) parseID() *ast.InlineID {
-	lit := &ast.InlineID{Token: *p.curToken, Name: p.curToken.Literal}
+func (p *Parser) parseID() *parse_tree.InlineID {
+	lit := &parse_tree.InlineID{Token: *p.curToken, Name: p.curToken.Literal}
 
 	p.expectToken(token.ID)
 
 	return lit
 }
 
-func (p *Parser) parseInt() *ast.InlineInt {
-	lit := &ast.InlineInt{Token: *p.curToken}
+func (p *Parser) parseInt() *parse_tree.InlineInt {
+	lit := &parse_tree.InlineInt{Token: *p.curToken}
 
 	i, err := strconv.ParseInt(p.curToken.Literal, 0, 0)
 	if !isNil(err) {
@@ -516,17 +517,17 @@ func (p *Parser) parseInt() *ast.InlineInt {
 
 	lit.Value = int(i)
 
-	p.expectToken(token.INT)
+	p.expectToken(token.Int)
 
 	return lit
 }
 
-func (p *Parser) parseBool() *ast.InlineBool {
-	lit := &ast.InlineBool{Token: *p.curToken}
+func (p *Parser) parseBool() *parse_tree.InlineBool {
+	lit := &parse_tree.InlineBool{Token: *p.curToken}
 
-	lit.Value = p.curToken.Type == token.TRUE
+	lit.Value = p.curToken.Type == token.True
 
-	p.expectToken(token.TRUE, token.FALSE)
+	p.expectToken(token.True, token.False)
 
 	return lit
 }
@@ -537,30 +538,30 @@ Tuple ->
 	'('  Expr  (','  Expr)*  ')'
 
 Note that there are no 1-tuples, as those are just parenthesized
-expressions. In that case, parseTuple may not return a *ast.InlineTuple.
+expressions. In that case, parseTuple may not return a *parse_tree.InlineTuple.
 */
-func (p *Parser) parseTuple() ast.Inline {
-	lit := &ast.InlineTuple{Token: *p.curToken}
+func (p *Parser) parseTuple() parse_tree.Inline {
+	lit := &parse_tree.InlineTuple{Token: *p.curToken}
 
-	p.expectToken(token.LPAREN)
+	p.expectToken(token.LParen)
 
 	// check for unit (empty tuple)
-	if p.curToken.Type == token.RPAREN {
-		p.expectToken(token.RPAREN)
+	if p.curToken.Type == token.RParen {
+		p.expectToken(token.RParen)
 		return p.unit
 	}
 
-	var exprs []ast.Inline
+	var exprs []parse_tree.Inline
 Loop:
 	for {
 		exprs = append(exprs, p.parseExpr())
 
 		switch p.curToken.Type {
-		case token.RPAREN:
-			p.expectToken(token.RPAREN)
+		case token.RParen:
+			p.expectToken(token.RParen)
 			break Loop
-		case token.COMMA:
-			p.expectToken(token.COMMA)
+		case token.Comma:
+			p.expectToken(token.Comma)
 		default:
 			p.error(fmt.Sprintf("malformed tuple: found token %v", p.curToken))
 			return nil
@@ -584,30 +585,30 @@ List ->
 
 Note that this is a recursive function.
 */
-func (p *Parser) parseList() *ast.InlineCons {
-	lit := &ast.InlineCons{Token: *p.curToken}
+func (p *Parser) parseList() *parse_tree.InlineCons {
+	lit := &parse_tree.InlineCons{Token: *p.curToken}
 
-	p.expectToken(token.LBRACKET, token.COMMA)
+	p.expectToken(token.LBracket, token.Comma)
 
 	// check for nil (empty list)
-	if p.curToken.Type == token.RBRACKET {
-		p.expectToken(token.RBRACKET)
+	if p.curToken.Type == token.RBracket {
+		p.expectToken(token.RBracket)
 		return nil
 	}
 
 	lit.Head = p.parseExpr()
 
-	if p.curToken.Type == token.SEMICOLON {
-		p.expectToken(token.SEMICOLON)
+	if p.curToken.Type == token.Semicolon {
+		p.expectToken(token.Semicolon)
 		lit.Tail = p.parseExpr()
-		p.expectToken(token.RBRACKET)
+		p.expectToken(token.RBracket)
 
 		return lit
 	}
 
 	// check for end of list
-	if p.curToken.Type == token.RBRACKET {
-		p.expectToken(token.RBRACKET)
+	if p.curToken.Type == token.RBracket {
+		p.expectToken(token.RBracket)
 		lit.Tail = nil
 		return lit
 	}
@@ -622,10 +623,10 @@ UnopExpr ->
 	[-!]  Atom
 */
 
-func (p *Parser) parseUnopExpr() *ast.InlineUnopExpr {
+func (p *Parser) parseUnopExpr() *parse_tree.InlineUnopExpr {
 	for _, op := range unops {
 		if p.curToken.Type == op {
-			lit := &ast.InlineUnopExpr{Token: *p.curToken}
+			lit := &parse_tree.InlineUnopExpr{Token: *p.curToken}
 			p.expectToken(op)
 			lit.Expr = p.parseAtom()
 
@@ -655,29 +656,29 @@ ApplyExpr ->
 	Expr  '.'  Expr
 	Expr  Expr
 */
-func (p *Parser) parseExpr() ast.Inline {
+func (p *Parser) parseExpr() parse_tree.Inline {
 	return p.parseExpression(0)
 }
-func (p *Parser) parseExprRest(atom ast.Inline) ast.Inline {
+func (p *Parser) parseExprRest(atom parse_tree.Inline) parse_tree.Inline {
 	return p.parseExpressionRest(0, atom)
 }
-func (p *Parser) parseExpression(precedence int) ast.Inline {
+func (p *Parser) parseExpression(precedence int) parse_tree.Inline {
 	return p.parseExpressionRest(precedence, p.parseAtom())
 }
-func (p *Parser) parseExpressionRest(precedence int, atom ast.Inline) ast.Inline {
+func (p *Parser) parseExpressionRest(precedence int, atom parse_tree.Inline) parse_tree.Inline {
 	if precedence >= len(binopPrecs) {
-		if p.curToken.Type == token.ARROW {
+		if p.curToken.Type == token.Arrow {
 			tok := p.curToken
-			p.expectToken(token.ARROW)
+			p.expectToken(token.Arrow)
 
 			if !atom.IsLval() {
 				p.error(fmt.Sprintf("atom %v is not an l-value", atom))
 			}
 
-			return &ast.InlineFunc{
+			return &parse_tree.InlineFunc{
 				Token: *tok,
 				Lval:  atom,
-				Expr:  p.parseExpr(), // note that this resets the precedence; this is why token.ARROW is not treated as just another binop
+				Expr:  p.parseExpr(), // note that this resets the precedence; this is why token.Arrow is not treated as just another binop
 			}
 		}
 
@@ -706,7 +707,7 @@ func (p *Parser) parseExpressionRest(precedence int, atom ast.Inline) ast.Inline
 
 		samePrecAST := p.parseExpression(precedence)
 
-		return &ast.InlineBinopExpr{
+		return &parse_tree.InlineBinopExpr{
 			Token: *tok,
 			LExpr: higherPrecAST,
 			RExpr: samePrecAST,
@@ -716,13 +717,13 @@ func (p *Parser) parseExpressionRest(precedence int, atom ast.Inline) ast.Inline
 	return higherPrecAST
 }
 
-func (p *Parser) parseExpressionLeft(precedence int, prevAST ast.Inline) ast.Inline {
+func (p *Parser) parseExpressionLeft(precedence int, prevAST parse_tree.Inline) parse_tree.Inline {
 	tok := p.curToken
 	p.nextToken()
 
 	higherPrecAST := p.parseExpression(precedence + 1)
 
-	samePrecAST := &ast.InlineBinopExpr{
+	samePrecAST := &parse_tree.InlineBinopExpr{
 		Token: *tok,
 		LExpr: prevAST,
 		RExpr: higherPrecAST,
@@ -735,11 +736,11 @@ func (p *Parser) parseExpressionLeft(precedence int, prevAST ast.Inline) ast.Inl
 	return samePrecAST
 }
 
-func (p *Parser) parseFuncsAndApplyExprs(prevAST ast.Inline) ast.Inline {
-	var fn, arg ast.Inline
+func (p *Parser) parseFuncsAndApplyExprs(prevAST parse_tree.Inline) parse_tree.Inline {
+	var fn, arg parse_tree.Inline
 
-	if p.curToken.Type == token.DOT {
-		p.expectToken(token.DOT)
+	if p.curToken.Type == token.Dot {
+		p.expectToken(token.Dot)
 		fn = p.parseAtom()
 		arg = prevAST
 	} else {
@@ -747,7 +748,7 @@ func (p *Parser) parseFuncsAndApplyExprs(prevAST ast.Inline) ast.Inline {
 		arg = p.parseAtom()
 	}
 
-	applyExpr := &ast.InlineBinopExpr{
+	applyExpr := &parse_tree.InlineBinopExpr{
 		Token: token.AtToken,
 		LExpr: fn,
 		RExpr: arg,

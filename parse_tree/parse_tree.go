@@ -1,4 +1,4 @@
-package ast
+package parse_tree
 
 import (
 	"bytes"
@@ -23,7 +23,7 @@ Program ->
 	DeclsAndExpr
 
 DeclsAndExpr ->
-	«BLOCK_LEN»  DeclBlock*  ExprBlock
+	«BlockLen»  DeclBlock*  ExprBlock
 
 
 // block elements
@@ -165,7 +165,7 @@ func (p *Program) String() string {
  */
 
 type PatMatBlock struct {
-	Token token.Token // the token.PATMAT token
+	Token token.Token // the token.PatMat token
 	Lval  Inline
 	Expr  Block
 }
@@ -183,7 +183,7 @@ func (pmb *PatMatBlock) String() string {
 }
 
 type FuncBlock struct {
-	Token token.Token // the token.ARROW token
+	Token token.Token // the token.Arrow token
 	Lval  Inline
 	Expr  Block
 }
@@ -201,7 +201,7 @@ func (flb *FuncBlock) String() string {
 }
 
 type LetBlock struct {
-	Token token.Token // the token.LET token
+	Token token.Token // the token.Let token
 	Decls []Block
 	Expr  Block
 }
@@ -225,7 +225,7 @@ func (lb *LetBlock) String() string {
 }
 
 type TupleBlock struct {
-	Token token.Token // the token.TBLOCK token
+	Token token.Token // the token.TBlock token
 	Exprs []Block
 }
 
@@ -246,7 +246,7 @@ func (tb *TupleBlock) String() string {
 }
 
 type ConsBlock struct {
-	Token token.Token // the token.LBLOCK token
+	Token token.Token // the token.LBlock token
 	Head  Block
 	Tail  Block
 }
@@ -270,7 +270,7 @@ func (cb *ConsBlock) String() string {
 }
 
 type JustExprBlock struct {
-	Token token.Token // the token.EXPR_BLOCK token
+	Token token.Token // the token.ExprBlock token
 	Expr  Inline
 }
 
@@ -299,7 +299,7 @@ func (ii *InlineID) TokenLiteral() string { return ii.Token.Literal }
 func (ii *InlineID) String() string       { return ii.Name }
 
 type InlineInt struct {
-	Token token.Token // the token.INT token
+	Token token.Token // the token.Int token
 	Value int
 }
 
@@ -308,7 +308,7 @@ func (ii *InlineInt) TokenLiteral() string { return ii.Token.Literal }
 func (ii *InlineInt) String() string       { return ii.Token.Literal }
 
 type InlineBool struct {
-	Token token.Token // the token.TRUE or token.FALSE tokens
+	Token token.Token // the token.True or token.False tokens
 	Value bool
 }
 
@@ -317,7 +317,7 @@ func (ib *InlineBool) TokenLiteral() string { return ib.Token.Literal }
 func (ib *InlineBool) String() string       { return ib.Token.Literal }
 
 type InlineFunc struct {
-	Token token.Token // the token.ARROW token
+	Token token.Token // the token.Arrow token
 	Lval  Inline
 	Expr  Inline
 }
@@ -337,7 +337,7 @@ func (iFunc *InlineFunc) String() string {
 }
 
 type InlineTuple struct {
-	Token token.Token // the token.LPAREN token
+	Token token.Token // the token.LParen token
 	Exprs []Inline
 }
 
@@ -376,7 +376,7 @@ func (it *InlineTuple) String() string {
 }
 
 type InlineCons struct {
-	Token token.Token // the token.LBRACKET token
+	Token token.Token // the token.LBracket token
 	Head  Inline
 	Tail  Inline
 }
@@ -407,7 +407,7 @@ type InlineUnopExpr struct {
 }
 
 func (iue *InlineUnopExpr) IsLval() bool         { return false }
-func (iue *InlineUnopExpr) Op() token.TokenType  { return iue.Token.Type }
+func (iue *InlineUnopExpr) Op() token.TokType    { return iue.Token.Type }
 func (iue *InlineUnopExpr) TokenLiteral() string { return iue.Token.Literal }
 func (iue *InlineUnopExpr) String() string {
 	var out bytes.Buffer
@@ -428,7 +428,7 @@ type InlineBinopExpr struct {
 }
 
 func (ibe *InlineBinopExpr) IsLval() bool         { return false }
-func (ibe *InlineBinopExpr) Op() token.TokenType  { return ibe.Token.Type }
+func (ibe *InlineBinopExpr) Op() token.TokType    { return ibe.Token.Type }
 func (ibe *InlineBinopExpr) TokenLiteral() string { return ibe.Token.Literal }
 func (ibe *InlineBinopExpr) String() string {
 	var out bytes.Buffer

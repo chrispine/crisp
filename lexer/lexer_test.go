@@ -18,68 +18,68 @@ module export let case [{}]
 a|日本語&c<=!d<>=> !=== ,:;`
 
 	expectedTokens := []token.Token{
-		{5, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{5, token.BlockLen, "«BlockLen»"},
 		{0, token.ID, "main"},
-		{0, token.NEWLINE, "\n"},
+		{0, token.NewLine, "\n"},
 
 		{0, token.ID, "foo"},
-		{0, token.PATMAT, "="},
+		{0, token.PatMat, "="},
 		{0, token.ID, "x"},
-		{0, token.ARROW, "->"},
-		{0, token.INDENT, "« -> »"},
-		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
+		{0, token.Arrow, "->"},
+		{0, token.Indent, "« -> »"},
+		{1, token.BlockLen, "«BlockLen»"},
 		{0, token.ID, "x"},
-		{0, token.PLUS, "+"},
-		{0, token.INT, "1"},
-		{0, token.NEWLINE, "\n"},
-		{0, token.DEDENT, "« <- »"},
+		{0, token.Plus, "+"},
+		{0, token.Int, "1"},
+		{0, token.NewLine, "\n"},
+		{0, token.Dedent, "« <- »"},
 
-		{0, token.LPAREN, "("},
-		{0, token.INT, "3"},
-		{0, token.PLUS, "+"},
-		{0, token.INT, "3"},
-		{0, token.MINUS, "-"},
-		{0, token.INT, "2"},
-		{0, token.MULT, "*"},
-		{0, token.INT, "1"},
-		{0, token.DIV, "/"},
-		{0, token.INT, "1"},
-		{0, token.EXP, "^"},
-		{0, token.INT, "2"},
-		{0, token.MOD, "%"},
-		{0, token.INT, "999"},
-		{0, token.RPAREN, ")"},
-		{0, token.DOT, "."},
+		{0, token.LParen, "("},
+		{0, token.Int, "3"},
+		{0, token.Plus, "+"},
+		{0, token.Int, "3"},
+		{0, token.Minus, "-"},
+		{0, token.Int, "2"},
+		{0, token.Mult, "*"},
+		{0, token.Int, "1"},
+		{0, token.Div, "/"},
+		{0, token.Int, "1"},
+		{0, token.Exp, "^"},
+		{0, token.Int, "2"},
+		{0, token.Mod, "%"},
+		{0, token.Int, "999"},
+		{0, token.RParen, ")"},
+		{0, token.Dot, "."},
 		{0, token.ID, "foo"},
-		{0, token.NEWLINE, "\n"},
+		{0, token.NewLine, "\n"},
 
-		{0, token.MODULE, "module"},
-		{0, token.EXPORT, "export"},
-		{0, token.LET, "let"},
-		{0, token.CASE, "case"},
-		{0, token.LBRACKET, "["},
-		{0, token.LBRACE, "{"},
-		{0, token.RBRACE, "}"},
-		{0, token.RBRACKET, "]"},
-		{0, token.NEWLINE, "\n"},
+		{0, token.Module, "module"},
+		{0, token.Export, "export"},
+		{0, token.Let, "let"},
+		{0, token.Case, "case"},
+		{0, token.LBracket, "["},
+		{0, token.LBrace, "{"},
+		{0, token.RBrace, "}"},
+		{0, token.RBracket, "]"},
+		{0, token.NewLine, "\n"},
 
 		{0, token.ID, "a"},
-		{0, token.OR, "|"},
+		{0, token.Or, "|"},
 		{0, token.ID, "日本語"},
-		{0, token.AND, "&"},
+		{0, token.And, "&"},
 		{0, token.ID, "c"},
 		{0, token.LTE, "<="},
-		{0, token.NOT, "!"},
+		{0, token.Not, "!"},
 		{0, token.ID, "d"},
 		{0, token.LT, "<"},
 		{0, token.GTE, ">="},
 		{0, token.GT, ">"},
-		{0, token.NEQ, "!="},
-		{0, token.EQUAL, "=="},
-		{0, token.COMMA, ","},
-		{0, token.COLON, ":"},
-		{0, token.SEMICOLON, ";"},
-		{0, token.NEWLINE, "\n"},
+		{0, token.NEq, "!="},
+		{0, token.Equal, "=="},
+		{0, token.Comma, ","},
+		{0, token.Colon, ":"},
+		{0, token.Semicolon, ";"},
+		{0, token.NewLine, "\n"},
 		{0, token.EOF, "«EOF»"},
 	}
 
@@ -92,15 +92,15 @@ func TestTokenizingBlocks1(t *testing.T) {
 	2`
 
 	expectedTokens := []token.Token{
-		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
-		{0, token.TBLOCK, "(*)"},
-		{0, token.INDENT, "« -> »"},
-		{2, token.BLOCK_LEN, "«BLOCK_LEN»"},
-		{0, token.INT, "1"},
-		{0, token.NEWLINE, "\n"},
-		{0, token.INT, "2"},
-		{0, token.NEWLINE, "\n"},
-		{0, token.DEDENT, "« <- »"},
+		{1, token.BlockLen, "«BlockLen»"},
+		{0, token.TBlock, "(*)"},
+		{0, token.Indent, "« -> »"},
+		{2, token.BlockLen, "«BlockLen»"},
+		{0, token.Int, "1"},
+		{0, token.NewLine, "\n"},
+		{0, token.Int, "2"},
+		{0, token.NewLine, "\n"},
+		{0, token.Dedent, "« <- »"},
 		{0, token.EOF, "«EOF»"},
 	}
 
@@ -115,15 +115,15 @@ func TestTokenizingBlocks2(t *testing.T) {
 `
 
 	expectedTokens := []token.Token{
-		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
-		{0, token.TBLOCK, "(*)"},
-		{0, token.INDENT, "« -> »"},
-		{2, token.BLOCK_LEN, "«BLOCK_LEN»"},
-		{0, token.INT, "1"},
-		{0, token.NEWLINE, "\n"},
-		{0, token.INT, "2"},
-		{0, token.NEWLINE, "\n"},
-		{0, token.DEDENT, "« <- »"},
+		{1, token.BlockLen, "«BlockLen»"},
+		{0, token.TBlock, "(*)"},
+		{0, token.Indent, "« -> »"},
+		{2, token.BlockLen, "«BlockLen»"},
+		{0, token.Int, "1"},
+		{0, token.NewLine, "\n"},
+		{0, token.Int, "2"},
+		{0, token.NewLine, "\n"},
+		{0, token.Dedent, "« <- »"},
 		{0, token.EOF, "«EOF»"},
 	}
 
@@ -137,16 +137,16 @@ x
 `
 
 	expectedTokens := []token.Token{
-		{2, token.BLOCK_LEN, "«BLOCK_LEN»"},
-		{0, token.TBLOCK, "(*)"},
-		{0, token.INDENT, "« -> »"},
-		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
-		{0, token.INT, "1"},
-		{0, token.NEWLINE, "\n"},
-		{0, token.DEDENT, "« <- »"},
+		{2, token.BlockLen, "«BlockLen»"},
+		{0, token.TBlock, "(*)"},
+		{0, token.Indent, "« -> »"},
+		{1, token.BlockLen, "«BlockLen»"},
+		{0, token.Int, "1"},
+		{0, token.NewLine, "\n"},
+		{0, token.Dedent, "« <- »"},
 
 		{0, token.ID, "x"},
-		{0, token.NEWLINE, "\n"},
+		{0, token.NewLine, "\n"},
 		{0, token.EOF, "«EOF»"},
 	}
 
@@ -160,16 +160,16 @@ func TestTokenizingBlocks4(t *testing.T) {
 x`
 
 	expectedTokens := []token.Token{
-		{2, token.BLOCK_LEN, "«BLOCK_LEN»"},
-		{0, token.TBLOCK, "(*)"},
-		{0, token.INDENT, "« -> »"},
-		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
-		{0, token.INT, "1"},
-		{0, token.NEWLINE, "\n"},
-		{0, token.DEDENT, "« <- »"},
+		{2, token.BlockLen, "«BlockLen»"},
+		{0, token.TBlock, "(*)"},
+		{0, token.Indent, "« -> »"},
+		{1, token.BlockLen, "«BlockLen»"},
+		{0, token.Int, "1"},
+		{0, token.NewLine, "\n"},
+		{0, token.Dedent, "« <- »"},
 
 		{0, token.ID, "x"},
-		{0, token.NEWLINE, "\n"},
+		{0, token.NewLine, "\n"},
 		{0, token.EOF, "«EOF»"},
 	}
 
@@ -184,19 +184,19 @@ func TestTokenizingBlocks5(t *testing.T) {
 		2`
 
 	expectedTokens := []token.Token{
-		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
-		{0, token.TBLOCK, "(*)"},
-		{0, token.INDENT, "« -> »"},
-		{2, token.BLOCK_LEN, "«BLOCK_LEN»"},
-		{0, token.INT, "1"},
-		{0, token.NEWLINE, "\n"},
-		{0, token.TBLOCK, "(*)"},
-		{0, token.INDENT, "« -> »"},
-		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
-		{0, token.INT, "2"},
-		{0, token.NEWLINE, "\n"},
-		{0, token.DEDENT, "« <- »"},
-		{0, token.DEDENT, "« <- »"},
+		{1, token.BlockLen, "«BlockLen»"},
+		{0, token.TBlock, "(*)"},
+		{0, token.Indent, "« -> »"},
+		{2, token.BlockLen, "«BlockLen»"},
+		{0, token.Int, "1"},
+		{0, token.NewLine, "\n"},
+		{0, token.TBlock, "(*)"},
+		{0, token.Indent, "« -> »"},
+		{1, token.BlockLen, "«BlockLen»"},
+		{0, token.Int, "2"},
+		{0, token.NewLine, "\n"},
+		{0, token.Dedent, "« <- »"},
+		{0, token.Dedent, "« <- »"},
 		{0, token.EOF, "«EOF»"},
 	}
 
@@ -212,19 +212,19 @@ func TestTokenizingBlocks6(t *testing.T) {
 `
 
 	expectedTokens := []token.Token{
-		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
-		{0, token.TBLOCK, "(*)"},
-		{0, token.INDENT, "« -> »"},
-		{2, token.BLOCK_LEN, "«BLOCK_LEN»"},
-		{0, token.INT, "1"},
-		{0, token.NEWLINE, "\n"},
-		{0, token.TBLOCK, "(*)"},
-		{0, token.INDENT, "« -> »"},
-		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
-		{0, token.INT, "2"},
-		{0, token.NEWLINE, "\n"},
-		{0, token.DEDENT, "« <- »"},
-		{0, token.DEDENT, "« <- »"},
+		{1, token.BlockLen, "«BlockLen»"},
+		{0, token.TBlock, "(*)"},
+		{0, token.Indent, "« -> »"},
+		{2, token.BlockLen, "«BlockLen»"},
+		{0, token.Int, "1"},
+		{0, token.NewLine, "\n"},
+		{0, token.TBlock, "(*)"},
+		{0, token.Indent, "« -> »"},
+		{1, token.BlockLen, "«BlockLen»"},
+		{0, token.Int, "2"},
+		{0, token.NewLine, "\n"},
+		{0, token.Dedent, "« <- »"},
+		{0, token.Dedent, "« <- »"},
 		{0, token.EOF, "«EOF»"},
 	}
 
@@ -241,22 +241,22 @@ func TestTokenizingBlocks7(t *testing.T) {
 x`
 
 	expectedTokens := []token.Token{
-		{2, token.BLOCK_LEN, "«BLOCK_LEN»"},
-		{0, token.TBLOCK, "(*)"},
-		{0, token.INDENT, "« -> »"},
-		{2, token.BLOCK_LEN, "«BLOCK_LEN»"},
-		{0, token.INT, "1"},
-		{0, token.NEWLINE, "\n"},
-		{0, token.TBLOCK, "(*)"},
-		{0, token.INDENT, "« -> »"},
-		{1, token.BLOCK_LEN, "«BLOCK_LEN»"},
-		{0, token.INT, "2"},
-		{0, token.NEWLINE, "\n"},
-		{0, token.DEDENT, "« <- »"},
-		{0, token.DEDENT, "« <- »"},
+		{2, token.BlockLen, "«BlockLen»"},
+		{0, token.TBlock, "(*)"},
+		{0, token.Indent, "« -> »"},
+		{2, token.BlockLen, "«BlockLen»"},
+		{0, token.Int, "1"},
+		{0, token.NewLine, "\n"},
+		{0, token.TBlock, "(*)"},
+		{0, token.Indent, "« -> »"},
+		{1, token.BlockLen, "«BlockLen»"},
+		{0, token.Int, "2"},
+		{0, token.NewLine, "\n"},
+		{0, token.Dedent, "« <- »"},
+		{0, token.Dedent, "« <- »"},
 
 		{0, token.ID, "x"},
-		{0, token.NEWLINE, "\n"},
+		{0, token.NewLine, "\n"},
 		{0, token.EOF, "«EOF»"},
 	}
 
@@ -272,13 +272,13 @@ func testInput(t *testing.T, input string, expectedTokens []token.Token) {
 		tok := l.NextToken()
 
 		switch tok.Type {
-		case token.NEWLINE:
+		case token.NewLine:
 			numNewlines++
-		case token.INDENT:
+		case token.Indent:
 			numIndents++
-		case token.DEDENT:
+		case token.Dedent:
 			numDedents++
-		case token.BLOCK_LEN:
+		case token.BlockLen:
 			sumBlockLens += tok.NumLines
 		}
 

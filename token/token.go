@@ -4,97 +4,97 @@ import (
 	"strings"
 )
 
-type TokenType int
+type TokType int
 
 type Token struct {
-	NumLines int // only used for BLOCK_LEN tokens
-	Type     TokenType
+	NumLines int // only used for BlockLen tokens
+	Type     TokType
 	Literal  string
 }
 
 var ExprBlockToken = Token{
-	Type:    EXPR_BLOCK,
+	Type:    ExprBlock,
 	Literal: "«ExprBlock»",
 }
 
 var AtToken = Token{
-	Type:    AT,
+	Type:    At,
 	Literal: "@",
 }
 
 const (
-	ILLEGAL TokenType = iota
+	Illegal TokType = iota
 
-	EXPR_BLOCK // virtual token the parser needs; lexer does not emit this
+	ExprBlock // virtual token the parser needs; lexer does not emit this
 
-	BLOCK_LEN // token to keep track of how many lines are in this block
+	BlockLen // token to keep track of how many lines are in this block
 
 	// Whitespace
-	NEWLINE
-	INDENT // tabs are the only valid indent characters
-	DEDENT
+	NewLine
+	Indent // tabs are the only valid indent characters
+	Dedent
 	EOF
 
-	// Identifiers and ints
+	// Identifiers and integers
 	ID
-	INT
+	Int
 
 	// Operators
-	TBLOCK // (*)
-	LBLOCK // [*]
-	PATMAT // =
-	ARROW  // ->
-	COLON  // :
+	TBlock // (*)
+	LBlock // [*]
+	PatMat // =
+	Arrow  // ->
+	Colon  // :
 
-	DBLPLUS  // ++
-	DBLMINUS // --
-	DBLMULT  // **
-	DBLDIV   // //
-	DBLMOD   // %%
-	DBLEXP   // ^^
-	DBLAND   // &&
-	DBLOR    // ||
+	DblPlus  // ++
+	DblMinus // --
+	DblMult  // **
+	DblDiv   // //
+	DblMod   // %%
+	DblExp   // ^^
+	DblAnd   // &&
+	DblOr    // ||
 
-	PLUS  // +
-	MINUS // -
-	MULT  // *
-	DIV   // /
-	MOD   // %
-	EXP   // ^
-	AND   // &
-	OR    // |
-	NOT   // !
+	Plus  // +
+	Minus // -
+	Mult  // *
+	Div   // /
+	Mod   // %
+	Exp   // ^
+	And   // &
+	Or    // |
+	Not   // !
 
 	LT    // <
 	GT    // >
 	LTE   // <=
 	GTE   // >=
-	EQUAL // ==
-	NEQ   // !=
+	Equal // ==
+	NEq   // !=
 
 	// Delimiters
-	LPAREN   // (
-	RPAREN   // )
-	LBRACKET // [
-	RBRACKET // ]
-	LBRACE   // {
-	RBRACE   // }
+	LParen   // (
+	RParen   // )
+	LBracket // [
+	RBracket // ]
+	LBrace   // {
+	RBrace   // }
 
-	DOT       // .
-	AT        // @
-	COMMA     // ,
-	SEMICOLON // ;
+	Dot       // .
+	At        // @
+	Comma     // ,
+	Semicolon // ;
 
 	// Keywords
-	LET
-	CASE
-	MODULE
-	EXPORT
-	TRUE
-	FALSE
+	Let
+	Case
+	Module
+	Export
+	True
+	False
 
 	// Unused
-	NUM_TOKEN_TYPES
+	NumTokenTypes
 )
 
 // Note that the order of these is significant:
@@ -103,60 +103,60 @@ func GetOperators() []Token {
 	return []Token{
 		{0, LTE, strings.TrimSpace("          <=    ")},
 		{0, GTE, strings.TrimSpace("          >=    ")},
-		{0, EQUAL, strings.TrimSpace("        ==    ")},
-		{0, NEQ, strings.TrimSpace("          !=    ")},
+		{0, Equal, strings.TrimSpace("        ==    ")},
+		{0, NEq, strings.TrimSpace("          !=    ")},
 		{0, LT, strings.TrimSpace("           <     ")},
 		{0, GT, strings.TrimSpace("           >     ")},
 
-		{0, PATMAT, strings.TrimSpace("       =     ")},
-		{0, ARROW, strings.TrimSpace("        ->    ")},
-		{0, COLON, strings.TrimSpace("        :     ")},
+		{0, PatMat, strings.TrimSpace("       =     ")},
+		{0, Arrow, strings.TrimSpace("        ->    ")},
+		{0, Colon, strings.TrimSpace("        :     ")},
 
-		{0, DBLPLUS, strings.TrimSpace("      ++    ")},
-		{0, DBLMINUS, strings.TrimSpace("     --    ")},
-		{0, DBLMULT, strings.TrimSpace("      **    ")},
-		{0, DBLDIV, strings.TrimSpace("       //    ")},
-		{0, DBLMOD, strings.TrimSpace("       %%    ")},
-		{0, DBLEXP, strings.TrimSpace("       ^^    ")},
-		{0, DBLAND, strings.TrimSpace("       &&    ")},
-		{0, DBLOR, strings.TrimSpace("        ||    ")},
+		{0, DblPlus, strings.TrimSpace("      ++    ")},
+		{0, DblMinus, strings.TrimSpace("     --    ")},
+		{0, DblMult, strings.TrimSpace("      **    ")},
+		{0, DblDiv, strings.TrimSpace("       //    ")},
+		{0, DblMod, strings.TrimSpace("       %%    ")},
+		{0, DblExp, strings.TrimSpace("       ^^    ")},
+		{0, DblAnd, strings.TrimSpace("       &&    ")},
+		{0, DblOr, strings.TrimSpace("        ||    ")},
 
-		{0, PLUS, strings.TrimSpace("         +     ")},
-		{0, MINUS, strings.TrimSpace("        -     ")},
-		{0, MULT, strings.TrimSpace("         *     ")},
-		{0, DIV, strings.TrimSpace("          /     ")},
-		{0, MOD, strings.TrimSpace("          %     ")},
-		{0, EXP, strings.TrimSpace("          ^     ")},
-		{0, AND, strings.TrimSpace("          &     ")},
-		{0, OR, strings.TrimSpace("           |     ")},
-		{0, NOT, strings.TrimSpace("          !     ")},
+		{0, Plus, strings.TrimSpace("         +     ")},
+		{0, Minus, strings.TrimSpace("        -     ")},
+		{0, Mult, strings.TrimSpace("         *     ")},
+		{0, Div, strings.TrimSpace("          /     ")},
+		{0, Mod, strings.TrimSpace("          %     ")},
+		{0, Exp, strings.TrimSpace("          ^     ")},
+		{0, And, strings.TrimSpace("          &     ")},
+		{0, Or, strings.TrimSpace("           |     ")},
+		{0, Not, strings.TrimSpace("          !     ")},
 
-		{0, TBLOCK, strings.TrimSpace("      (*)    ")},
-		{0, LBLOCK, strings.TrimSpace("      [*]    ")},
-		{0, LPAREN, strings.TrimSpace("      (      ")},
-		{0, RPAREN, strings.TrimSpace("        )    ")},
-		{0, LBRACKET, strings.TrimSpace("    [      ")},
-		{0, RBRACKET, strings.TrimSpace("      ]    ")},
-		{0, LBRACE, strings.TrimSpace("      {      ")},
-		{0, RBRACE, strings.TrimSpace("        }    ")},
+		{0, TBlock, strings.TrimSpace("      (*)    ")},
+		{0, LBlock, strings.TrimSpace("      [*]    ")},
+		{0, LParen, strings.TrimSpace("      (      ")},
+		{0, RParen, strings.TrimSpace("        )    ")},
+		{0, LBracket, strings.TrimSpace("    [      ")},
+		{0, RBracket, strings.TrimSpace("      ]    ")},
+		{0, LBrace, strings.TrimSpace("      {      ")},
+		{0, RBrace, strings.TrimSpace("        }    ")},
 
-		{0, DOT, strings.TrimSpace("          .     ")},
-		{0, AT, strings.TrimSpace("           @     ")},
-		{0, COMMA, strings.TrimSpace("        ,     ")},
-		{0, SEMICOLON, strings.TrimSpace("    ;     ")},
+		{0, Dot, strings.TrimSpace("          .     ")},
+		{0, At, strings.TrimSpace("           @     ")},
+		{0, Comma, strings.TrimSpace("        ,     ")},
+		{0, Semicolon, strings.TrimSpace("    ;     ")},
 	}
 }
 
-var keywords = map[string]TokenType{
-	"let":    LET,
-	"case":   CASE,
-	"module": MODULE,
-	"export": EXPORT,
-	"true":   TRUE,
-	"false":  FALSE,
+var keywords = map[string]TokType{
+	"let":    Let,
+	"case":   Case,
+	"module": Module,
+	"export": Export,
+	"true":   True,
+	"false":  False,
 }
 
-func LookupID(id string) TokenType {
+func LookupID(id string) TokType {
 	if tok, ok := keywords[id]; ok {
 		return tok
 	}

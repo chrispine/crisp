@@ -1,8 +1,8 @@
 package parser
 
 import (
-	"crisp/ast"
 	"crisp/lexer"
+	"crisp/parse_tree"
 	"crisp/token"
 	"fmt"
 	"testing"
@@ -87,24 +87,24 @@ func TestExprs(t *testing.T) {
 func TestUnopExprs(t *testing.T) {
 	prefixTests := []struct {
 		input string
-		op    token.TokenType
+		op    token.TokType
 		value interface{}
 	}{
-		{"-90210", token.MINUS, 90210},
-		{"-bar  ", token.MINUS, "bar"},
-		{"!true ", token.NOT, true},
-		{"!false", token.NOT, false},
-		{"!foo  ", token.NOT, "foo"},
+		{"-90210", token.Minus, 90210},
+		{"-bar  ", token.Minus, "bar"},
+		{"!true ", token.Not, true},
+		{"!false", token.Not, false},
+		{"!foo  ", token.Not, "foo"},
 	}
 
 	for _, tt := range prefixTests {
 		l := lexer.New(tt.input)
 		p := New(l)
-		exprAST := p.ParseProgram().Expr.(*ast.JustExprBlock).Expr
+		exprAST := p.ParseProgram().Expr.(*parse_tree.JustExprBlock).Expr
 		checkParserErrors(t, p)
 
 		switch unopAST := exprAST.(type) {
-		case *ast.InlineUnopExpr:
+		case *parse_tree.InlineUnopExpr:
 			if tt.op != unopAST.Op() {
 				t.Errorf("parsed wrong unop operator: expected %v, got %v", tt.op, unopAST.Op())
 			}
@@ -115,7 +115,7 @@ func TestUnopExprs(t *testing.T) {
 	}
 }
 
-func testAtom(t *testing.T, exp ast.Inline, expected interface{}) bool {
+func testAtom(t *testing.T, exp parse_tree.Inline, expected interface{}) bool {
 	switch v := expected.(type) {
 	case int:
 		return testInlineInt(t, exp, v)
@@ -128,10 +128,10 @@ func testAtom(t *testing.T, exp ast.Inline, expected interface{}) bool {
 	return false
 }
 
-func testInlineInt(t *testing.T, il ast.Inline, value int) bool {
-	i, ok := il.(*ast.InlineInt)
+func testInlineInt(t *testing.T, il parse_tree.Inline, value int) bool {
+	i, ok := il.(*parse_tree.InlineInt)
 	if !ok {
-		t.Errorf("il not *ast.InlineInt. got=%T", il)
+		t.Errorf("il not *parse_tree.InlineInt. got=%T", il)
 		return false
 	}
 
@@ -149,10 +149,10 @@ func testInlineInt(t *testing.T, il ast.Inline, value int) bool {
 	return true
 }
 
-func testInlineID(t *testing.T, exp ast.Inline, name string) bool {
-	id, ok := exp.(*ast.InlineID)
+func testInlineID(t *testing.T, exp parse_tree.Inline, name string) bool {
+	id, ok := exp.(*parse_tree.InlineID)
 	if !ok {
-		t.Errorf("exp not *ast.InlineID. got=%T", exp)
+		t.Errorf("exp not *parse_tree.InlineID. got=%T", exp)
 		return false
 	}
 
@@ -169,10 +169,10 @@ func testInlineID(t *testing.T, exp ast.Inline, name string) bool {
 	return true
 }
 
-func testInlineBool(t *testing.T, exp ast.Inline, value bool) bool {
-	bo, ok := exp.(*ast.InlineBool)
+func testInlineBool(t *testing.T, exp parse_tree.Inline, value bool) bool {
+	bo, ok := exp.(*parse_tree.InlineBool)
 	if !ok {
-		t.Errorf("exp not *ast.InlneBool. got=%T", exp)
+		t.Errorf("exp not *parse_tree.InlneBool. got=%T", exp)
 		return false
 	}
 

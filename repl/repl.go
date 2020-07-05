@@ -2,8 +2,8 @@ package repl
 
 import (
 	"bufio"
-	"crisp/ast"
 	"crisp/lexer"
+	"crisp/parse_tree"
 	"crisp/parser"
 	"fmt"
 	"io"
@@ -24,7 +24,7 @@ func Start(in io.Reader, out io.Writer) {
 		line := scanner.Text()
 		l := lexer.New(line)
 		p := parser.New(l)
-		exprAST := p.ParseProgram().Expr.(*ast.JustExprBlock).Expr
+		exprAST := p.ParseProgram().Expr.(*parse_tree.JustExprBlock).Expr
 
 		// check for parse errors
 		errors := p.Errors()
