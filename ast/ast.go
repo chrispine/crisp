@@ -48,9 +48,9 @@ func (e *BinopExpr) expr()          {}
 func (e *BinopExpr) String() string { return "BinopExpr" }
 
 type LetExpr struct {
-	Bindings map[string]Expr
-	Asserts  []Expr
-	Expr     Expr
+	Env     *ExprEnv
+	Asserts []Expr
+	Expr    Expr
 }
 
 func (e *LetExpr) expr()          {}
@@ -63,3 +63,10 @@ type FuncExpr struct {
 
 func (e *FuncExpr) expr()          {}
 func (e *FuncExpr) String() string { return "FuncExpr" }
+
+type ArgExpr struct{}
+
+func (e *ArgExpr) expr()          {}
+func (e *ArgExpr) String() string { return "«Arg»" }
+
+var Arg = &ArgExpr{}

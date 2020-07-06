@@ -8,8 +8,15 @@ import (
 
 type Env struct {
 	parent   *Env
-	bindings map[string]Value
+	bindings []Binding
 }
+
+type Binding struct {
+	Name  string
+	Value Value
+}
+
+var TopLevelEnv = &Env{}
 
 // bindings will initially be thunks to allow for
 // recursive or out-of-order declarations
@@ -20,18 +27,22 @@ type Thunk struct {
 func (th *Thunk) Class() Class    { return ThunkClass }
 func (th *Thunk) Inspect() string { return fmt.Sprintf("%v", th.Expr) }
 
-func NewEnv(parent *Env, bindings map[string]Value) *Env {
+func NewEnv(parent *Env, bindings []Binding) *Env {
+	if parent == nil {
+		panic("Error: not allowed to create an Env with nil parent")
+	}
 	return &Env{parent: parent, bindings: bindings}
 }
 
-var TopLevelEnv = NewEnv(nil, map[string]Value{})
-
 func (e *Env) Get(name string) Value {
-	val, ok := e.bindings[name]
-	if ok {
-		return val
+	// check local bindings
+	for _, b := range e.bindings {
+		if b.Name == name {
+			return b.Value
+		}
 	}
 
+	// nope, let's see if a parent has it
 	if e.parent != nil {
 		return e.parent.Get(name)
 	}
@@ -40,8 +51,29 @@ func (e *Env) Get(name string) Value {
 		return resolveTopLevelBinding(name)
 	}
 
+	// How did we get here? There's no parent, but this isn't the TopLevelEnv?
 	panic("[very weird env error] not defined: " + name)
 	return nil
+}
+
+func (e *Env) Update(name string, val Value) {
+	// check local bindings
+	for _, b := range e.bindings {
+		if b.Name == name {
+			b.Value = val
+			return
+		}
+	}
+
+	// nope, let's see if a parent has it
+	if e.parent != nil {
+		e.parent.Update(name, val)
+		return
+	}
+
+	// How did we get here? Shouldn't even be possible.
+	panic("[very weird env update error] not defined: " + name)
+	return
 }
 
 func resolveTopLevelBinding(name string) Value {
@@ -57,8 +89,4 @@ func resolveTopLevelBinding(name string) Value {
 
 	panic("[env error] not defined: " + name)
 	return nil
-}
-
-func (e *Env) Set(name string, val Value) {
-	e.bindings[name] = val
 }

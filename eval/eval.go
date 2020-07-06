@@ -32,7 +32,7 @@ func Eval(env *value.Env, someExpr ast.Expr) value.Value {
 func apply(fn *value.Func, arg value.Value) value.Value {
 	// TODO: properly handle multiple function pieces
 	letExpr := fn.FuncPartExprs[0]
-	argBindings := map[string]value.Value{fn.ArgName: arg}
+	argBindings := []value.Binding{{Name: fn.ArgName, Value: arg}}
 	argEnv := value.NewEnv(fn.Env, argBindings)
 
 	return Eval(argEnv, letExpr)
@@ -52,7 +52,10 @@ func evalLookupExpr(env *value.Env, expr *ast.LookupExpr) value.Value {
 	thunk, ok := maybeThunk.(*value.Thunk)
 	if ok {
 		// force the thunk
-		return Eval(env, thunk.Expr)
+		val := Eval(env, thunk.Expr)
+		// store the value so we don't have to force it again later
+		env.Update(expr.Name, val)
+		return val
 	}
 
 	return maybeThunk
@@ -89,6 +92,12 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 			r := rightVal.Value
 
 			switch expr.Token.Type {
+			case token.Equal:
+				if l == r {
+					return value.True
+				} else {
+					return value.False
+				}
 			case token.Plus:
 				return &value.Int{Value: l + r}
 			case token.Minus:
@@ -117,10 +126,24 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 			r := rightVal.Value
 
 			switch expr.Token.Type {
+			case token.Equal:
+				if l == r {
+					return value.True
+				} else {
+					return value.False
+				}
 			case token.And:
-				return &value.Bool{Value: l && r}
+				if l && r {
+					return value.True
+				} else {
+					return value.False
+				}
 			case token.Or:
-				return &value.Bool{Value: l || r}
+				if l || r {
+					return value.True
+				} else {
+					return value.False
+				}
 			}
 		}
 	case *value.Func:
@@ -135,15 +158,17 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 }
 
 func evalLetExpr(env *value.Env, expr *ast.LetExpr) value.Value {
-	if len(expr.Asserts) > 0 {
-		// TODO check expr.Asserts
-		panic("come on, Chris: time to implement LetExpr assert evaluation")
+	for _, assert := range expr.Asserts {
+		val := Eval(env, assert)
+		if !val.(*value.Bool).Value {
+			panic("Runtime Error: failed assertion in `let` expression")
+		}
 	}
 
-	bindings := map[string]value.Value{}
+	var bindings []value.Binding
 
-	for name, e := range expr.Bindings {
-		bindings[name] = &value.Thunk{Expr: e}
+	for _, eb := range expr.Env.Bindings {
+		bindings = append(bindings, value.Binding{eb.Name, &value.Thunk{Expr: eb.Expr}})
 	}
 	return Eval(value.NewEnv(env, bindings), expr.Expr)
 }

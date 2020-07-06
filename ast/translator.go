@@ -23,44 +23,7 @@ func (tr *Translator) Translate(program *parse_tree.Program) Expr {
 		Expr:  program.Expr,
 	}
 
-	return tr.translateBlock(lb)
-}
-
-func (tr *Translator) translateBlock(blockTree parse_tree.Block) Expr {
-	switch block := blockTree.(type) {
-	case *parse_tree.JustExprBlock:
-		return tr.translateJustExprBlock(block)
-	case *parse_tree.LetBlock:
-		return tr.translateLetBlock(block)
-	case *parse_tree.FuncBlock:
-		return tr.translateFuncBlock(block)
-	}
-
-	tr.error(fmt.Sprintf("Translator Error: unhandled Block %v of type %T", blockTree, blockTree))
-	return nil
-}
-
-func (tr *Translator) translateInline(inlineTree parse_tree.Inline) Expr {
-	switch inline := inlineTree.(type) {
-	case *parse_tree.InlineID:
-		return &LookupExpr{Name: inline.Name}
-	case *parse_tree.InlineUnopExpr:
-		return &UnopExpr{
-			Token: inline.Token,
-			Expr:  tr.translateInline(inline.Expr),
-		}
-	case *parse_tree.InlineBinopExpr:
-		return &BinopExpr{
-			Token: inline.Token,
-			LExpr: tr.translateInline(inline.LExpr),
-			RExpr: tr.translateInline(inline.RExpr),
-		}
-	case *parse_tree.InlineFunc:
-		return tr.translateInlineFunc(inline)
-	}
-
-	tr.error(fmt.Sprintf("Translator Error: unhandled Inline %v of type %T", inlineTree, inlineTree))
-	return nil
+	return tr.translateBlock(TopLevelExprEnv, lb)
 }
 
 func (tr *Translator) Errors() []string {
@@ -69,77 +32,131 @@ func (tr *Translator) Errors() []string {
 
 func (tr *Translator) error(err string) {
 	tr.errors = append(tr.errors, err)
-	panic(err) // TODO: remove this line when parser is stable
+	panic(err) // TODO: remove this line when translator is stable
 }
 
-func (tr *Translator) translateJustExprBlock(block *parse_tree.JustExprBlock) Expr {
-	return tr.translateInline(block.Expr)
-}
-
-func (tr *Translator) translateLetBlock(block *parse_tree.LetBlock) *LetExpr {
-	le := &LetExpr{
-		Expr:     tr.translateBlock(block.Expr),
-		Bindings: map[string]Expr{},
+func (tr *Translator) translateBlock(env *ExprEnv, blockTree parse_tree.Block) Expr {
+	switch block := blockTree.(type) {
+	case *parse_tree.JustExprBlock:
+		return tr.translateJustExprBlock(env, block)
+	case *parse_tree.LetBlock:
+		return tr.translateLetBlock(env, block)
+	case *parse_tree.FuncBlock:
+		return tr.translateFuncBlock(env, block)
 	}
 
-	for _, someDecl := range block.Decls {
-		switch decl := someDecl.(type) {
-		case *parse_tree.PatMatBlock:
-			switch lVal := decl.LVal.(type) {
-			case *parse_tree.InlineID:
-				le.Bindings[lVal.Name] = tr.translateBlock(decl.Expr)
-			default:
-				tr.error("someone tell Chris to implement destructuring assignment")
+	tr.error(fmt.Sprintf("Translator Error: unhandled Block %v of type %T", blockTree, blockTree))
+	return nil
+}
+
+func (tr *Translator) translateInline(env *ExprEnv, inlineTree parse_tree.Inline) Expr {
+	switch inline := inlineTree.(type) {
+	case *parse_tree.InlineID:
+		return &LookupExpr{Name: inline.Name} // TODO optimize lookup
+	case *parse_tree.InlineUnopExpr:
+		return &UnopExpr{
+			Token: inline.Token,
+			Expr:  tr.translateInline(env, inline.Expr),
+		}
+	case *parse_tree.InlineBinopExpr:
+		return &BinopExpr{
+			Token: inline.Token,
+			LExpr: tr.translateInline(env, inline.LExpr),
+			RExpr: tr.translateInline(env, inline.RExpr),
+		}
+	case *parse_tree.InlineFunc:
+		return tr.translateInlineFunc(env, inline)
+	}
+
+	tr.error(fmt.Sprintf("Translator Error: unhandled Inline %v of type %T", inlineTree, inlineTree))
+	return nil
+}
+
+func (tr *Translator) translateJustExprBlock(env *ExprEnv, block *parse_tree.JustExprBlock) Expr {
+	return tr.translateInline(env, block.Expr)
+}
+
+func (tr *Translator) translateLetBlock(env *ExprEnv, block *parse_tree.LetBlock) *LetExpr {
+	newEnv := &ExprEnv{
+		parent: env,
+	}
+
+	le := &LetExpr{Env: newEnv}
+
+	type toAssert struct {
+		lVal parse_tree.Inline
+		expr parse_tree.Block
+	}
+
+	// For each declaration (LVal = Expr), we break it down
+	// into new bindings (which go into newEnv.Bindings)
+	// and new assertions (which go into le.Asserts).
+	// Note that we cannot translate the sub-expressions until
+	// the env is complete, so we save them up and do that last.
+	var bindingsToTranslate []parse_tree.Block
+	var assertsToTranslate []*toAssert
+
+	for _, decl := range block.Decls {
+		switch lVal := decl.LVal.(type) {
+		case *parse_tree.InlineID:
+			if env.isDefined(lVal.Name) {
+				// assert
+				assertsToTranslate = append(assertsToTranslate, &toAssert{decl.LVal, decl.Expr})
+			} else {
+				// binding
+				newEnv.Bindings = append(newEnv.Bindings, ExprBinding{lVal.Name, nil})
+				bindingsToTranslate = append(bindingsToTranslate, decl.Expr)
 			}
 		default:
-			tr.error(fmt.Sprintf("Translator Error: unhandled declaration %v of type %T", decl, decl))
+			tr.error("someone tell Chris to implement destructuring assignment")
 		}
 	}
+
+	// Now that we know the name half of all bindings in newEnv,
+	// we can proceed with translation of sub-expressions.
+	for _, ta := range assertsToTranslate {
+		newAssert := &BinopExpr{
+			Token: token.Token{Type: token.Equal, Literal: "=="},
+			LExpr: tr.translateInline(newEnv, ta.lVal),
+			RExpr: tr.translateBlock(newEnv, ta.expr),
+		}
+		le.Asserts = append(le.Asserts, newAssert)
+	}
+	for i, bindBlock := range bindingsToTranslate {
+		newEnv.Bindings[i].Expr = tr.translateBlock(newEnv, bindBlock)
+	}
+
+	le.Expr = tr.translateBlock(newEnv, block.Expr)
 
 	return le
 }
 
-func (tr *Translator) translateFuncBlock(block *parse_tree.FuncBlock) Expr {
+func (tr *Translator) translateFuncBlock(env *ExprEnv, block *parse_tree.FuncBlock) Expr {
+	return tr.translateFunc(env, block.LVal, block.Expr)
+}
+func (tr *Translator) translateInlineFunc(env *ExprEnv, inline *parse_tree.InlineFunc) Expr {
+	return tr.translateFunc(env, inline.LVal, &parse_tree.JustExprBlock{Expr: inline.Expr})
+}
+func (tr *Translator) translateFunc(env *ExprEnv, lVal parse_tree.Inline, expr parse_tree.Block) Expr {
 	argName := getArgName()
 
 	letBlock := &parse_tree.LetBlock{
-		Decls: []parse_tree.Block{
-			&parse_tree.PatMatBlock{
-				LVal: block.LVal,
-				Expr: &parse_tree.JustExprBlock{
-					Expr: &parse_tree.InlineID{Name: argName},
-				},
-			},
+		Decls: []*parse_tree.PatMatBlock{{
+			LVal: lVal,
+			Expr: &parse_tree.JustExprBlock{
+				Expr: &parse_tree.InlineID{Name: argName},
+			}},
 		},
-		Expr: block.Expr,
+		Expr: expr,
 	}
 
-	letExpr := tr.translateLetBlock(letBlock)
-
-	return tr.translateFunc(letExpr, argName)
-}
-func (tr *Translator) translateInlineFunc(inline *parse_tree.InlineFunc) Expr {
-	argName := getArgName()
-
-	letBlock := &parse_tree.LetBlock{
-		Decls: []parse_tree.Block{
-			&parse_tree.PatMatBlock{
-				LVal: inline.LVal,
-				Expr: &parse_tree.JustExprBlock{
-					Expr: &parse_tree.InlineID{Name: argName},
-				},
-			},
-		},
-		Expr: &parse_tree.JustExprBlock{
-			Expr: inline.Expr,
-		},
+	argEnv := &ExprEnv{
+		parent:   env,
+		Bindings: []ExprBinding{{Name: argName, Expr: Arg}},
 	}
 
-	letExpr := tr.translateLetBlock(letBlock)
+	letExpr := tr.translateLetBlock(argEnv, letBlock)
 
-	return tr.translateFunc(letExpr, argName)
-}
-func (tr *Translator) translateFunc(letExpr *LetExpr, argName string) Expr {
 	return &FuncExpr{FuncPartExprs: []*LetExpr{letExpr}, ArgName: argName}
 }
 
