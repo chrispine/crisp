@@ -102,13 +102,13 @@ add2(3)
 
 
 `},
-		{5, `
+		// 		{1, `
 
+		// fact(0) -> 1
 
-5
+		// fact(0)
 
-
-`},
+		// `},
 		{5, `
 
 
@@ -209,7 +209,7 @@ add2(3)
 		if !ok {
 			t.Fatalf("wow, expected an int, got %v", val.Inspect())
 		} else if intVal.Value != tt.expected {
-			t.Fatalf("wrong int value: expected %d, got %d", tt.expected, intVal)
+			t.Fatalf("wrong int value: expected %d, got %d in program:\n%v", tt.expected, intVal, tt.program)
 		}
 	}
 }
@@ -235,7 +235,7 @@ func TestEvalBoolExpr(t *testing.T) {
 		if !ok {
 			t.Fatalf("wow, expected a bool, got %v", val.Inspect())
 		} else if boolVal.Value != tt.expected {
-			t.Fatalf("wrong bool value: expected %v, got %v", tt.expected, boolVal)
+			t.Fatalf("wrong bool value: expected %v, got %v in program:\n%v", tt.expected, boolVal, tt.program)
 		}
 	}
 }

@@ -35,9 +35,8 @@ const (
 	Dedent
 	EOF
 
-	// Identifiers and integers
+	// Identifiers (including ints and bools)
 	ID
-	Int
 
 	// Operators
 	TBlock // (*)
@@ -90,8 +89,6 @@ const (
 	Case
 	Module
 	Export
-	True
-	False
 
 	// Unused
 	NumTokenTypes
@@ -152,8 +149,6 @@ var keywords = map[string]TokType{
 	"case":   Case,
 	"module": Module,
 	"export": Export,
-	"true":   True,
-	"false":  False,
 }
 
 func LookupID(id string) TokType {

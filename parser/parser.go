@@ -6,7 +6,6 @@ import (
 	"crisp/token"
 	"fmt"
 	"reflect"
-	"strconv"
 )
 
 var unops = []token.TokType{
@@ -468,8 +467,6 @@ func makeNestedConsBlocks(lBlockToken token.Token, heads []parse_tree.Block, tai
 /*
 ☉Atom ->
 	ID
-	Int
-	Bool
 	Tuple
 	List
 	UnopExpr
@@ -478,10 +475,6 @@ func (p *Parser) parseAtom() parse_tree.Inline {
 	switch p.curToken.Type {
 	case token.ID:
 		return p.parseID()
-	case token.Int:
-		return p.parseInt()
-	case token.True, token.False:
-		return p.parseBool()
 	case token.LParen:
 		return p.parseTuple()
 	case token.LBracket:
@@ -495,32 +488,6 @@ func (p *Parser) parseID() *parse_tree.InlineID {
 	lit := &parse_tree.InlineID{Token: *p.curToken, Name: p.curToken.Literal}
 
 	p.expectToken(token.ID)
-
-	return lit
-}
-
-func (p *Parser) parseInt() *parse_tree.InlineInt {
-	lit := &parse_tree.InlineInt{Token: *p.curToken}
-
-	i, err := strconv.ParseInt(p.curToken.Literal, 0, 0)
-	if !isNil(err) {
-		p.error(fmt.Sprintf("failed to parse %q as integer", p.curToken.Literal))
-		return nil
-	}
-
-	lit.Value = int(i)
-
-	p.expectToken(token.Int)
-
-	return lit
-}
-
-func (p *Parser) parseBool() *parse_tree.InlineBool {
-	lit := &parse_tree.InlineBool{Token: *p.curToken}
-
-	lit.Value = p.curTokenIs(token.True)
-
-	p.expectToken(token.True, token.False)
 
 	return lit
 }

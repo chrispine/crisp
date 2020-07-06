@@ -91,10 +91,10 @@ func TestUnopExprs(t *testing.T) {
 		op    token.TokType
 		value interface{}
 	}{
-		{"-90210", token.Minus, 90210},
+		{"-90210", token.Minus, "90210"},
 		{"-bar  ", token.Minus, "bar"},
-		{"!true ", token.Not, true},
-		{"!false", token.Not, false},
+		{"!true ", token.Not, "true"},
+		{"!false", token.Not, "false"},
 		{"!foo  ", token.Not, "foo"},
 	}
 
@@ -118,8 +118,6 @@ func TestUnopExprs(t *testing.T) {
 
 func testAtom(t *testing.T, exp parse_tree.Inline, expected interface{}) bool {
 	switch v := expected.(type) {
-	case int:
-		return testInlineInt(t, exp, v)
 	case bool:
 		return testInlineBool(t, exp, v)
 	case string:
@@ -127,27 +125,6 @@ func testAtom(t *testing.T, exp parse_tree.Inline, expected interface{}) bool {
 	}
 	t.Errorf("type of exp not handled. got=%T", exp)
 	return false
-}
-
-func testInlineInt(t *testing.T, il parse_tree.Inline, value int) bool {
-	i, ok := il.(*parse_tree.InlineInt)
-	if !ok {
-		t.Errorf("il not *parse_tree.InlineInt. got=%T", il)
-		return false
-	}
-
-	if i.Value != value {
-		t.Errorf("i.Value not %d. got=%d", value, i.Value)
-		return false
-	}
-
-	if i.TokenLiteral() != fmt.Sprintf("%d", value) {
-		t.Errorf("i.TokenLiteral not %d. got=%s", value,
-			i.TokenLiteral())
-		return false
-	}
-
-	return true
 }
 
 func testInlineID(t *testing.T, exp parse_tree.Inline, name string) bool {

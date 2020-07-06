@@ -37,6 +37,9 @@ type Bool struct {
 func (b *Bool) Class() Class    { return BoolClass }
 func (b *Bool) Inspect() string { return fmt.Sprintf("%v", b.Value) }
 
+var True = &Bool{true}
+var False = &Bool{false}
+
 type Func struct {
 	Env           *Env
 	ArgName       string

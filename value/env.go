@@ -3,6 +3,7 @@ package value
 import (
 	"crisp/ast"
 	"fmt"
+	"strconv"
 )
 
 type Env struct {
@@ -33,6 +34,25 @@ func (e *Env) Get(name string) Value {
 
 	if e.parent != nil {
 		return e.parent.Get(name)
+	}
+
+	if e == TopLevelEnv {
+		return resolveTopLevelBinding(name)
+	}
+
+	panic("[very weird env error] not defined: " + name)
+	return nil
+}
+
+func resolveTopLevelBinding(name string) Value {
+	if name == "true" {
+		return True
+	}
+	if name == "false" {
+		return False
+	}
+	if i, err := strconv.Atoi(name); err == nil {
+		return &Int{i}
 	}
 
 	panic("[env error] not defined: " + name)

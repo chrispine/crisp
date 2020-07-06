@@ -182,14 +182,6 @@ func (l *Lexer) nextToken() *token.Token {
 		return maybeNilTok
 	}
 
-	// isDigit() must come before isLetter() because
-	// isLetter() includes digits, for IDs like `bar2`
-	if isDigit(l.ch) {
-		tok.Type = token.Int
-		tok.Literal = l.readNumber()
-		return tok
-	}
-
 	if isLetter(l.ch) {
 		tok.Literal = l.readIdentifier()
 		tok.Type = token.LookupID(tok.Literal)
@@ -210,16 +202,6 @@ func (l *Lexer) readIdentifier() string {
 	position := l.position
 
 	for isLetter(l.ch) {
-		l.readRune()
-	}
-
-	return l.input[position:l.position]
-}
-
-func (l *Lexer) readNumber() string {
-	position := l.position
-
-	for isDigit(l.ch) {
 		l.readRune()
 	}
 

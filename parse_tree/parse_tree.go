@@ -74,8 +74,6 @@ ListBlock ->
 
 ☉Atom ->
 	ID
-	Int
-	Bool
 	Tuple
 	List
 	UnopExpr
@@ -108,8 +106,6 @@ ApplyExpr ->
 
 ☉LLValAtom->
 	ID
-	Int
-	Bool
 	LValTuple
 	LValList
 
