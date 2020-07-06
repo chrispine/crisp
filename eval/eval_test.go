@@ -31,6 +31,18 @@ func TestEvalIntExpr(t *testing.T) {
 		{40, "5*2^3"},
 		{40, "2^3*5"},
 		{256, "2^2^3"},
+		{5, `
+x = 5
+x`},
+		{5, `
+x = y+2
+y = 3
+x`},
+		{5, `
+x = 4
+let
+	y = x+1
+	y`},
 	}
 
 	for _, tt := range tests {

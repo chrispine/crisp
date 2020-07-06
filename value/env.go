@@ -1,17 +1,31 @@
 package value
 
+import (
+	"crisp/ast"
+	"fmt"
+)
+
 type Env struct {
-	bindings map[string]*Value
 	parent   *Env
+	bindings map[string]Value
 }
 
-func NewEnv(parent *Env) *Env {
-	return &Env{parent: parent}
+// bindings will initially be thunks to allow for
+// recursive or out-of-order declarations
+type Thunk struct {
+	Expr ast.Expr
 }
 
-var TopLevelEnv = NewEnv(nil)
+func (th *Thunk) Class() Class    { return ThunkClass }
+func (th *Thunk) Inspect() string { return fmt.Sprintf("%v", th.Expr) }
 
-func (e *Env) Get(name string) *Value {
+func NewEnv(parent *Env, bindings map[string]Value) *Env {
+	return &Env{parent: parent, bindings: bindings}
+}
+
+var TopLevelEnv = NewEnv(nil, map[string]Value{})
+
+func (e *Env) Get(name string) Value {
 	val, ok := e.bindings[name]
 	if ok {
 		return val
@@ -25,7 +39,6 @@ func (e *Env) Get(name string) *Value {
 	return nil
 }
 
-func (e *Env) Set(name string, val *Value) *Value {
+func (e *Env) Set(name string, val Value) {
 	e.bindings[name] = val
-	return val
 }

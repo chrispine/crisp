@@ -86,6 +86,20 @@ a|日本語&c<=!d<>=> !=== ,:;`
 	testInput(t, input, expectedTokens)
 }
 
+func TestTokenizingWhitespaceAtStart(t *testing.T) {
+	input := `
+5`
+
+	expectedTokens := []token.Token{
+		{1, token.BlockLen, "«BlockLen»"},
+		{0, token.Int, "5"},
+		{0, token.NewLine, "\n"},
+		{0, token.EOF, "«EOF»"},
+	}
+
+	testInput(t, input, expectedTokens)
+}
+
 func TestTokenizingBlocks1(t *testing.T) {
 	input := `(*)
 	1

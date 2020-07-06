@@ -9,16 +9,18 @@ import (
 
 func Eval(env *value.Env, someExpr ast.Expr) value.Value {
 	switch expr := someExpr.(type) {
-	case *ast.LetExpr:
-		return evalLetExpr(env, expr)
 	case *ast.IntExpr:
 		return evalIntExpr(env, expr)
 	case *ast.BoolExpr:
 		return evalBoolExpr(env, expr)
+	case *ast.LookupExpr:
+		return evalLookupExpr(env, expr)
 	case *ast.UnopExpr:
 		return evalUnopExpr(env, expr)
 	case *ast.BinopExpr:
 		return evalBinopExpr(env, expr)
+	case *ast.LetExpr:
+		return evalLetExpr(env, expr)
 	}
 
 	panic(fmt.Sprintf("Runtime Error: unhandled Expr %v of type %T", someExpr, someExpr))
@@ -31,6 +33,18 @@ func evalIntExpr(_ *value.Env, expr *ast.IntExpr) value.Value {
 
 func evalBoolExpr(_ *value.Env, expr *ast.BoolExpr) value.Value {
 	return &value.Bool{Value: expr.Value}
+}
+
+func evalLookupExpr(env *value.Env, expr *ast.LookupExpr) value.Value {
+	maybeThunk := env.Get(expr.Name)
+
+	thunk, ok := maybeThunk.(*value.Thunk)
+	if ok {
+		// force the thunk
+		return Eval(env, thunk.Expr)
+	}
+
+	return maybeThunk
 }
 
 func evalUnopExpr(env *value.Env, expr *ast.UnopExpr) value.Value {
@@ -109,5 +123,11 @@ func evalLetExpr(env *value.Env, expr *ast.LetExpr) value.Value {
 		// TODO check expr.Asserts
 		panic("come on, Chris: time to implement LetExpr assert evaluation")
 	}
-	return Eval(expr.Env, expr.Expr)
+
+	bindings := map[string]value.Value{}
+
+	for name, e := range expr.Bindings {
+		bindings[name] = &value.Thunk{Expr: e}
+	}
+	return Eval(value.NewEnv(env, bindings), expr.Expr)
 }

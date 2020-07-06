@@ -7,12 +7,12 @@ import "fmt"
 type Class int
 
 const (
-	ErrorClass = iota
-	IntClass
+	IntClass = iota
 	BoolClass
 	TupleClass
 	ConsClass
 	FuncClass
+	ThunkClass
 )
 
 type Value interface {

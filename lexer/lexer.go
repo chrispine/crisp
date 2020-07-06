@@ -168,10 +168,14 @@ func (l *Lexer) nextToken() *token.Token {
 	if isNewline(l.ch) {
 		l.readRune()
 
-		// make sure we never emit two NewLine tokens in a row, and never
-		// after Dedent, as that implies NewLine
+		// make sure we never emit two NewLine tokens in a row,
+		// and never after Dedent, as that implies NewLine,
+		// and never after BlockLen (which I think can only happen
+		// when the first character of a program is '\n'
 		prevTokenType := l.allTokens[len(l.allTokens)-1].Type
-		if prevTokenType != token.NewLine && prevTokenType != token.Dedent {
+		if prevTokenType != token.NewLine &&
+			prevTokenType != token.Dedent &&
+			prevTokenType != token.BlockLen {
 			return l.createNewlineToken()
 		}
 	}

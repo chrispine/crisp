@@ -2,7 +2,6 @@ package ast
 
 import (
 	"crisp/token"
-	"crisp/value"
 )
 
 type Expr interface {
@@ -14,23 +13,30 @@ type IntExpr struct {
 	Value int
 }
 
-func (le *IntExpr) expr()          {}
-func (le *IntExpr) String() string { return "IntExpr" }
+func (e *IntExpr) expr()          {}
+func (e *IntExpr) String() string { return "IntExpr" }
 
 type BoolExpr struct {
 	Value bool
 }
 
-func (le *BoolExpr) expr()          {}
-func (le *BoolExpr) String() string { return "BoolExpr" }
+func (e *BoolExpr) expr()          {}
+func (e *BoolExpr) String() string { return "BoolExpr" }
+
+type LookupExpr struct {
+	Name string
+}
+
+func (e *LookupExpr) expr()          {}
+func (e *LookupExpr) String() string { return "LookupExpr" }
 
 type UnopExpr struct {
 	Token token.Token // the unop token, e.g. !
 	Expr  Expr
 }
 
-func (le *UnopExpr) expr()          {}
-func (le *UnopExpr) String() string { return "UnopExpr" }
+func (e *UnopExpr) expr()          {}
+func (e *UnopExpr) String() string { return "UnopExpr" }
 
 type BinopExpr struct {
 	Token token.Token // the operator token, e.g. +
@@ -38,14 +44,14 @@ type BinopExpr struct {
 	RExpr Expr
 }
 
-func (le *BinopExpr) expr()          {}
-func (le *BinopExpr) String() string { return "BinopExpr" }
+func (e *BinopExpr) expr()          {}
+func (e *BinopExpr) String() string { return "BinopExpr" }
 
 type LetExpr struct {
-	Env     *value.Env
-	Asserts []Expr
-	Expr    Expr
+	Bindings map[string]Expr
+	Asserts  []Expr
+	Expr     Expr
 }
 
-func (le *LetExpr) expr()          {}
-func (le *LetExpr) String() string { return "LetExpr" }
+func (e *LetExpr) expr()          {}
+func (e *LetExpr) String() string { return "LetExpr" }
