@@ -1,6 +1,9 @@
 package value
 
-import "fmt"
+import (
+	"crisp/ast"
+	"fmt"
+)
 
 // Class is not the same as the Crisp type
 // Class might be Tuple, while Crisp type might be Tuple<Int, Int, Bool>
@@ -9,10 +12,10 @@ type Class int
 const (
 	IntClass = iota
 	BoolClass
-	TupleClass
-	ConsClass
 	FuncClass
 	ThunkClass
+	TupleClass
+	ConsClass
 )
 
 type Value interface {
@@ -33,3 +36,11 @@ type Bool struct {
 
 func (b *Bool) Class() Class    { return BoolClass }
 func (b *Bool) Inspect() string { return fmt.Sprintf("%v", b.Value) }
+
+type Func struct {
+	Env           *Env
+	FuncPartExprs []*ast.LetExpr
+}
+
+func (f *Func) Class() Class    { return FuncClass }
+func (f *Func) Inspect() string { return "INSPECTED_FUNC" }

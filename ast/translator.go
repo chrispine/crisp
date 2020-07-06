@@ -6,6 +6,12 @@ import (
 	"fmt"
 )
 
+// This is the name that we bind to the argument
+// when a function is called. It's important that
+// it's not a legal identifier, so it will never
+// clash with identifiers in the program.
+const ArgName = "@ARG@"
+
 // translates parse trees into ASTs
 
 type Translator struct {
@@ -31,6 +37,8 @@ func (tr *Translator) translateBlock(blockTree parse_tree.Block) Expr {
 		return tr.translateJustExprBlock(block)
 	case *parse_tree.LetBlock:
 		return tr.translateLetBlock(block)
+	case *parse_tree.FuncBlock:
+		return tr.translateFuncBlock(block)
 	}
 
 	tr.error(fmt.Sprintf("Translator Error: unhandled Block %v of type %T", blockTree, blockTree))
@@ -56,6 +64,8 @@ func (tr *Translator) translateInline(inlineTree parse_tree.Inline) Expr {
 			LExpr: tr.translateInline(inline.LExpr),
 			RExpr: tr.translateInline(inline.RExpr),
 		}
+	case *parse_tree.InlineFunc:
+		return tr.translateInlineFunc(inline)
 	}
 
 	tr.error(fmt.Sprintf("Translator Error: unhandled Inline %v of type %T", inlineTree, inlineTree))
@@ -75,7 +85,7 @@ func (tr *Translator) translateJustExprBlock(block *parse_tree.JustExprBlock) Ex
 	return tr.translateInline(block.Expr)
 }
 
-func (tr *Translator) translateLetBlock(block *parse_tree.LetBlock) Expr {
+func (tr *Translator) translateLetBlock(block *parse_tree.LetBlock) *LetExpr {
 	le := &LetExpr{
 		Expr:     tr.translateBlock(block.Expr),
 		Bindings: map[string]Expr{},
@@ -84,7 +94,7 @@ func (tr *Translator) translateLetBlock(block *parse_tree.LetBlock) Expr {
 	for _, someDecl := range block.Decls {
 		switch decl := someDecl.(type) {
 		case *parse_tree.PatMatBlock:
-			switch lVal := decl.Lval.(type) {
+			switch lVal := decl.LVal.(type) {
 			case *parse_tree.InlineID:
 				le.Bindings[lVal.Name] = tr.translateBlock(decl.Expr)
 			default:
@@ -96,4 +106,44 @@ func (tr *Translator) translateLetBlock(block *parse_tree.LetBlock) Expr {
 	}
 
 	return le
+}
+
+func (tr *Translator) translateFuncBlock(block *parse_tree.FuncBlock) Expr {
+	letBlock := &parse_tree.LetBlock{
+		Decls: []parse_tree.Block{
+			&parse_tree.PatMatBlock{
+				LVal: block.LVal,
+				Expr: &parse_tree.JustExprBlock{
+					Expr: &parse_tree.InlineID{Name: ArgName},
+				},
+			},
+		},
+		Expr: block.Expr,
+	}
+
+	letExpr := tr.translateLetBlock(letBlock)
+
+	return tr.translateFunc(letExpr)
+}
+func (tr *Translator) translateInlineFunc(inline *parse_tree.InlineFunc) Expr {
+	letBlock := &parse_tree.LetBlock{
+		Decls: []parse_tree.Block{
+			&parse_tree.PatMatBlock{
+				LVal: inline.LVal,
+				Expr: &parse_tree.JustExprBlock{
+					Expr: &parse_tree.InlineID{Name: ArgName},
+				},
+			},
+		},
+		Expr: &parse_tree.JustExprBlock{
+			Expr: inline.Expr,
+		},
+	}
+
+	letExpr := tr.translateLetBlock(letBlock)
+
+	return tr.translateFunc(letExpr)
+}
+func (tr *Translator) translateFunc(letExpr *LetExpr) Expr {
+	return &FuncExpr{FuncPartExprs: []*LetExpr{letExpr}}
 }

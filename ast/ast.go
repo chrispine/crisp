@@ -55,3 +55,10 @@ type LetExpr struct {
 
 func (e *LetExpr) expr()          {}
 func (e *LetExpr) String() string { return "LetExpr" }
+
+type FuncExpr struct {
+	FuncPartExprs []*LetExpr
+}
+
+func (e *FuncExpr) expr()          {}
+func (e *FuncExpr) String() string { return "FuncExpr" }

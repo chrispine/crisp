@@ -21,10 +21,21 @@ func Eval(env *value.Env, someExpr ast.Expr) value.Value {
 		return evalBinopExpr(env, expr)
 	case *ast.LetExpr:
 		return evalLetExpr(env, expr)
+	case *ast.FuncExpr:
+		return evalFuncExpr(env, expr)
 	}
 
-	panic(fmt.Sprintf("Runtime Error: unhandled Expr %v of type %T", someExpr, someExpr))
+	panic(fmt.Sprintf("Runtime Error: unhandled expression %v of type %T", someExpr, someExpr))
 	return nil
+}
+
+func apply(fn *value.Func, arg value.Value) value.Value {
+	// TODO: properly handle multiple function pieces
+	letExpr := fn.FuncPartExprs[0]
+	argBindings := map[string]value.Value{ast.ArgName: arg}
+	argEnv := value.NewEnv(fn.Env, argBindings)
+
+	return Eval(argEnv, letExpr)
 }
 
 func evalIntExpr(_ *value.Env, expr *ast.IntExpr) value.Value {
@@ -112,9 +123,14 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 				return &value.Bool{Value: l || r}
 			}
 		}
+	case *value.Func:
+		switch expr.Token.Type {
+		case token.At:
+			return apply(leftVal, someRightVal)
+		}
 	}
 
-	panic(fmt.Sprintf("RuntimeError: illegal unop expr: %v", expr))
+	panic(fmt.Sprintf("RuntimeError: illegal binop expr: %v", expr))
 	return nil
 }
 
@@ -130,4 +146,11 @@ func evalLetExpr(env *value.Env, expr *ast.LetExpr) value.Value {
 		bindings[name] = &value.Thunk{Expr: e}
 	}
 	return Eval(value.NewEnv(env, bindings), expr.Expr)
+}
+
+func evalFuncExpr(env *value.Env, expr *ast.FuncExpr) value.Value {
+	return &value.Func{
+		Env:           env,
+		FuncPartExprs: expr.FuncPartExprs,
+	}
 }

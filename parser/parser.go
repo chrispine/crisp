@@ -229,14 +229,14 @@ func (p *Parser) parseDeclBlock() parse_tree.Block {
 
 /*
 PatMatBlock ->
-	LvalAtom  '='  ExprBlock
+	LValAtom  '='  ExprBlock
 */
 func (p *Parser) parsePatMatBlock(atom parse_tree.Inline) parse_tree.Block {
-	if !atom.IsLval() {
+	if !atom.IsLVal() {
 		p.error(fmt.Sprintf("atom %v is not an l-value", atom))
 	}
 
-	lit := &parse_tree.PatMatBlock{Token: *p.curToken, Lval: atom}
+	lit := &parse_tree.PatMatBlock{Token: *p.curToken, LVal: atom}
 
 	p.expectToken(token.PatMat)
 
@@ -247,7 +247,7 @@ func (p *Parser) parsePatMatBlock(atom parse_tree.Inline) parse_tree.Block {
 
 /*
 FuncDeclBlock ->
-	ID  (LvalAtom)*  FuncBlock  // sugar for currying and 'let'
+	ID  (LValAtom)*  FuncBlock  // sugar for currying and 'let'
 */
 func (p *Parser) parseFuncDeclBlock(atom parse_tree.Inline) parse_tree.Block {
 	// `atom` must be an identifier
@@ -258,15 +258,15 @@ func (p *Parser) parseFuncDeclBlock(atom parse_tree.Inline) parse_tree.Block {
 
 	patmat := &parse_tree.PatMatBlock{
 		Token: token.Token{Type: token.PatMat, Literal: "="},
-		Lval:  atom,
+		LVal:  atom,
 	}
 
 	var args []parse_tree.Inline
 
-	// read LvalAtoms up to token.Arrow
+	// read LValAtoms up to token.Arrow
 	for !p.curTokenIs(token.Arrow) {
 		arg := p.parseAtom()
-		if !arg.IsLval() {
+		if !arg.IsLVal() {
 			p.error(fmt.Sprintf("arg is not an l-value: %v", arg))
 		}
 		args = append(args, arg)
@@ -293,7 +293,7 @@ func makeNestedFuncBlocks(arrowToken token.Token, args []parse_tree.Inline, inne
 
 	return &parse_tree.FuncBlock{
 		Token: arrowToken,
-		Lval:  args[0],
+		LVal:  args[0],
 		Expr:  makeNestedFuncBlocks(arrowToken, args[1:], inner),
 	}
 }
@@ -362,19 +362,19 @@ func (p *Parser) parseLetBlock() parse_tree.Block {
 
 /*
 FuncBlock ->
-	LvalAtom  '->'  ExprBlock
-	LvalAtom  '->'  |->'  DeclsAndExpr  '<-|'                  // sugar for 'let'
+	LValAtom  '->'  ExprBlock
+	LValAtom  '->'  |->'  DeclsAndExpr  '<-|'                  // sugar for 'let'
 */
 func (p *Parser) parseFuncBlock(atom parse_tree.Inline) parse_tree.Block {
 	p.expectToken(token.Arrow)
 
-	if !atom.IsLval() {
+	if !atom.IsLVal() {
 		p.error(fmt.Sprintf("atom %v is not an l-value", atom))
 	}
 
 	lit := &parse_tree.FuncBlock{
 		Token: *p.curToken,
-		Lval:  atom,
+		LVal:  atom,
 	}
 
 	if p.curTokenIs(token.Indent) {
@@ -642,7 +642,7 @@ BinopExpr ->
 	Expr  [+-*%/^&|]  Expr
 
 FuncExpr ->
-	LvalAtom  '->'  Expr
+	LValAtom  '->'  Expr
 
 ApplyExpr ->
 	Expr  '@'  Expr
@@ -664,13 +664,13 @@ func (p *Parser) parseExpressionRest(precedence int, atom parse_tree.Inline) par
 			tok := p.curToken
 			p.expectToken(token.Arrow)
 
-			if !atom.IsLval() {
+			if !atom.IsLVal() {
 				p.error(fmt.Sprintf("atom %v is not an l-value", atom))
 			}
 
 			return &parse_tree.InlineFunc{
 				Token: *tok,
-				Lval:  atom,
+				LVal:  atom,
 				Expr:  p.parseExpr(), // note that this resets the precedence; this is why token.Arrow is not treated as just another binop
 			}
 		}

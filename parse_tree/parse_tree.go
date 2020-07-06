@@ -34,10 +34,10 @@ DeclsAndExpr ->
 	FuncDeclBlock
 
 PatMatBlock ->
-	LvalAtom  '='  ExprBlock
+	LValAtom  '='  ExprBlock
 
 FuncDeclBlock ->
-	ID  (LvalAtom)*  FuncBlock                   // sugar for currying and 'let'
+	ID  (LValAtom)*  FuncBlock                   // sugar for currying and 'let'
 
 ☉ExprBlock ->
 	JustExprBlock
@@ -53,8 +53,8 @@ LetBlock ->
 	'let'  '|->'  DeclsAndExpr  '<-|'
 
 FuncBlock ->
-	LvalAtom  '->'  ExprBlock
-	LvalAtom  '->'  |->'  DeclsAndExpr  '<-|'                  // sugar for 'let'
+	LValAtom  '->'  ExprBlock
+	LValAtom  '->'  |->'  DeclsAndExpr  '<-|'                  // sugar for 'let'
 
 TupleBlock ->
 	'(*)'  |->'  ExprBlock+  '<-|'
@@ -95,7 +95,7 @@ BinopExpr ->
 	Expr  [+-*%/^&|.@]  Expr
 
 FuncExpr ->
-	LvalAtom  '->'  Expr
+	LValAtom  '->'  Expr
 
 ApplyExpr ->
 	Expr  '@'  Expr
@@ -103,23 +103,23 @@ ApplyExpr ->
 	Expr  Expr
 
 
-// lval elements
+// lVal elements
 
 
-☉LvalAtom ->
+☉LLValAtom->
 	ID
 	Int
 	Bool
-	LvalTuple
-	LvalList
+	LValTuple
+	LValList
 
-LvalTuple ->
+LValTuple ->
 	'('  ')'
-	'('  LvalAtom  (','  LvalAtom)*  ')'
+	'('  LValAtom  (','  LValAtom)*  ')'
 
-LvalList ->
+LValList ->
 	'['  ']'
-	'['  LvalAtom  (','  LvalAtom)*  (';'  LvalAtom)?  ']'
+	'['  LValAtom  (','  LValAtom)*  (';'  LValAtom)?  ']'
 
 */
 
@@ -138,7 +138,7 @@ type Block interface {
 // All inline nodes implement this
 type Inline interface {
 	Node
-	IsLval() bool
+	IsLVal() bool
 }
 
 // neither Block nor Inline
@@ -166,7 +166,7 @@ func (p *Program) String() string {
 
 type PatMatBlock struct {
 	Token token.Token // the token.PatMat token
-	Lval  Inline
+	LVal  Inline
 	Expr  Block
 }
 
@@ -175,7 +175,7 @@ func (pmb *PatMatBlock) TokenLiteral() string { return pmb.Token.Literal }
 func (pmb *PatMatBlock) String() string {
 	var out bytes.Buffer
 
-	out.WriteString(pmb.Lval.String())
+	out.WriteString(pmb.LVal.String())
 	out.WriteString(" = ")
 	out.WriteString(pmb.Expr.String())
 
@@ -184,7 +184,7 @@ func (pmb *PatMatBlock) String() string {
 
 type FuncBlock struct {
 	Token token.Token // the token.Arrow token
-	Lval  Inline
+	LVal  Inline
 	Expr  Block
 }
 
@@ -193,7 +193,7 @@ func (flb *FuncBlock) TokenLiteral() string { return flb.Token.Literal }
 func (flb *FuncBlock) String() string {
 	var out bytes.Buffer
 
-	out.WriteString(flb.Lval.String())
+	out.WriteString(flb.LVal.String())
 	out.WriteString(" -> ")
 	out.WriteString(flb.Expr.String())
 
@@ -294,7 +294,7 @@ type InlineID struct {
 	Name  string
 }
 
-func (ii *InlineID) IsLval() bool         { return true }
+func (ii *InlineID) IsLVal() bool         { return true }
 func (ii *InlineID) TokenLiteral() string { return ii.Token.Literal }
 func (ii *InlineID) String() string       { return ii.Name }
 
@@ -303,7 +303,7 @@ type InlineInt struct {
 	Value int
 }
 
-func (ii *InlineInt) IsLval() bool         { return true }
+func (ii *InlineInt) IsLVal() bool         { return true }
 func (ii *InlineInt) TokenLiteral() string { return ii.Token.Literal }
 func (ii *InlineInt) String() string       { return ii.Token.Literal }
 
@@ -312,23 +312,23 @@ type InlineBool struct {
 	Value bool
 }
 
-func (ib *InlineBool) IsLval() bool         { return true }
+func (ib *InlineBool) IsLVal() bool         { return true }
 func (ib *InlineBool) TokenLiteral() string { return ib.Token.Literal }
 func (ib *InlineBool) String() string       { return ib.Token.Literal }
 
 type InlineFunc struct {
 	Token token.Token // the token.Arrow token
-	Lval  Inline
+	LVal  Inline
 	Expr  Inline
 }
 
-func (iFunc *InlineFunc) IsLval() bool         { return false }
+func (iFunc *InlineFunc) IsLVal() bool         { return false }
 func (iFunc *InlineFunc) TokenLiteral() string { return iFunc.Token.Literal }
 func (iFunc *InlineFunc) String() string {
 	var out bytes.Buffer
 
 	out.WriteString("(")
-	out.WriteString(iFunc.Lval.String())
+	out.WriteString(iFunc.LVal.String())
 	out.WriteString(" -> ")
 	out.WriteString(iFunc.Expr.String())
 	out.WriteString(")")
@@ -341,9 +341,9 @@ type InlineTuple struct {
 	Exprs []Inline
 }
 
-func (it *InlineTuple) IsLval() bool {
+func (it *InlineTuple) IsLVal() bool {
 	for _, expr := range it.Exprs {
-		if !expr.IsLval() {
+		if !expr.IsLVal() {
 			return false
 		}
 	}
@@ -381,7 +381,7 @@ type InlineCons struct {
 	Tail  Inline
 }
 
-func (ic *InlineCons) IsLval() bool         { return ic.Head.IsLval() && (isNil(ic.Tail) || ic.Tail.IsLval()) }
+func (ic *InlineCons) IsLVal() bool         { return ic.Head.IsLVal() && (isNil(ic.Tail) || ic.Tail.IsLVal()) }
 func (ic *InlineCons) TokenLiteral() string { return ic.Token.Literal }
 func (ic *InlineCons) String() string {
 	var out bytes.Buffer
@@ -406,7 +406,7 @@ type InlineUnopExpr struct {
 	Expr  Inline
 }
 
-func (iue *InlineUnopExpr) IsLval() bool         { return false }
+func (iue *InlineUnopExpr) IsLVal() bool         { return false }
 func (iue *InlineUnopExpr) Op() token.TokType    { return iue.Token.Type }
 func (iue *InlineUnopExpr) TokenLiteral() string { return iue.Token.Literal }
 func (iue *InlineUnopExpr) String() string {
@@ -427,7 +427,7 @@ type InlineBinopExpr struct {
 	RExpr Inline
 }
 
-func (ibe *InlineBinopExpr) IsLval() bool         { return false }
+func (ibe *InlineBinopExpr) IsLVal() bool         { return false }
 func (ibe *InlineBinopExpr) Op() token.TokType    { return ibe.Token.Type }
 func (ibe *InlineBinopExpr) TokenLiteral() string { return ibe.Token.Literal }
 func (ibe *InlineBinopExpr) String() string {
