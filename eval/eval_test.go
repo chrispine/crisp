@@ -93,7 +93,12 @@ sqr(5-1)
 		{5, `
 
 
-5
+make_adder(n) ->
+	x -> x+n
+
+add2 = make_adder(2)
+
+add2(3)
 
 
 `},

@@ -39,6 +39,7 @@ func (b *Bool) Inspect() string { return fmt.Sprintf("%v", b.Value) }
 
 type Func struct {
 	Env           *Env
+	ArgName       string
 	FuncPartExprs []*ast.LetExpr
 }
 

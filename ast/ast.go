@@ -57,6 +57,7 @@ func (e *LetExpr) expr()          {}
 func (e *LetExpr) String() string { return "LetExpr" }
 
 type FuncExpr struct {
+	ArgName       string
 	FuncPartExprs []*LetExpr
 }
 

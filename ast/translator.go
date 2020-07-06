@@ -4,13 +4,8 @@ import (
 	"crisp/parse_tree"
 	"crisp/token"
 	"fmt"
+	"strconv"
 )
-
-// This is the name that we bind to the argument
-// when a function is called. It's important that
-// it's not a legal identifier, so it will never
-// clash with identifiers in the program.
-const ArgName = "@ARG@"
 
 // translates parse trees into ASTs
 
@@ -109,12 +104,14 @@ func (tr *Translator) translateLetBlock(block *parse_tree.LetBlock) *LetExpr {
 }
 
 func (tr *Translator) translateFuncBlock(block *parse_tree.FuncBlock) Expr {
+	argName := getArgName()
+
 	letBlock := &parse_tree.LetBlock{
 		Decls: []parse_tree.Block{
 			&parse_tree.PatMatBlock{
 				LVal: block.LVal,
 				Expr: &parse_tree.JustExprBlock{
-					Expr: &parse_tree.InlineID{Name: ArgName},
+					Expr: &parse_tree.InlineID{Name: argName},
 				},
 			},
 		},
@@ -123,15 +120,17 @@ func (tr *Translator) translateFuncBlock(block *parse_tree.FuncBlock) Expr {
 
 	letExpr := tr.translateLetBlock(letBlock)
 
-	return tr.translateFunc(letExpr)
+	return tr.translateFunc(letExpr, argName)
 }
 func (tr *Translator) translateInlineFunc(inline *parse_tree.InlineFunc) Expr {
+	argName := getArgName()
+
 	letBlock := &parse_tree.LetBlock{
 		Decls: []parse_tree.Block{
 			&parse_tree.PatMatBlock{
 				LVal: inline.LVal,
 				Expr: &parse_tree.JustExprBlock{
-					Expr: &parse_tree.InlineID{Name: ArgName},
+					Expr: &parse_tree.InlineID{Name: argName},
 				},
 			},
 		},
@@ -142,8 +141,23 @@ func (tr *Translator) translateInlineFunc(inline *parse_tree.InlineFunc) Expr {
 
 	letExpr := tr.translateLetBlock(letBlock)
 
-	return tr.translateFunc(letExpr)
+	return tr.translateFunc(letExpr, argName)
 }
-func (tr *Translator) translateFunc(letExpr *LetExpr) Expr {
-	return &FuncExpr{FuncPartExprs: []*LetExpr{letExpr}}
+func (tr *Translator) translateFunc(letExpr *LetExpr, argName string) Expr {
+	return &FuncExpr{FuncPartExprs: []*LetExpr{letExpr}, ArgName: argName}
+}
+
+// This is the name that we bind to the argument
+// when a function is called. It's important that
+// it's not a legal identifier, so it will never
+// clash with identifiers in the program, and that
+// it be unique, so it doesn't clash with nested
+// function calls.
+var argNum = 0
+
+func getArgName() string {
+	name := "@ARG_" + strconv.Itoa(argNum) + "@"
+	argNum++
+
+	return name
 }

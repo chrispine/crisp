@@ -32,7 +32,7 @@ func Eval(env *value.Env, someExpr ast.Expr) value.Value {
 func apply(fn *value.Func, arg value.Value) value.Value {
 	// TODO: properly handle multiple function pieces
 	letExpr := fn.FuncPartExprs[0]
-	argBindings := map[string]value.Value{ast.ArgName: arg}
+	argBindings := map[string]value.Value{fn.ArgName: arg}
 	argEnv := value.NewEnv(fn.Env, argBindings)
 
 	return Eval(argEnv, letExpr)
@@ -151,6 +151,7 @@ func evalLetExpr(env *value.Env, expr *ast.LetExpr) value.Value {
 func evalFuncExpr(env *value.Env, expr *ast.FuncExpr) value.Value {
 	return &value.Func{
 		Env:           env,
+		ArgName:       expr.ArgName,
 		FuncPartExprs: expr.FuncPartExprs,
 	}
 }
