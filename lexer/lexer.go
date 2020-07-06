@@ -165,17 +165,14 @@ func (l *Lexer) nextToken() *token.Token {
 		return tok
 	}
 
-	if isNewline(l.ch) {
+	for isNewline(l.ch) {
 		l.readRune()
 
 		// make sure we never emit two NewLine tokens in a row,
-		// and never after Dedent, as that implies NewLine,
-		// and never after BlockLen (which I think can only happen
-		// when the first character of a program is '\n'
+		// and never after Dedent, as that implies NewLine
 		prevTokenType := l.allTokens[len(l.allTokens)-1].Type
 		if prevTokenType != token.NewLine &&
-			prevTokenType != token.Dedent &&
-			prevTokenType != token.BlockLen {
+			prevTokenType != token.Dedent {
 			return l.createNewlineToken()
 		}
 	}
@@ -256,7 +253,7 @@ func (l *Lexer) consumeIndentation() int {
 		l.readRune()
 	}
 
-	if !isWhitespace(l.ch) && l.ch != '#' {
+	if !isWhitespace(l.ch) && !isNewline(l.ch) && l.ch != '#' {
 		return indent
 	}
 
