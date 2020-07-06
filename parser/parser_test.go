@@ -4,7 +4,6 @@ import (
 	"crisp/lexer"
 	"crisp/parse_tree"
 	"crisp/token"
-	"fmt"
 	"testing"
 )
 
@@ -118,8 +117,6 @@ func TestUnopExprs(t *testing.T) {
 
 func testAtom(t *testing.T, exp parse_tree.Inline, expected interface{}) bool {
 	switch v := expected.(type) {
-	case bool:
-		return testInlineBool(t, exp, v)
 	case string:
 		return testInlineID(t, exp, v)
 	}
@@ -141,26 +138,6 @@ func testInlineID(t *testing.T, exp parse_tree.Inline, name string) bool {
 
 	if id.TokenLiteral() != name {
 		t.Errorf("id.TokenLiteral not %s. got=%s", name, id.TokenLiteral())
-		return false
-	}
-
-	return true
-}
-
-func testInlineBool(t *testing.T, exp parse_tree.Inline, value bool) bool {
-	bo, ok := exp.(*parse_tree.InlineBool)
-	if !ok {
-		t.Errorf("exp not *parse_tree.InlneBool. got=%T", exp)
-		return false
-	}
-
-	if bo.Value != value {
-		t.Errorf("bo.Value not %t. got=%t", value, bo.Value)
-		return false
-	}
-
-	if bo.TokenLiteral() != fmt.Sprintf("%t", value) {
-		t.Errorf("bo.TokenLiteral not %t. got=%s", value, bo.TokenLiteral())
 		return false
 	}
 

@@ -42,10 +42,6 @@ func (tr *Translator) translateBlock(blockTree parse_tree.Block) Expr {
 
 func (tr *Translator) translateInline(inlineTree parse_tree.Inline) Expr {
 	switch inline := inlineTree.(type) {
-	case *parse_tree.InlineInt:
-		return &IntExpr{Value: inline.Value}
-	case *parse_tree.InlineBool:
-		return &BoolExpr{Value: inline.Value}
 	case *parse_tree.InlineID:
 		return &LookupExpr{Name: inline.Name}
 	case *parse_tree.InlineUnopExpr:

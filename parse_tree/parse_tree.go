@@ -294,24 +294,6 @@ func (ii *InlineID) IsLVal() bool         { return true }
 func (ii *InlineID) TokenLiteral() string { return ii.Token.Literal }
 func (ii *InlineID) String() string       { return ii.Name }
 
-type InlineInt struct {
-	Token token.Token // the token.Int token
-	Value int
-}
-
-func (ii *InlineInt) IsLVal() bool         { return true }
-func (ii *InlineInt) TokenLiteral() string { return ii.Token.Literal }
-func (ii *InlineInt) String() string       { return ii.Token.Literal }
-
-type InlineBool struct {
-	Token token.Token // the token.True or token.False tokens
-	Value bool
-}
-
-func (ib *InlineBool) IsLVal() bool         { return true }
-func (ib *InlineBool) TokenLiteral() string { return ib.Token.Literal }
-func (ib *InlineBool) String() string       { return ib.Token.Literal }
-
 type InlineFunc struct {
 	Token token.Token // the token.Arrow token
 	LVal  Inline
