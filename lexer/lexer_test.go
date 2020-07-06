@@ -8,10 +8,10 @@ import (
 func TestVariousTokens(t *testing.T) {
 	input := `main
 
-foo = x ->
+fooBar = x ->
 	x + 1
 
-(3+3-2*1/1^2%999).foo
+(3+3-2*1/1^2%999).foo_bar
 
 module export let case [{}]
 
@@ -22,7 +22,7 @@ a|日本語&c<=!d<>=> !=== ,:;`
 		{0, token.ID, "main"},
 		{0, token.NewLine, "\n"},
 
-		{0, token.ID, "foo"},
+		{0, token.ID, "fooBar"},
 		{0, token.PatMat, "="},
 		{0, token.ID, "x"},
 		{0, token.Arrow, "->"},
@@ -50,7 +50,7 @@ a|日本語&c<=!d<>=> !=== ,:;`
 		{0, token.Int, "999"},
 		{0, token.RParen, ")"},
 		{0, token.Dot, "."},
-		{0, token.ID, "foo"},
+		{0, token.ID, "foo_bar"},
 		{0, token.NewLine, "\n"},
 
 		{0, token.Module, "module"},

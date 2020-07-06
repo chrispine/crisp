@@ -182,15 +182,17 @@ func (l *Lexer) nextToken() *token.Token {
 		return maybeNilTok
 	}
 
-	if isLetter(l.ch) {
-		tok.Literal = l.readIdentifier()
-		tok.Type = token.LookupID(tok.Literal)
-		return tok
-	}
-
+	// isDigit() must come before isLetter() because
+	// isLetter() includes digits, for IDs like `bar2`
 	if isDigit(l.ch) {
 		tok.Type = token.Int
 		tok.Literal = l.readNumber()
+		return tok
+	}
+
+	if isLetter(l.ch) {
+		tok.Literal = l.readIdentifier()
+		tok.Type = token.LookupID(tok.Literal)
 		return tok
 	}
 
@@ -287,12 +289,12 @@ func (l *Lexer) consumeComment() {
 	}
 }
 
-func isLetter(ch rune) bool {
-	return unicode.IsLetter(ch)
-}
-
 func isDigit(ch rune) bool {
 	return '0' <= ch && ch <= '9'
+}
+
+func isLetter(ch rune) bool {
+	return unicode.IsLetter(ch) || isDigit(ch) || ch == '_'
 }
 
 func isWhitespace(ch rune) bool {
