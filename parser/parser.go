@@ -198,8 +198,8 @@ func (p *Parser) ParseProgram() *parse_tree.Program {
 DeclsAndExpr ->
 	«BlockLen»  DeclBlock*  ExprBlock
 */
-func (p *Parser) parseDeclsAndExpr() ([]parse_tree.Block, parse_tree.Block) {
-	var decls []parse_tree.Block
+func (p *Parser) parseDeclsAndExpr() ([]*parse_tree.PatMatBlock, parse_tree.Block) {
+	var decls []*parse_tree.PatMatBlock
 
 	numDecls := p.curToken.NumLines - 1
 	p.expectToken(token.BlockLen)
@@ -216,7 +216,7 @@ func (p *Parser) parseDeclsAndExpr() ([]parse_tree.Block, parse_tree.Block) {
 	PatMatBlock
 	FuncDeclBlock
 */
-func (p *Parser) parseDeclBlock() parse_tree.Block {
+func (p *Parser) parseDeclBlock() *parse_tree.PatMatBlock {
 	atom := p.parseAtom()
 
 	if p.curTokenIs(token.PatMat) {
@@ -230,7 +230,7 @@ func (p *Parser) parseDeclBlock() parse_tree.Block {
 PatMatBlock ->
 	LValAtom  '='  ExprBlock
 */
-func (p *Parser) parsePatMatBlock(atom parse_tree.Inline) parse_tree.Block {
+func (p *Parser) parsePatMatBlock(atom parse_tree.Inline) *parse_tree.PatMatBlock {
 	if !atom.IsLVal() {
 		p.error(fmt.Sprintf("atom %v is not an l-value", atom))
 	}
@@ -248,7 +248,7 @@ func (p *Parser) parsePatMatBlock(atom parse_tree.Inline) parse_tree.Block {
 FuncDeclBlock ->
 	ID  (LValAtom)*  FuncBlock  // sugar for currying and 'let'
 */
-func (p *Parser) parseFuncDeclBlock(atom parse_tree.Inline) parse_tree.Block {
+func (p *Parser) parseFuncDeclBlock(atom parse_tree.Inline) *parse_tree.PatMatBlock {
 	// `atom` must be an identifier
 	_, ok := atom.(*parse_tree.InlineID)
 	if !ok {

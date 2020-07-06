@@ -139,7 +139,7 @@ type Inline interface {
 
 // neither Block nor Inline
 type Program struct {
-	Decls []Block
+	Decls []*PatMatBlock
 	Expr  Block
 }
 
@@ -198,7 +198,7 @@ func (flb *FuncBlock) String() string {
 
 type LetBlock struct {
 	Token token.Token // the token.Let token
-	Decls []Block
+	Decls []*PatMatBlock
 	Expr  Block
 }
 
