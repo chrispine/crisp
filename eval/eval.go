@@ -223,10 +223,20 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 		switch expr.Token.Type {
 		case token.At:
 			return apply(leftVal, someRightVal)
+		case token.Mult:
+			if rightVal, ok := someRightVal.(*value.Func); ok {
+				return composeFuncs(leftVal, rightVal)
+			}
 		case token.Exp:
 			if rightVal, ok := someRightVal.(*value.Int); ok {
-				if rightVal.Value == 0 {
-					return value.Identity
+				if rightVal.Value >= 0 {
+					composition := value.Identity
+
+					for i := 0; i < rightVal.Value; i++ {
+						composition = composeFuncs(composition, leftVal)
+					}
+
+					return composition
 				}
 			}
 		}
@@ -257,6 +267,45 @@ func evalFuncExpr(env *value.Env, expr *ast.FuncExpr) *value.Func {
 		Env:           env,
 		ArgName:       expr.ArgName,
 		FuncPartExprs: expr.FuncPartExprs,
+	}
+}
+
+func composeFuncs(f *value.Func, g *value.Func) *value.Func {
+	argName := ast.GetArgName()
+	fName := ast.GetArgName()
+	gName := ast.GetArgName()
+
+	env := value.NewEnv(value.EmptyEnv, []value.Binding{
+		{Name: fName, Value: f},
+		{Name: gName, Value: g},
+	})
+
+	return &value.Func{
+		Env:     env,
+		ArgName: argName,
+		FuncPartExprs: []*ast.LetExpr{
+			{
+				Env: &ast.ExprEnv{
+					Parent: &ast.ExprEnv{
+						Bindings: []ast.ExprBinding{
+							{
+								Name: argName,
+								Expr: ast.Arg,
+							},
+						},
+					},
+				},
+				Expr: &ast.BinopExpr{
+					Token: token.AtToken,
+					LExpr: &ast.LookupExpr{Name: fName},
+					RExpr: &ast.BinopExpr{
+						Token: token.AtToken,
+						LExpr: &ast.LookupExpr{Name: gName},
+						RExpr: &ast.LookupExpr{Name: argName},
+					},
+				},
+			},
+		},
 	}
 }
 

@@ -441,46 +441,107 @@ id(123)
 
 
 `},
-		{5, `
+		{11, `
 
-#head[h;t] -> h
-#tail[h;t] -> t
 
-#a = [22 ; b]
-#b = [88, 99, 111]
+double(x) -> 2*x
 
-#tailhead = head * tail
+id = double^0
 
-#a.tailhead
-5
+id(11)
 
 
 `},
-		{5, `
+		{22, `
 
 
-5
+double(x) -> 2*x
 
+dbl = double^1
 
-`},
-		{5, `
-
-
-5
+dbl(11)
 
 
 `},
-		{5, `
+		{44, `
 
 
-5
+double(x) -> 2*x
+
+quad = double^2
+
+quad(11)
 
 
 `},
-		{5, `
+		{50, `
 
 
-5
+double(x) -> 2*x
+
+sqr(x) -> x^2
+
+(double*sqr) 5
+
+
+`},
+		{88, `
+
+
+head[h;t] -> h
+tail[h;t] -> t
+
+a = [22 ; b]
+b = [88, 99, 111]
+
+tailhead = head * tail
+
+a.tailhead
+
+
+`},
+		{88, `
+
+
+head[h;t] -> h
+tail[h;t] -> t
+
+a = [22 ; b]
+b = [88, 99, 111]
+
+(head * tail) a
+
+
+`},
+		{41, `
+
+
+head[h;t] -> h
+tail[h;t] -> t
+
+t4 = tail ^ 4
+
+[91, 11, 21, 31, 41, 51, 61].t4.head
+
+
+`},
+		{99, `
+
+
+head[h;t] -> h
+tail[h;t] -> t
+
+a = [22 ; b]
+b = [88, 99, 111]
+
+(head * tail^2) a
+
+
+`},
+		{1, `
+
+
+1
 
 
 `},

@@ -239,7 +239,7 @@ func (tr *Translator) translateInlineFunc(env *ExprEnv, inline *parse_tree.Inlin
 	return tr.translateFunc(env, inline.LVal, &parse_tree.JustExprBlock{Expr: inline.Expr})
 }
 func (tr *Translator) translateFunc(env *ExprEnv, lVal parse_tree.Inline, expr parse_tree.Block) Expr {
-	argName := getArgName()
+	argName := GetArgName()
 
 	letBlock := &parse_tree.LetBlock{
 		Decls: []*parse_tree.PatMatBlock{{
@@ -327,7 +327,7 @@ func (tr *Translator) translateConsBlock(env *ExprEnv, block *parse_tree.ConsBlo
 // function calls.
 var argNum = 0
 
-func getArgName() string {
+func GetArgName() string {
 	name := "@ARG_" + strconv.Itoa(argNum) + "@"
 	argNum++
 

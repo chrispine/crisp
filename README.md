@@ -1,13 +1,14 @@
 # Crisp
 
-a language experiment for my own learning
+a language experiment for my own learning; maximize static reasoning ability
 
-DISCLAIMER
+DISCLAIMER: USE AT OWN RISK
 
 features
 - purely functional (no mutations)
 - pattern matching
 - strong, static, inferred typing
+- off-side language
 - not ever intended to be finished
   - probably will never have IO or tons of essential things
 
