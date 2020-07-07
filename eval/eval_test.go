@@ -338,6 +338,118 @@ tail args
 		{5, `
 
 
+add x y -> x + y
+
+2 + 1.add 2
+
+
+`},
+		{44, `
+
+
+foo(a,(b,c),d) ->
+	c
+
+yyy = (33, 44)
+
+foo(111, yyy, 222)
+
+
+`},
+		{44, `
+
+
+foo[a,[b,c],d] ->
+	c
+
+yyy = [33, 44]
+
+foo[111, yyy, 222]
+
+
+`},
+		{22, `
+
+
+head[h;t] -> h
+tail[h;t] -> t
+
+head[22,33,44,55,66]
+
+
+`},
+		{33, `
+
+
+head[h;t] -> h
+tail[h;t] -> t
+
+head(tail[22,33,44,55,66])
+
+
+`},
+		{88, `
+
+
+head[h;t] -> h
+tail[h;t] -> t
+
+a = [22 ; b]
+b = [88, 99, 111]
+
+head(tail a)
+
+
+`},
+		{88, `
+
+
+head[h;t] -> h
+tail[h;t] -> t
+
+a = [22 ; b]
+b = [88, 99, 111]
+
+a.tail.head
+
+
+`},
+		{88, `
+
+
+head[h;t] -> h
+tail[h;t] -> t
+
+a = [22 ; b]
+b = [88, 99, 111]
+
+compose(second,first) ->
+	x -> x.first.second
+
+tailhead = compose(head,tail)
+
+a.tailhead
+
+
+`},
+		//		{88, `
+		//
+		//
+		//head[h;t] -> h
+		//tail[h;t] -> t
+		//
+		//a = [22 ; b]
+		//b = [88, 99, 111]
+		//
+		//tailhead = head * tail
+		//
+		//a.tailhead
+		//
+		//
+		//`},
+		{5, `
+
+
 5
 
 
