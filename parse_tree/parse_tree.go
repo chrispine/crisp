@@ -128,7 +128,7 @@ type Node interface {
 // All block nodes implement this
 type Block interface {
 	Node
-	blockNode()
+	BlockNode()
 }
 
 // All inline nodes implement this
@@ -166,7 +166,7 @@ type PatMatBlock struct {
 	Expr  Block
 }
 
-func (pmb *PatMatBlock) blockNode()           {}
+func (pmb *PatMatBlock) BlockNode()           {}
 func (pmb *PatMatBlock) TokenLiteral() string { return pmb.Token.Literal }
 func (pmb *PatMatBlock) String() string {
 	var out bytes.Buffer
@@ -184,7 +184,7 @@ type FuncBlock struct {
 	Expr  Block
 }
 
-func (flb *FuncBlock) blockNode()           {}
+func (flb *FuncBlock) BlockNode()           {}
 func (flb *FuncBlock) TokenLiteral() string { return flb.Token.Literal }
 func (flb *FuncBlock) String() string {
 	var out bytes.Buffer
@@ -202,7 +202,7 @@ type LetBlock struct {
 	Expr  Block
 }
 
-func (lb *LetBlock) blockNode()           {}
+func (lb *LetBlock) BlockNode()           {}
 func (lb *LetBlock) TokenLiteral() string { return lb.Token.Literal }
 func (lb *LetBlock) String() string {
 	var out bytes.Buffer
@@ -225,7 +225,7 @@ type TupleBlock struct {
 	Exprs []Block
 }
 
-func (tb *TupleBlock) blockNode()           {}
+func (tb *TupleBlock) BlockNode()           {}
 func (tb *TupleBlock) TokenLiteral() string { return tb.Token.Literal }
 func (tb *TupleBlock) String() string {
 	var out bytes.Buffer
@@ -247,7 +247,7 @@ type ConsBlock struct {
 	Tail  Block
 }
 
-func (cb *ConsBlock) blockNode()           {}
+func (cb *ConsBlock) BlockNode()           {}
 func (cb *ConsBlock) TokenLiteral() string { return cb.Token.Literal }
 func (cb *ConsBlock) String() string {
 	var out bytes.Buffer
@@ -270,7 +270,7 @@ type JustExprBlock struct {
 	Expr  Inline
 }
 
-func (jeb *JustExprBlock) blockNode()           {}
+func (jeb *JustExprBlock) BlockNode()           {}
 func (jeb *JustExprBlock) TokenLiteral() string { return jeb.Token.Literal }
 func (jeb *JustExprBlock) String() string {
 	var out bytes.Buffer

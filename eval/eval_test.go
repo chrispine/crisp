@@ -111,35 +111,230 @@ fact(0)
 
 
 `},
-		// 		{5, `
-
-		// add(x, y) ->
-		// 	x + y
-
-		// add(2, 3)
-
-		// `},
 		{5, `
 
 
-5
+add(x, y) ->
+	x + y
+
+add(2, 3)
 
 
 `},
 		{5, `
 
 
-5
+inc(x) ->
+	add(a,b) ->
+		a + b
+	y = 1
+	add(x,y)
+
+inc(4)
 
 
 `},
 		{5, `
 
 
-5
+foo() ->
+	5
+
+foo()
 
 
 `},
+		{5, `
+
+
+foo() -> 5
+
+foo()
+
+
+`},
+		{5, `
+
+
+foo = () -> 5
+
+foo()
+
+
+`},
+		{5, `
+
+
+foo = () ->
+	5
+
+foo()
+
+
+`},
+		{5, `
+
+
+foo = (x) -> x+1
+
+foo(4)
+
+
+`},
+		{5, `
+
+
+foo = x -> x+1
+
+foo(4)
+
+
+`},
+		{5, `
+
+
+foo = (x -> x+1)
+
+foo(4)
+
+
+`},
+		{5, `
+
+
+foo = x ->
+	y = 1
+	x + y
+
+foo(4)
+
+
+`},
+		{5, `
+
+
+inc(x) ->
+	real_inc(a) ->
+		b = 1
+		a + b
+	real_inc(x)
+
+inc(4)
+
+
+`},
+		{5, `
+
+
+make_id() ->
+	x -> x
+
+make_id()(5)
+
+
+`},
+		{5, `
+
+
+get_five() ->
+	5
+
+five = get_five()
+five
+
+
+`},
+		{5, `
+
+
+make_id() ->
+	x -> x
+
+id = make_id()
+id(5)
+
+
+`},
+		{5, `
+
+
+make_adder(a) ->
+	b -> a + b
+
+inc = make_adder(1)
+
+inc(4)
+
+
+`},
+		{5, `
+
+
+make_adder(a) ->
+	adder(b) ->
+		a + b
+	adder
+
+inc3 = make_adder(3)
+inc3(2)
+
+
+`},
+		{5, `
+
+
+second = (a,b) -> b
+
+second(90210, 5)
+
+
+`},
+		{5, `
+
+
+second = (a,b) -> b
+args = (90210, 5)
+
+second(args)
+
+
+`},
+		{5, `
+
+
+second = (a,b) -> b
+args = (*)
+	90210
+	5
+
+second args
+
+
+`},
+		//		{5, `
+		//
+		//
+		//second = [a,b] -> b
+		//args = [*]
+		//		90210
+		//		5
+		//
+		//second args
+		//
+		//
+		//`},
+		//		{5, `
+		//
+		//
+		//tail = [h;t] -> t
+		//args = [*]
+		//		90210
+		//		; 5
+		//
+		//tail args
+		//
+		//
+		//`},
 		{5, `
 
 

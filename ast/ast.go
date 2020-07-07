@@ -5,8 +5,8 @@ import (
 )
 
 type Expr interface {
-	String() string
 	expr()
+	String() string
 }
 
 type IntExpr struct {
@@ -55,6 +55,13 @@ type LetExpr struct {
 
 func (e *LetExpr) expr()          {}
 func (e *LetExpr) String() string { return "LetExpr" }
+
+type TupleExpr struct {
+	Exprs []Expr
+}
+
+func (e *TupleExpr) expr()          {}
+func (e *TupleExpr) String() string { return "TupleExpr" }
 
 type FuncExpr struct {
 	ArgName       string

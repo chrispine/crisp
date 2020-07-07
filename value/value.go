@@ -40,6 +40,13 @@ func (b *Bool) Inspect() string { return fmt.Sprintf("%v", b.Value) }
 var True = &Bool{true}
 var False = &Bool{false}
 
+type Tuple struct {
+	Values []Value
+}
+
+func (f *Tuple) Class() Class    { return TupleClass }
+func (f *Tuple) Inspect() string { return "INSPECTED_TUPLE" }
+
 type Func struct {
 	Env           *Env
 	ArgName       string

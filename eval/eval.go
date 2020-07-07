@@ -23,6 +23,10 @@ func Eval(env *value.Env, someExpr ast.Expr) value.Value {
 		return evalLetExpr(env, expr)
 	case *ast.FuncExpr:
 		return evalFuncExpr(env, expr)
+	case *ast.TupleExpr:
+		return evalTupleExpr(env, expr)
+	case *ast.TupleDestructureExpr:
+		return evalTupleDestructure(env, expr)
 	}
 
 	panic(fmt.Sprintf("Runtime Error: unhandled expression %v of type %T", someExpr, someExpr))
@@ -59,6 +63,22 @@ func evalLookupExpr(env *value.Env, expr *ast.LookupExpr) value.Value {
 	}
 
 	return maybeThunk
+}
+
+func evalTupleExpr(env *value.Env, expr *ast.TupleExpr) value.Value {
+	var values []value.Value
+
+	for _, elem := range expr.Exprs {
+		values = append(values, Eval(env, elem))
+	}
+
+	return &value.Tuple{values}
+}
+
+func evalTupleDestructure(env *value.Env, expr *ast.TupleDestructureExpr) value.Value {
+	tuple := Eval(env, expr.Tuple).(*value.Tuple) // TODO: should I check for this error?
+
+	return tuple.Values[expr.Index]
 }
 
 func evalUnopExpr(env *value.Env, expr *ast.UnopExpr) value.Value {
