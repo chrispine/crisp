@@ -65,8 +65,7 @@ func evalBoolExpr(_ *value.Env, expr *ast.BoolExpr) *value.Bool {
 func evalLookupExpr(env *value.Env, expr *ast.LookupExpr) value.Value {
 	maybeThunk := env.Get(expr.Name)
 
-	thunk, ok := maybeThunk.(*value.Thunk)
-	if ok {
+	if thunk, ok := maybeThunk.(*value.Thunk); ok {
 		// force the thunk
 		val := Eval(env, thunk.Expr)
 		// store the value so we don't have to force it again later
@@ -163,9 +162,7 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 
 	switch leftVal := someLeftVal.(type) {
 	case *value.Int:
-		rightVal, ok := someRightVal.(*value.Int)
-
-		if ok {
+		if rightVal, ok := someRightVal.(*value.Int); ok {
 			l := leftVal.Value
 			r := rightVal.Value
 
@@ -197,9 +194,7 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 			}
 		}
 	case *value.Bool:
-		rightVal, ok := someRightVal.(*value.Bool)
-
-		if ok {
+		if rightVal, ok := someRightVal.(*value.Bool); ok {
 			l := leftVal.Value
 			r := rightVal.Value
 
@@ -228,6 +223,12 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 		switch expr.Token.Type {
 		case token.At:
 			return apply(leftVal, someRightVal)
+		case token.Exp:
+			if rightVal, ok := someRightVal.(*value.Int); ok {
+				if rightVal.Value == 0 {
+					return value.Identity
+				}
+			}
 		}
 	}
 

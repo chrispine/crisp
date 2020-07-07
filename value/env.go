@@ -16,7 +16,9 @@ type Binding struct {
 	Value Value
 }
 
+// TopLevelEnv has special handling to bind ints and bools
 var TopLevelEnv = &Env{}
+var EmptyEnv = &Env{}
 
 // bindings will initially be thunks to allow for
 // recursive or out-of-order declarations

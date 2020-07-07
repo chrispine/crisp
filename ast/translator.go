@@ -104,7 +104,7 @@ func (tr *Translator) translateLetBlock(env *ExprEnv, block *parse_tree.LetBlock
 	// will give to the LetExpr to hold the post-translated
 	// AST expressions.
 	preEnv := &ParseEnv{parent: nil}
-	postEnv := &ExprEnv{parent: env}
+	postEnv := &ExprEnv{Parent: env}
 
 	le := &LetExpr{Env: postEnv}
 
@@ -252,7 +252,7 @@ func (tr *Translator) translateFunc(env *ExprEnv, lVal parse_tree.Inline, expr p
 	}
 
 	argEnv := &ExprEnv{
-		parent:   env,
+		Parent:   env,
 		Bindings: []ExprBinding{{Name: argName, Expr: Arg}},
 	}
 

@@ -16,7 +16,7 @@ import (
 // tell me. This is garbage.
 
 type ExprEnv struct {
-	parent   *ExprEnv
+	Parent   *ExprEnv
 	Bindings []ExprBinding
 }
 
@@ -36,8 +36,8 @@ func (e *ExprEnv) isDefined(name string) bool {
 	}
 
 	// nope, let's see if a parent has it
-	if e.parent != nil {
-		return e.parent.isDefined(name)
+	if e.Parent != nil {
+		return e.Parent.isDefined(name)
 	}
 
 	if e == TopLevelExprEnv {

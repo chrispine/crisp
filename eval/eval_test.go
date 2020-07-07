@@ -432,24 +432,26 @@ a.tailhead
 
 
 `},
-		//		{88, `
-		//
-		//
-		//head[h;t] -> h
-		//tail[h;t] -> t
-		//
-		//a = [22 ; b]
-		//b = [88, 99, 111]
-		//
-		//tailhead = head * tail
-		//
-		//a.tailhead
-		//
-		//
-		//`},
+		{123, `
+
+
+id = (x -> 2*x)^0
+
+id(123)
+
+
+`},
 		{5, `
 
+#head[h;t] -> h
+#tail[h;t] -> t
 
+#a = [22 ; b]
+#b = [88, 99, 111]
+
+#tailhead = head * tail
+
+#a.tailhead
 5
 
 
@@ -514,9 +516,8 @@ a.tailhead
 
 	for _, tt := range tests {
 		val := testEval(t, tt.program)
-		intVal, ok := val.(*value.Int)
 
-		if !ok {
+		if intVal, ok := val.(*value.Int); !ok {
 			t.Fatalf("wow, expected an int, got %v", val.Inspect())
 		} else if intVal.Value != tt.expected {
 			t.Fatalf("wrong int value: expected %d, got %d in program:\n%v", tt.expected, intVal, tt.program)
@@ -540,9 +541,8 @@ func TestEvalBoolExpr(t *testing.T) {
 
 	for _, tt := range tests {
 		val := testEval(t, tt.program)
-		boolVal, ok := val.(*value.Bool)
 
-		if !ok {
+		if boolVal, ok := val.(*value.Bool); !ok {
 			t.Fatalf("wow, expected a bool, got %v", val.Inspect())
 		} else if boolVal.Value != tt.expected {
 			t.Fatalf("wrong bool value: expected %v, got %v in program:\n%v", tt.expected, boolVal, tt.program)

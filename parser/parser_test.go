@@ -126,6 +126,7 @@ func testAtom(t *testing.T, exp parse_tree.Inline, expected interface{}) bool {
 
 func testInlineID(t *testing.T, exp parse_tree.Inline, name string) bool {
 	id, ok := exp.(*parse_tree.InlineID)
+
 	if !ok {
 		t.Errorf("exp not *parse_tree.InlineID. got=%T", exp)
 		return false

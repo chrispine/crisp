@@ -63,3 +63,24 @@ type Func struct {
 
 func (f *Func) Class() Class    { return FuncClass }
 func (f *Func) Inspect() string { return "INSPECTED_FUNC" }
+
+var identityArgName = "@ARG_IDENTITY@"
+var Identity = &Func{
+	Env:     EmptyEnv,
+	ArgName: identityArgName,
+	FuncPartExprs: []*ast.LetExpr{
+		{
+			Env: &ast.ExprEnv{
+				Parent: &ast.ExprEnv{
+					Bindings: []ast.ExprBinding{
+						{
+							Name: identityArgName,
+							Expr: ast.Arg,
+						},
+					},
+				},
+			},
+			Expr: &ast.LookupExpr{Name: identityArgName},
+		},
+	},
+}

@@ -250,8 +250,7 @@ FuncDeclBlock ->
 */
 func (p *Parser) parseFuncDeclBlock(atom parse_tree.Inline) *parse_tree.PatMatBlock {
 	// `atom` must be an identifier
-	_, ok := atom.(*parse_tree.InlineID)
-	if !ok {
+	if _, ok := atom.(*parse_tree.InlineID); !ok {
 		p.error(fmt.Sprintf("not a valid identifier: %v", atom))
 	}
 
