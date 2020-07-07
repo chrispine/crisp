@@ -24,7 +24,7 @@ func (tr *Translator) Translate(program *parse_tree.Program) Expr {
 		Expr:  program.Expr,
 	}
 
-	return tr.translateBlock(TopLevelExprEnv, lb)
+	return tr.translateLetBlock(TopLevelExprEnv, lb)
 }
 
 func (tr *Translator) Errors() []string {
@@ -46,8 +46,12 @@ func (tr *Translator) translateBlock(env *ExprEnv, blockTree parse_tree.Block) E
 		return tr.translateFuncBlock(env, block)
 	case *parse_tree.TupleBlock:
 		return tr.translateTupleBlock(env, block)
+	case *parse_tree.ConsBlock:
+		return tr.translateConsBlock(env, block)
 	case *TupleDestructureBlock:
 		return tr.translateTupleDestructureBlock(env, block)
+	case *ConsDestructureBlock:
+		return tr.translateConsDestructureBlock(env, block)
 	}
 
 	tr.error(fmt.Sprintf("Translator Error: unhandled Block %v of type %T", blockTree, blockTree))
@@ -73,6 +77,8 @@ func (tr *Translator) translateInline(env *ExprEnv, inlineTree parse_tree.Inline
 		return tr.translateInlineFunc(env, inline)
 	case *parse_tree.InlineTuple:
 		return tr.translateInlineTuple(env, inline)
+	case *parse_tree.InlineCons:
+		return tr.translateInlineCons(env, inline)
 	}
 
 	tr.error(fmt.Sprintf("Translator Error: unhandled Inline %v of type %T", inlineTree, inlineTree))
@@ -84,9 +90,13 @@ func (tr *Translator) translateJustExprBlock(env *ExprEnv, block *parse_tree.Jus
 }
 
 type toAssert struct {
-	lhsEqual parse_tree.Inline
-	rhsEqual parse_tree.Block
+	lhsEqual   parse_tree.Inline
+	rhsEqual   parse_tree.Block
+	listIsCons parse_tree.Block
+	listIsNil  parse_tree.Block
 }
+
+var equalToken = token.Token{Type: token.Equal, Literal: "=="}
 
 func (tr *Translator) translateLetBlock(env *ExprEnv, block *parse_tree.LetBlock) *LetExpr {
 	// We create two new envs: one temporary one to hold the
@@ -114,10 +124,18 @@ func (tr *Translator) translateLetBlock(env *ExprEnv, block *parse_tree.LetBlock
 	// postEnv and le.Asserts.
 	for _, ta := range preAsserts {
 		var newAssert Expr
-		newAssert = &BinopExpr{
-			Token: token.Token{Type: token.Equal, Literal: "=="}, // TODO: use the same token for all of these
-			LExpr: tr.translateInline(postEnv, ta.lhsEqual),
-			RExpr: tr.translateBlock(postEnv, ta.rhsEqual),
+
+		switch {
+		case !isNil(ta.listIsCons):
+			newAssert = &AssertListIsConsExpr{List: tr.translateBlock(postEnv, ta.listIsCons)}
+		case !isNil(ta.listIsNil):
+			newAssert = &AssertListIsNilExpr{List: tr.translateBlock(postEnv, ta.listIsNil)}
+		default:
+			newAssert = &BinopExpr{
+				Token: equalToken,
+				LExpr: tr.translateInline(postEnv, ta.lhsEqual),
+				RExpr: tr.translateBlock(postEnv, ta.rhsEqual),
+			}
 		}
 
 		le.Asserts = append(le.Asserts, newAssert)
@@ -152,6 +170,8 @@ func (tr *Translator) partitionDecl(
 		}
 	case *parse_tree.InlineTuple:
 		// `(a, b) = expr`
+		// Note that we don't need to assert that `rhs` is a tuple, or what size of tuple,
+		// because the type checker will flag that at compile time.
 		for i, elem := range lhs.Exprs {
 			td := &TupleDestructureBlock{i, rhs}
 			asserts = tr.partitionDecl(preEnv, postEnv, asserts, elem, td)
@@ -160,7 +180,17 @@ func (tr *Translator) partitionDecl(
 		// `[a, b]` = expr
 		// `[h; t]` = expr
 		// `[    ]` = expr  (requires nil check!)
-		tr.error("someone tell Chris to implement destructuring assignment for lists")
+		asserts = append(asserts, toAssert{listIsCons: rhs})
+
+		rhsHead := &ConsDestructureBlock{true, rhs}
+		asserts = tr.partitionDecl(preEnv, postEnv, asserts, lhs.Head, rhsHead)
+
+		rhsTail := &ConsDestructureBlock{false, rhs}
+		if isNil(lhs.Tail) {
+			asserts = append(asserts, toAssert{listIsNil: rhsTail})
+		} else {
+			asserts = tr.partitionDecl(preEnv, postEnv, asserts, lhs.Tail, rhsTail)
+		}
 	default:
 		tr.error("illegal l-value (should not be possible to get here)")
 	}
@@ -177,6 +207,15 @@ func (td *TupleDestructureBlock) BlockNode()           {}
 func (td *TupleDestructureBlock) TokenLiteral() string { return "«TupleDestructureBlock»" }
 func (td *TupleDestructureBlock) String() string       { return "«TupleDestructureBlock»" }
 
+type ConsDestructureBlock struct {
+	isHead bool
+	list   parse_tree.Block
+}
+
+func (td *ConsDestructureBlock) BlockNode()           {}
+func (td *ConsDestructureBlock) TokenLiteral() string { return "«ConsDestructureBlock»" }
+func (td *ConsDestructureBlock) String() string       { return "«ConsDestructureBlock»" }
+
 type TupleDestructureExpr struct {
 	Index int
 	Tuple Expr
@@ -184,6 +223,14 @@ type TupleDestructureExpr struct {
 
 func (e *TupleDestructureExpr) expr()          {}
 func (e *TupleDestructureExpr) String() string { return "TupleDestructureExpr" }
+
+type ConsDestructureExpr struct {
+	IsHead bool
+	List   Expr
+}
+
+func (e *ConsDestructureExpr) expr()          {}
+func (e *ConsDestructureExpr) String() string { return "ConsDestructureExpr" }
 
 func (tr *Translator) translateFuncBlock(env *ExprEnv, block *parse_tree.FuncBlock) Expr {
 	return tr.translateFunc(env, block.LVal, block.Expr)
@@ -221,6 +268,13 @@ func (tr *Translator) translateTupleDestructureBlock(env *ExprEnv, block *TupleD
 	}
 }
 
+func (tr *Translator) translateConsDestructureBlock(env *ExprEnv, block *ConsDestructureBlock) Expr {
+	return &ConsDestructureExpr{
+		IsHead: block.isHead,
+		List:   tr.translateBlock(env, block.list),
+	}
+}
+
 func (tr *Translator) translateInlineTuple(env *ExprEnv, inline *parse_tree.InlineTuple) Expr {
 	var exprs []Expr
 
@@ -238,6 +292,31 @@ func (tr *Translator) translateTupleBlock(env *ExprEnv, block *parse_tree.TupleB
 	}
 
 	return &TupleExpr{exprs}
+}
+
+func (tr *Translator) translateInlineCons(env *ExprEnv, inline *parse_tree.InlineCons) Expr {
+	var tail Expr
+
+	if !isNil(inline.Tail) {
+		tail = tr.translateInline(env, inline.Tail)
+	}
+
+	return &ConsExpr{
+		Head: tr.translateInline(env, inline.Head),
+		Tail: tail,
+	}
+}
+func (tr *Translator) translateConsBlock(env *ExprEnv, block *parse_tree.ConsBlock) Expr {
+	var tail Expr
+
+	if !isNil(block.Tail) {
+		tail = tr.translateBlock(env, block.Tail)
+	}
+
+	return &ConsExpr{
+		Head: tr.translateBlock(env, block.Head),
+		Tail: tail,
+	}
 }
 
 // This is the name that we bind to the argument

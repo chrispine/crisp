@@ -311,30 +311,30 @@ second args
 
 
 `},
-		//		{5, `
-		//
-		//
-		//second = [a,b] -> b
-		//args = [*]
-		//		90210
-		//		5
-		//
-		//second args
-		//
-		//
-		//`},
-		//		{5, `
-		//
-		//
-		//tail = [h;t] -> t
-		//args = [*]
-		//		90210
-		//		; 5
-		//
-		//tail args
-		//
-		//
-		//`},
+		{5, `
+
+
+second = [a,b] -> b
+args = [*]
+	90210
+	5
+
+second args
+
+
+`},
+		{5, `
+
+
+tail = [h;t] -> t
+args = [*]
+	90210
+	; 5
+
+tail args
+
+
+`},
 		{5, `
 
 

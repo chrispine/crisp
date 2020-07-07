@@ -44,8 +44,16 @@ type Tuple struct {
 	Values []Value
 }
 
-func (f *Tuple) Class() Class    { return TupleClass }
-func (f *Tuple) Inspect() string { return "INSPECTED_TUPLE" }
+func (t *Tuple) Class() Class    { return TupleClass }
+func (t *Tuple) Inspect() string { return "INSPECTED_TUPLE" }
+
+type Cons struct {
+	Head Value
+	Tail Value
+}
+
+func (c *Cons) Class() Class    { return ConsClass }
+func (c *Cons) Inspect() string { return "INSPECTED_CONS" }
 
 type Func struct {
 	Env           *Env

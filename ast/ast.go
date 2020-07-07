@@ -63,6 +63,14 @@ type TupleExpr struct {
 func (e *TupleExpr) expr()          {}
 func (e *TupleExpr) String() string { return "TupleExpr" }
 
+type ConsExpr struct {
+	Head Expr
+	Tail Expr
+}
+
+func (e *ConsExpr) expr()          {}
+func (e *ConsExpr) String() string { return "ConsExpr" }
+
 type FuncExpr struct {
 	ArgName       string
 	FuncPartExprs []*LetExpr
@@ -77,3 +85,17 @@ func (e *ArgExpr) expr()          {}
 func (e *ArgExpr) String() string { return "«Arg»" }
 
 var Arg = &ArgExpr{}
+
+type AssertListIsConsExpr struct {
+	List Expr
+}
+
+func (e *AssertListIsConsExpr) expr()          {}
+func (e *AssertListIsConsExpr) String() string { return "AssertListIsConsExpr" }
+
+type AssertListIsNilExpr struct {
+	List Expr
+}
+
+func (e *AssertListIsNilExpr) expr()          {}
+func (e *AssertListIsNilExpr) String() string { return "AssertListIsNilExpr" }

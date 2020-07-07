@@ -5,6 +5,7 @@ import (
 	"crisp/token"
 	"crisp/value"
 	"fmt"
+	"reflect"
 )
 
 func Eval(env *value.Env, someExpr ast.Expr) value.Value {
@@ -27,6 +28,14 @@ func Eval(env *value.Env, someExpr ast.Expr) value.Value {
 		return evalTupleExpr(env, expr)
 	case *ast.TupleDestructureExpr:
 		return evalTupleDestructure(env, expr)
+	case *ast.ConsExpr:
+		return evalConsExpr(env, expr)
+	case *ast.ConsDestructureExpr:
+		return evalConsDestructure(env, expr)
+	case *ast.AssertListIsConsExpr:
+		return evalAssertListIsCons(env, expr)
+	case *ast.AssertListIsNilExpr:
+		return evalAssertListIsNil(env, expr)
 	}
 
 	panic(fmt.Sprintf("Runtime Error: unhandled expression %v of type %T", someExpr, someExpr))
@@ -42,12 +51,15 @@ func apply(fn *value.Func, arg value.Value) value.Value {
 	return Eval(argEnv, letExpr)
 }
 
-func evalIntExpr(_ *value.Env, expr *ast.IntExpr) value.Value {
+func evalIntExpr(_ *value.Env, expr *ast.IntExpr) *value.Int {
 	return &value.Int{Value: expr.Value}
 }
 
-func evalBoolExpr(_ *value.Env, expr *ast.BoolExpr) value.Value {
-	return &value.Bool{Value: expr.Value}
+func evalBoolExpr(_ *value.Env, expr *ast.BoolExpr) *value.Bool {
+	if expr.Value {
+		return value.True
+	}
+	return value.False
 }
 
 func evalLookupExpr(env *value.Env, expr *ast.LookupExpr) value.Value {
@@ -65,20 +77,63 @@ func evalLookupExpr(env *value.Env, expr *ast.LookupExpr) value.Value {
 	return maybeThunk
 }
 
-func evalTupleExpr(env *value.Env, expr *ast.TupleExpr) value.Value {
+func evalTupleExpr(env *value.Env, expr *ast.TupleExpr) *value.Tuple {
 	var values []value.Value
 
 	for _, elem := range expr.Exprs {
 		values = append(values, Eval(env, elem))
 	}
 
-	return &value.Tuple{values}
+	return &value.Tuple{Values: values}
 }
 
 func evalTupleDestructure(env *value.Env, expr *ast.TupleDestructureExpr) value.Value {
-	tuple := Eval(env, expr.Tuple).(*value.Tuple) // TODO: should I check for this error?
+	tuple := Eval(env, expr.Tuple).(*value.Tuple)
+	// TODO: did I just eval the same expression multiple times, one for each element?
+	// TODO: same question with cons destructuring and "list is cons/nil" assertions
 
 	return tuple.Values[expr.Index]
+}
+
+func evalConsExpr(env *value.Env, expr *ast.ConsExpr) *value.Cons {
+	var tail value.Value
+
+	if !isNil(expr.Tail) {
+		tail = Eval(env, expr.Tail)
+	}
+
+	return &value.Cons{
+		Head: Eval(env, expr.Head),
+		Tail: tail,
+	}
+}
+
+func evalConsDestructure(env *value.Env, expr *ast.ConsDestructureExpr) value.Value {
+	cons := Eval(env, expr.List).(*value.Cons)
+
+	if expr.IsHead {
+		return cons.Head
+	}
+
+	return cons.Tail
+}
+
+func evalAssertListIsCons(env *value.Env, expr *ast.AssertListIsConsExpr) *value.Bool {
+	cons := Eval(env, expr.List)
+
+	if isNil(cons) {
+		return value.False
+	}
+	return value.True
+}
+
+func evalAssertListIsNil(env *value.Env, expr *ast.AssertListIsNilExpr) *value.Bool {
+	cons := Eval(env, expr.List)
+
+	if isNil(cons) {
+		return value.True
+	}
+	return value.False
 }
 
 func evalUnopExpr(env *value.Env, expr *ast.UnopExpr) value.Value {
@@ -91,7 +146,10 @@ func evalUnopExpr(env *value.Env, expr *ast.UnopExpr) value.Value {
 		}
 	case *value.Bool:
 		if expr.Token.Type == token.Not {
-			return &value.Bool{Value: !val.Value}
+			if val.Value {
+				return value.False
+			}
+			return value.True
 		}
 	}
 
@@ -193,10 +251,14 @@ func evalLetExpr(env *value.Env, expr *ast.LetExpr) value.Value {
 	return Eval(value.NewEnv(env, bindings), expr.Expr)
 }
 
-func evalFuncExpr(env *value.Env, expr *ast.FuncExpr) value.Value {
+func evalFuncExpr(env *value.Env, expr *ast.FuncExpr) *value.Func {
 	return &value.Func{
 		Env:           env,
 		ArgName:       expr.ArgName,
 		FuncPartExprs: expr.FuncPartExprs,
 	}
+}
+
+func isNil(i interface{}) bool {
+	return i == nil || reflect.ValueOf(i).IsNil()
 }
