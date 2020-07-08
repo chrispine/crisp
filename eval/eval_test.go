@@ -541,7 +541,7 @@ b = [88, 99, 111]
 		{1, `
 
 
-1
+1 # head(ones)
 
 
 `},
@@ -575,6 +575,36 @@ b = [88, 99, 111]
 `},
 	}
 
+	for _, tt := range tests {
+		val := testEval(t, tt.program)
+
+		if intVal, ok := val.(*value.Int); !ok {
+			t.Fatalf("wow, expected an int, got %v", val.Inspect())
+		} else if intVal.Value != tt.expected {
+			t.Fatalf("wrong int value: expected %d, got %d in program:\n%v", tt.expected, intVal, tt.program)
+		}
+	}
+}
+
+func testEvalIntExpr2(t *testing.T) {
+	tests := []struct {
+		expected int
+		program  string
+	}{
+		{1, `
+
+
+ones = [1; ones]
+
+head[h;t] -> h
+tail[h;t] -> t
+
+ones.tail.head
+head(ones)
+
+
+`},
+	}
 	for _, tt := range tests {
 		val := testEval(t, tt.program)
 

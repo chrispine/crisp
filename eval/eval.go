@@ -45,7 +45,7 @@ func Eval(env *value.Env, someExpr ast.Expr) value.Value {
 func apply(fn *value.Func, arg value.Value) value.Value {
 	// TODO: properly handle multiple function pieces
 	letExpr := fn.FuncPartExprs[0]
-	argBindings := []value.Binding{{Name: fn.ArgName, Value: arg}}
+	argBindings := []*value.Binding{{Name: fn.ArgName, Value: arg}}
 	argEnv := value.NewEnv(fn.Env, argBindings)
 
 	return Eval(argEnv, letExpr)
@@ -247,6 +247,7 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 }
 
 func evalLetExpr(env *value.Env, expr *ast.LetExpr) value.Value {
+	// First, we validate the assertions
 	for _, assert := range expr.Asserts {
 		val := Eval(env, assert)
 		if !val.(*value.Bool).Value {
@@ -254,12 +255,21 @@ func evalLetExpr(env *value.Env, expr *ast.LetExpr) value.Value {
 		}
 	}
 
-	var bindings []value.Binding
+	// Next, we create thunks for all of the bindings, allowing us to have recursive datatypes.
+	var bindings []*value.Binding
 
 	for _, eb := range expr.Env.Bindings {
-		bindings = append(bindings, value.Binding{eb.Name, &value.Thunk{Expr: eb.Expr}})
+		bindings = append(bindings, &value.Binding{eb.Name, &value.Thunk{Expr: eb.Expr}})
 	}
-	return Eval(value.NewEnv(env, bindings), expr.Expr)
+
+	newEnv := value.NewEnv(env, bindings)
+
+	// Finally, we force all of the thunks, so none are left when we return.
+	for _, b := range newEnv.Bindings {
+		Eval(newEnv, &ast.LookupExpr{Name: b.Name})
+	}
+
+	return Eval(newEnv, expr.Expr)
 }
 
 func evalFuncExpr(env *value.Env, expr *ast.FuncExpr) *value.Func {
@@ -275,7 +285,7 @@ func composeFuncs(f *value.Func, g *value.Func) *value.Func {
 	fName := ast.GetArgName()
 	gName := ast.GetArgName()
 
-	env := value.NewEnv(value.EmptyEnv, []value.Binding{
+	env := value.NewEnv(value.EmptyEnv, []*value.Binding{
 		{Name: fName, Value: f},
 		{Name: gName, Value: g},
 	})

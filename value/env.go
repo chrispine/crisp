@@ -8,7 +8,7 @@ import (
 
 type Env struct {
 	parent   *Env
-	bindings []Binding
+	Bindings []*Binding
 }
 
 type Binding struct {
@@ -20,7 +20,7 @@ type Binding struct {
 var TopLevelEnv = &Env{}
 var EmptyEnv = &Env{}
 
-// bindings will initially be thunks to allow for
+// bindings will briefly be thunks to allow for
 // recursive or out-of-order declarations
 type Thunk struct {
 	Expr ast.Expr
@@ -29,16 +29,16 @@ type Thunk struct {
 func (th *Thunk) Class() Class    { return ThunkClass }
 func (th *Thunk) Inspect() string { return fmt.Sprintf("%v", th.Expr) }
 
-func NewEnv(parent *Env, bindings []Binding) *Env {
+func NewEnv(parent *Env, bindings []*Binding) *Env {
 	if parent == nil {
 		panic("Error: not allowed to create an Env with nil parent")
 	}
-	return &Env{parent: parent, bindings: bindings}
+	return &Env{parent: parent, Bindings: bindings}
 }
 
 func (e *Env) Get(name string) Value {
 	// check local bindings
-	for _, b := range e.bindings {
+	for _, b := range e.Bindings {
 		if b.Name == name {
 			return b.Value
 		}
@@ -60,7 +60,7 @@ func (e *Env) Get(name string) Value {
 
 func (e *Env) Update(name string, val Value) {
 	// check local bindings
-	for _, b := range e.bindings {
+	for _, b := range e.Bindings {
 		if b.Name == name {
 			b.Value = val
 			return
