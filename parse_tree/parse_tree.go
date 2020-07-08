@@ -294,6 +294,15 @@ func (ii *InlineID) IsLVal() bool         { return true }
 func (ii *InlineID) TokenLiteral() string { return ii.Token.Literal }
 func (ii *InlineID) String() string       { return ii.Name }
 
+type InlineNoMatch struct {
+	Token token.Token // the token.ID token
+	Name  string
+}
+
+func (ii *InlineNoMatch) IsLVal() bool         { return true }
+func (ii *InlineNoMatch) TokenLiteral() string { return ii.Token.Literal }
+func (ii *InlineNoMatch) String() string       { return ii.Name }
+
 type InlineFunc struct {
 	Token token.Token // the token.Arrow token
 	LVal  Inline

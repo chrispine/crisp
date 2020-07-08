@@ -37,6 +37,7 @@ const (
 
 	// Identifiers (including ints and bools)
 	ID
+	NoMatch
 
 	// Operators
 	TBlock // (*)

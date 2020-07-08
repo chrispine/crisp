@@ -157,6 +157,9 @@ func (tr *Translator) partitionDecl(
 	rhs parse_tree.Block) []toAssert {
 
 	switch lhs := lVal.(type) {
+	case *parse_tree.InlineNoMatch:
+		// `_ = expr`
+		// do nothing
 	case *parse_tree.InlineID:
 		// `x = expr`
 		if postEnv.isDefined(lhs.Name) {

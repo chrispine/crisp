@@ -474,6 +474,8 @@ func (p *Parser) parseAtom() parse_tree.Inline {
 	switch p.curToken.Type {
 	case token.ID:
 		return p.parseID()
+	case token.NoMatch:
+		return p.parseNoMatch()
 	case token.LParen:
 		return p.parseTuple()
 	case token.LBracket:
@@ -487,6 +489,14 @@ func (p *Parser) parseID() *parse_tree.InlineID {
 	lit := &parse_tree.InlineID{Token: *p.curToken, Name: p.curToken.Literal}
 
 	p.expectToken(token.ID)
+
+	return lit
+}
+
+func (p *Parser) parseNoMatch() *parse_tree.InlineNoMatch {
+	lit := &parse_tree.InlineNoMatch{Token: *p.curToken, Name: p.curToken.Literal}
+
+	p.expectToken(token.NoMatch)
 
 	return lit
 }

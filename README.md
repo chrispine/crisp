@@ -6,7 +6,7 @@ DISCLAIMER: USE AT OWN RISK
 
 features
 - purely functional (no mutations)
-- pattern matching
+- pattern matching (including `___`)
 - strong, static, inferred typing
 - off-side language
 - not ever intended to be finished

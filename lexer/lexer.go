@@ -184,6 +184,10 @@ func (l *Lexer) nextToken() *token.Token {
 
 	if isLetter(l.ch) {
 		tok.Literal = l.readIdentifier()
+		if isAllUnderscores(tok.Literal) {
+			tok.Type = token.NoMatch
+			return tok
+		}
 		tok.Type = token.LookupID(tok.Literal)
 		return tok
 	}
@@ -202,6 +206,10 @@ func (l *Lexer) readIdentifier() string {
 	position := l.position
 
 	for isLetter(l.ch) {
+		l.readRune()
+	}
+
+	if l.ch == '?' {
 		l.readRune()
 	}
 
@@ -285,4 +293,14 @@ func isWhitespace(ch rune) bool {
 
 func isNewline(ch rune) bool {
 	return ch == '\n' || ch == '\r' || ch == '\v' || ch == '\f'
+}
+
+func isAllUnderscores(literal string) bool {
+	for _, ch := range literal {
+		if ch != '_' {
+			return false
+		}
+	}
+
+	return true
 }
