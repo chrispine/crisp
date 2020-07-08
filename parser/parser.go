@@ -204,11 +204,33 @@ func (p *Parser) parseDeclsAndExpr() ([]*parse_tree.PatMatBlock, parse_tree.Bloc
 	numDecls := p.curToken.NumLines - 1
 	p.expectToken(token.BlockLen)
 
+	prevWasFuncDecl := false
+
 	for i := 0; i < numDecls; i++ {
-		decls = append(decls, p.parseDeclBlock())
+		decl, wasFuncDecl := p.parseDeclBlock()
+
+		if wasFuncDecl && prevWasFuncDecl && shouldCombine(decls[len(decls)-1], decl) {
+			prevFunc := decls[len(decls)-1].Expr.(*parse_tree.FuncBlock)
+			currFunc := decl.Expr.(*parse_tree.FuncBlock)
+
+			// combine curr into prev
+			prevFunc.FuncBlockPieces = append(prevFunc.FuncBlockPieces, currFunc.FuncBlockPieces[0])
+		} else {
+			decls = append(decls, decl)
+			prevWasFuncDecl = wasFuncDecl
+		}
 	}
 
 	return decls, p.parseExprBlock()
+}
+
+func shouldCombine(prevDecl *parse_tree.PatMatBlock, currDecl *parse_tree.PatMatBlock) bool {
+	if prevID, ok := prevDecl.LVal.(*parse_tree.InlineID); ok {
+		if currID, ok := currDecl.LVal.(*parse_tree.InlineID); ok {
+			return prevID.Name == currID.Name
+		}
+	}
+	return false
 }
 
 /*
@@ -216,14 +238,14 @@ func (p *Parser) parseDeclsAndExpr() ([]*parse_tree.PatMatBlock, parse_tree.Bloc
 	PatMatBlock
 	FuncDeclBlock
 */
-func (p *Parser) parseDeclBlock() *parse_tree.PatMatBlock {
+func (p *Parser) parseDeclBlock() (*parse_tree.PatMatBlock, bool) {
 	atom := p.parseAtom()
 
 	if p.curTokenIs(token.PatMat) {
-		return p.parsePatMatBlock(atom)
+		return p.parsePatMatBlock(atom), false
 	}
 
-	return p.parseFuncDeclBlock(atom)
+	return p.parseFuncDeclBlock(atom), true
 }
 
 /*
@@ -291,8 +313,10 @@ func makeNestedFuncBlocks(arrowToken token.Token, args []parse_tree.Inline, inne
 
 	return &parse_tree.FuncBlock{
 		Token: arrowToken,
-		LVal:  args[0],
-		Expr:  makeNestedFuncBlocks(arrowToken, args[1:], inner),
+		FuncBlockPieces: []*parse_tree.FuncBlockPiece{{
+			LVal: args[0],
+			Expr: makeNestedFuncBlocks(arrowToken, args[1:], inner),
+		}},
 	}
 }
 
@@ -372,7 +396,9 @@ func (p *Parser) parseFuncBlock(atom parse_tree.Inline) parse_tree.Block {
 
 	lit := &parse_tree.FuncBlock{
 		Token: *p.curToken,
-		LVal:  atom,
+		FuncBlockPieces: []*parse_tree.FuncBlockPiece{{
+			LVal: atom,
+		}},
 	}
 
 	if p.curTokenIs(token.Indent) {
@@ -382,10 +408,10 @@ func (p *Parser) parseFuncBlock(atom parse_tree.Inline) parse_tree.Block {
 			Literal: "let",
 		}}
 		letBlock.Decls, letBlock.Expr = p.parseDeclsAndExpr()
-		lit.Expr = letBlock
+		lit.FuncBlockPieces[0].Expr = letBlock
 		p.expectToken(token.Dedent)
 	} else {
-		lit.Expr = p.parseExprBlock()
+		lit.FuncBlockPieces[0].Expr = p.parseExprBlock()
 	}
 
 	return lit

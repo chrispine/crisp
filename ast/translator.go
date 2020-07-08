@@ -236,32 +236,39 @@ func (e *ConsDestructureExpr) expr()          {}
 func (e *ConsDestructureExpr) String() string { return "ConsDestructureExpr" }
 
 func (tr *Translator) translateFuncBlock(env *ExprEnv, block *parse_tree.FuncBlock) Expr {
-	return tr.translateFunc(env, block.LVal, block.Expr)
+	return tr.translateFunc(env, block.FuncBlockPieces)
 }
 func (tr *Translator) translateInlineFunc(env *ExprEnv, inline *parse_tree.InlineFunc) Expr {
-	return tr.translateFunc(env, inline.LVal, &parse_tree.JustExprBlock{Expr: inline.Expr})
+	funcBlockPieces := []*parse_tree.FuncBlockPiece{{
+		LVal: inline.LVal,
+		Expr: &parse_tree.JustExprBlock{Expr: inline.Expr},
+	}}
+	return tr.translateFunc(env, funcBlockPieces)
 }
-func (tr *Translator) translateFunc(env *ExprEnv, lVal parse_tree.Inline, expr parse_tree.Block) Expr {
+func (tr *Translator) translateFunc(env *ExprEnv, funcBlockPieces []*parse_tree.FuncBlockPiece) Expr {
 	argName := GetArgName()
+	var letExprs []*LetExpr
 
-	letBlock := &parse_tree.LetBlock{
-		Decls: []*parse_tree.PatMatBlock{{
-			LVal: lVal,
-			Expr: &parse_tree.JustExprBlock{
-				Expr: &parse_tree.InlineID{Name: argName},
-			}},
-		},
-		Expr: expr,
+	for _, piece := range funcBlockPieces {
+		letBlock := &parse_tree.LetBlock{
+			Decls: []*parse_tree.PatMatBlock{{
+				LVal: piece.LVal,
+				Expr: &parse_tree.JustExprBlock{
+					Expr: &parse_tree.InlineID{Name: argName},
+				}},
+			},
+			Expr: piece.Expr,
+		}
+
+		argEnv := &ExprEnv{
+			Parent:   env,
+			Bindings: []ExprBinding{{Name: argName, Expr: Arg}},
+		}
+
+		letExprs = append(letExprs, tr.translateLetBlock(argEnv, letBlock))
 	}
 
-	argEnv := &ExprEnv{
-		Parent:   env,
-		Bindings: []ExprBinding{{Name: argName, Expr: Arg}},
-	}
-
-	letExpr := tr.translateLetBlock(argEnv, letBlock)
-
-	return &FuncExpr{FuncPartExprs: []*LetExpr{letExpr}, ArgName: argName}
+	return &FuncExpr{FuncPartExprs: letExprs, ArgName: argName}
 }
 
 func (tr *Translator) translateTupleDestructureBlock(env *ExprEnv, block *TupleDestructureBlock) Expr {

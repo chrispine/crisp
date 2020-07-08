@@ -43,12 +43,18 @@ func Eval(env *value.Env, someExpr ast.Expr) value.Value {
 }
 
 func apply(fn *value.Func, arg value.Value) value.Value {
-	// TODO: properly handle multiple function pieces
-	letExpr := fn.FuncPartExprs[0]
-	argBindings := []*value.Binding{{Name: fn.ArgName, Value: arg}}
-	argEnv := value.NewEnv(fn.Env, argBindings)
+	for _, letExpr := range fn.FuncPartExprs {
+		argBindings := []*value.Binding{{Name: fn.ArgName, Value: arg}}
+		argEnv := value.NewEnv(fn.Env, argBindings)
 
-	return Eval(argEnv, letExpr)
+		if !checkAsserts(argEnv, letExpr) {
+			continue
+		}
+
+		return evalAssertedLetExpr(argEnv, letExpr)
+	}
+
+	panic("Runtime Error: no matching function piece for function call")
 }
 
 func evalIntExpr(_ *value.Env, expr *ast.IntExpr) *value.Int {
@@ -248,13 +254,14 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 
 func evalLetExpr(env *value.Env, expr *ast.LetExpr) value.Value {
 	// First, we validate the assertions
-	for _, assert := range expr.Asserts {
-		val := Eval(env, assert)
-		if !val.(*value.Bool).Value {
-			panic("Runtime Error: failed assertion in `let` expression")
-		}
+	if !checkAsserts(env, expr) {
+		panic("Runtime Error: failed assertion in `let` expression")
 	}
 
+	return evalAssertedLetExpr(env, expr)
+}
+
+func evalAssertedLetExpr(env *value.Env, expr *ast.LetExpr) value.Value {
 	// Next, we create thunks for all of the bindings, allowing us to have recursive datatypes.
 	var bindings []*value.Binding
 
@@ -270,6 +277,17 @@ func evalLetExpr(env *value.Env, expr *ast.LetExpr) value.Value {
 	}
 
 	return Eval(newEnv, expr.Expr)
+}
+
+func checkAsserts(env *value.Env, expr *ast.LetExpr) bool {
+	for _, assert := range expr.Asserts {
+		val := Eval(env, assert)
+		if !val.(*value.Bool).Value {
+			return false
+		}
+	}
+
+	return true
 }
 
 func evalFuncExpr(env *value.Env, expr *ast.FuncExpr) *value.Func {

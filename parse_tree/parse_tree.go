@@ -178,10 +178,13 @@ func (pmb *PatMatBlock) String() string {
 	return out.String()
 }
 
+type FuncBlockPiece struct {
+	LVal Inline
+	Expr Block
+}
 type FuncBlock struct {
-	Token token.Token // the token.Arrow token
-	LVal  Inline
-	Expr  Block
+	Token           token.Token // the token.Arrow token
+	FuncBlockPieces []*FuncBlockPiece
 }
 
 func (flb *FuncBlock) BlockNode()           {}
@@ -189,9 +192,9 @@ func (flb *FuncBlock) TokenLiteral() string { return flb.Token.Literal }
 func (flb *FuncBlock) String() string {
 	var out bytes.Buffer
 
-	out.WriteString(flb.LVal.String())
+	out.WriteString(flb.FuncBlockPieces[0].LVal.String())
 	out.WriteString(" -> ")
-	out.WriteString(flb.Expr.String())
+	out.WriteString(flb.FuncBlockPieces[0].Expr.String())
 
 	return out.String()
 }
