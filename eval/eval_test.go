@@ -31,6 +31,11 @@ func TestEvalIntExpr(t *testing.T) {
 		{40, "5*2^3"},
 		{40, "2^3*5"},
 		{256, "2^2^3"},
+		{4, "1234 % 10"},
+		{3, "3 % 5"},
+		{3, "8 % 5"},
+		{3, "-2 % 5"},
+		{3, "-7 % 5"},
 		{5, `
 x = 5
 x`},
@@ -645,6 +650,24 @@ func TestEvalBoolExpr(t *testing.T) {
 		{"false & (true | true)", false},
 		{"(false & true) | true", true},
 		{"false & true | true", true},
+		{"true == true", true},
+		{"true != true", false},
+		{"true != false", true},
+		{"3 == 3", true},
+		{"3 != 3", false},
+		{"3 != 4", true},
+		{"3 < 4", true},
+		{"3 < 3", false},
+		{"3 < 2", false},
+		{"3 <= 4", true},
+		{"3 <= 3", true},
+		{"3 <= 2", false},
+		{"3 >= 2", true},
+		{"3 >= 3", true},
+		{"3 >= 4", false},
+		{"3 > 2", true},
+		{"3 > 3", false},
+		{"3 > 4", false},
 	}
 
 	for _, tt := range tests {

@@ -179,6 +179,36 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 				} else {
 					return value.False
 				}
+			case token.NEq:
+				if l == r {
+					return value.False
+				} else {
+					return value.True
+				}
+			case token.LT:
+				if l < r {
+					return value.True
+				} else {
+					return value.False
+				}
+			case token.LTE:
+				if l <= r {
+					return value.True
+				} else {
+					return value.False
+				}
+			case token.GT:
+				if l > r {
+					return value.True
+				} else {
+					return value.False
+				}
+			case token.GTE:
+				if l >= r {
+					return value.True
+				} else {
+					return value.False
+				}
 			case token.Plus:
 				return &value.Int{Value: l + r}
 			case token.Minus:
@@ -188,7 +218,11 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 			case token.Div:
 				return &value.Int{Value: l / r}
 			case token.Mod:
-				return &value.Int{Value: l % r} // TODO: awesomeMod() <3
+				m := l % r
+				if m < 0 { // awesomeMod! <3
+					m += r
+				}
+				return &value.Int{Value: m}
 			case token.Exp:
 				if r >= 0 {
 					val := 1
@@ -210,6 +244,12 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 					return value.True
 				} else {
 					return value.False
+				}
+			case token.NEq:
+				if l == r {
+					return value.False
+				} else {
+					return value.True
 				}
 			case token.And:
 				if l && r {
