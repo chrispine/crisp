@@ -396,7 +396,9 @@ type InlineUnopExpr struct {
 	Expr  Inline
 }
 
-func (iue *InlineUnopExpr) IsLVal() bool         { return false }
+func (iue *InlineUnopExpr) IsLVal() bool {
+	return iue.Token.Type == token.Shadow && iue.Expr.IsLVal()
+}
 func (iue *InlineUnopExpr) Op() token.TokType    { return iue.Token.Type }
 func (iue *InlineUnopExpr) TokenLiteral() string { return iue.Token.Literal }
 func (iue *InlineUnopExpr) String() string {

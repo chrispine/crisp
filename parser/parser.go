@@ -9,8 +9,9 @@ import (
 )
 
 var unops = []token.TokType{
-	token.Minus, //  -
-	token.Not,   //  !
+	token.Minus,  //  -
+	token.Not,    //  !
+	token.Shadow, //  $
 }
 
 var isBinop, isEndOfExpr map[token.TokType]bool

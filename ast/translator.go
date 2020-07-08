@@ -116,7 +116,7 @@ func (tr *Translator) translateLetBlock(env *ExprEnv, block *parse_tree.LetBlock
 	var preAsserts []toAssert
 
 	for _, decl := range block.Decls {
-		preAsserts = tr.partitionDecl(preEnv, postEnv, preAsserts, decl.LVal, decl.Expr)
+		preAsserts = tr.partitionDecl(preEnv, postEnv, preAsserts, decl.LVal, decl.Expr, false)
 	}
 
 	// Now that we know the name half of all bindings in preEnv,
@@ -154,15 +154,23 @@ func (tr *Translator) partitionDecl(
 	postEnv *ExprEnv,
 	asserts []toAssert,
 	lVal parse_tree.Inline,
-	rhs parse_tree.Block) []toAssert {
+	rhs parse_tree.Block,
+	shadowing bool) []toAssert {
 
 	switch lhs := lVal.(type) {
 	case *parse_tree.InlineNoMatch:
 		// `_ = expr`
 		// do nothing
+	case *parse_tree.InlineUnopExpr:
+		// `$(lval) = expr`
+		if lhs.Token.Type == token.Shadow {
+			asserts = tr.partitionDecl(preEnv, postEnv, asserts, lhs.Expr, rhs, true)
+		} else {
+			tr.error("illegal l-value (should not be possible to get here)")
+		}
 	case *parse_tree.InlineID:
 		// `x = expr`
-		if postEnv.isDefined(lhs.Name) {
+		if !shadowing && postEnv.isDefined(lhs.Name) {
 			// assert
 			asserts = append(asserts, toAssert{lhsEqual: lhs, rhsEqual: rhs})
 		} else {
@@ -177,7 +185,7 @@ func (tr *Translator) partitionDecl(
 		// because the type checker will flag that at compile time.
 		for i, elem := range lhs.Exprs {
 			td := &TupleDestructureBlock{i, rhs}
-			asserts = tr.partitionDecl(preEnv, postEnv, asserts, elem, td)
+			asserts = tr.partitionDecl(preEnv, postEnv, asserts, elem, td, shadowing)
 		}
 	case *parse_tree.InlineCons:
 		// `[a, b]` = expr
@@ -186,13 +194,13 @@ func (tr *Translator) partitionDecl(
 		asserts = append(asserts, toAssert{listIsCons: rhs})
 
 		rhsHead := &ConsDestructureBlock{true, rhs}
-		asserts = tr.partitionDecl(preEnv, postEnv, asserts, lhs.Head, rhsHead)
+		asserts = tr.partitionDecl(preEnv, postEnv, asserts, lhs.Head, rhsHead, shadowing)
 
 		rhsTail := &ConsDestructureBlock{false, rhs}
 		if isNil(lhs.Tail) {
 			asserts = append(asserts, toAssert{listIsNil: rhsTail})
 		} else {
-			asserts = tr.partitionDecl(preEnv, postEnv, asserts, lhs.Tail, rhsTail)
+			asserts = tr.partitionDecl(preEnv, postEnv, asserts, lhs.Tail, rhsTail, shadowing)
 		}
 	default:
 		tr.error("illegal l-value (should not be possible to get here)")

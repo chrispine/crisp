@@ -21,6 +21,10 @@ var AtToken = Token{
 	Type:    At,
 	Literal: "@",
 }
+var ShadowToken = Token{
+	Type:    Shadow,
+	Literal: "$",
+}
 
 const (
 	Illegal TokType = iota
@@ -38,6 +42,7 @@ const (
 	// Identifiers (including ints and bools)
 	ID
 	NoMatch
+	Shadow // $
 
 	// Operators
 	TBlock // (*)
@@ -107,6 +112,7 @@ func GetOperators() []Token {
 		{0, GT, strings.TrimSpace("           >     ")},
 
 		{0, PatMat, strings.TrimSpace("       =     ")},
+		{0, Shadow, strings.TrimSpace("       $     ")},
 		{0, Arrow, strings.TrimSpace("        ->    ")},
 		{0, Colon, strings.TrimSpace("        :     ")},
 
