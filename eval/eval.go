@@ -9,47 +9,60 @@ import (
 )
 
 func Eval(env *value.Env, someExpr ast.Expr) value.Value {
+	return eval(env, someExpr, nil)
+}
+
+func eval(env *value.Env, someExpr ast.Expr, binding *value.Binding) value.Value {
+	var val value.Value
+
 	switch expr := someExpr.(type) {
 	case *ast.IntExpr:
-		return evalIntExpr(env, expr)
+		val = evalIntExpr(env, expr)
 	case *ast.BoolExpr:
-		return evalBoolExpr(env, expr)
+		val = evalBoolExpr(env, expr)
 	case *ast.LookupExpr:
-		return evalLookupExpr(env, expr)
+		val = evalLookupExpr(env, expr)
 	case *ast.UnopExpr:
-		return evalUnopExpr(env, expr)
+		val = evalUnopExpr(env, expr)
 	case *ast.BinopExpr:
-		return evalBinopExpr(env, expr)
+		val = evalBinopExpr(env, expr)
 	case *ast.FuncExpr:
-		return evalFuncExpr(env, expr)
+		val = evalFuncExpr(env, expr)
 	case *ast.TupleExpr:
-		return evalTupleExpr(env, expr)
+		val = evalTupleExpr(env, expr, binding)
+		binding = nil
 	case *ast.TupleDestructureExpr:
-		return evalTupleDestructure(env, expr)
+		val = evalTupleDestructure(env, expr)
 	case *ast.ConsExpr:
-		return evalConsExpr(env, expr)
+		val = evalConsExpr(env, expr, binding)
+		binding = nil
 	case *ast.ConsDestructureExpr:
-		return evalConsDestructure(env, expr)
+		val = evalConsDestructure(env, expr)
 	case *ast.AssertEqualExpr:
-		return evalAssertEqual(env, expr)
+		val = evalAssertEqual(env, expr)
 	case *ast.AssertListIsConsExpr:
-		return evalAssertListIsCons(env, expr)
+		val = evalAssertListIsCons(env, expr)
 	case *ast.AssertListIsNilExpr:
-		return evalAssertListIsNil(env, expr)
+		val = evalAssertListIsNil(env, expr)
 	case *ast.LetExpr:
 		// LetExpr is special because it contains runtime assertions
 		// that must be tested. (In a function or `case` statement,
 		// these would determine which branch to follow, but that is
 		// handled in apply(func, val).)
-		val, ok := evalLetExpr(env, expr, nil)
+		var ok bool
+		val, ok = evalLetExpr(env, expr, nil)
 		if !ok {
 			panic("Runtime Error: failed assertion in `let` expression")
 		}
-		return val
+	default:
+		panic(fmt.Sprintf("Runtime Error: unhandled expression %v of type %T", someExpr, someExpr))
 	}
 
-	panic(fmt.Sprintf("Runtime Error: unhandled expression %v of type %T", someExpr, someExpr))
-	return nil
+	if binding != nil {
+		binding.Value = val
+	}
+
+	return val
 }
 
 func apply(fn *value.Func, arg value.Value) value.Value {
@@ -85,23 +98,27 @@ func evalLookupExpr(env *value.Env, expr *ast.LookupExpr) value.Value {
 
 	if thunk, ok := maybeThunk.(*value.Thunk); ok {
 		// force the thunk
-		val := Eval(thunk.Env, thunk.Expr) // TODO: , env.GetBinding(expr.Depth, expr.Index))
-		// store the value so we don't have to force it again later
-		env.Update(expr.Depth, expr.Index, val)
-		return val
+		return eval(thunk.Env, thunk.Expr, env.GetBinding(expr.Depth, expr.Index))
 	}
 
 	return maybeThunk
 }
 
-func evalTupleExpr(env *value.Env, expr *ast.TupleExpr) *value.Tuple {
+func evalTupleExpr(env *value.Env, expr *ast.TupleExpr, binding *value.Binding) *value.Tuple {
 	var values []value.Value
+
+	tuple := &value.Tuple{}
+	if binding != nil {
+		binding.Value = tuple
+	}
 
 	for _, elem := range expr.Exprs {
 		values = append(values, Eval(env, elem))
 	}
 
-	return &value.Tuple{Values: values}
+	tuple.Values = values
+
+	return tuple
 }
 
 func evalTupleDestructure(env *value.Env, expr *ast.TupleDestructureExpr) value.Value {
@@ -112,17 +129,18 @@ func evalTupleDestructure(env *value.Env, expr *ast.TupleDestructureExpr) value.
 	return tuple.Values[expr.Index]
 }
 
-func evalConsExpr(env *value.Env, expr *ast.ConsExpr) *value.Cons {
-	var tail value.Value
+func evalConsExpr(env *value.Env, expr *ast.ConsExpr, binding *value.Binding) *value.Cons {
+	cons := &value.Cons{}
+	if binding != nil {
+		binding.Value = cons
+	}
 
+	cons.Head = Eval(env, expr.Head)
 	if !isNil(expr.Tail) {
-		tail = Eval(env, expr.Tail)
+		cons.Tail = Eval(env, expr.Tail)
 	}
 
-	return &value.Cons{
-		Head: Eval(env, expr.Head),
-		Tail: tail,
-	}
+	return cons
 }
 
 func evalConsDestructure(env *value.Env, expr *ast.ConsDestructureExpr) value.Value {

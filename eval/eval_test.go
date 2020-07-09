@@ -585,6 +585,88 @@ fact(10)
 
 
 `},
+		{1, `
+
+
+ones = [1; ones]
+
+head[h;t] -> h
+tail[h;t] -> t
+
+ones.tail.head
+
+
+`},
+		{1, `
+
+
+head[h;t] -> h
+tail[h;t] -> t
+
+nth(n) -> head * tail^n
+
+ones = [1;ones]
+
+nth(200) ones
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
 		{5, `
 
 
@@ -619,18 +701,13 @@ func TestEvalIntExpr2(t *testing.T) {
 	}{
 		{1, `
 
-fact(0) -> 1
 
-fact(0)
+ones = [1; ones]
 
+head[h;t] -> h
+tail[h;t] -> t
 
-#ones = [1; ones]
-
-#head[h;t] -> h
-#tail[h;t] -> t
-
-#ones.tail.head
-#head(ones)
+ones.tail.head
 
 
 `},
