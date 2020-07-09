@@ -5,7 +5,6 @@ import (
 	"crisp/token"
 	"fmt"
 	"reflect"
-	"strconv"
 )
 
 // translates parse trees into ASTs
@@ -61,7 +60,7 @@ func (tr *Translator) translateBlock(env *ExprEnv, blockTree parse_tree.Block) E
 func (tr *Translator) translateInline(env *ExprEnv, inlineTree parse_tree.Inline) Expr {
 	switch inline := inlineTree.(type) {
 	case *parse_tree.InlineID:
-		if inline.Name[0] == '@' { // TODO: is this ridiculous?
+		if inline.Name == ArgName {
 			// this is an argument binding, which will be appended
 			// to the end of the bindings, hence (0, -1) meaning
 			// "last element of this env"
@@ -86,6 +85,8 @@ func (tr *Translator) translateInline(env *ExprEnv, inlineTree parse_tree.Inline
 		return tr.translateInlineTuple(env, inline)
 	case *parse_tree.InlineCons:
 		return tr.translateInlineCons(env, inline)
+	case *parse_tree.InlineNoMatch:
+		panic("Invalid use of `_` outside of pattern matching.")
 	}
 
 	tr.error(fmt.Sprintf("Translator Error: unhandled Inline %v of type %T", inlineTree, inlineTree))
@@ -271,8 +272,21 @@ func (tr *Translator) translateInlineFunc(env *ExprEnv, inline *parse_tree.Inlin
 	}}
 	return tr.translateFunc(env, funcBlockPieces)
 }
+
+var argPatMatBlock = &parse_tree.PatMatBlock{
+	Token: token.Token{Type: token.PatMat, Literal: "="},
+	LVal: &parse_tree.InlineUnopExpr{
+		Token: token.ShadowToken,
+		Expr: &parse_tree.InlineID{
+			Token: token.Token{Type: token.ID, Literal: "arg"},
+			Name:  "arg",
+		}},
+	Expr: &parse_tree.JustExprBlock{
+		Expr: &parse_tree.InlineID{Name: ArgName},
+	},
+}
+
 func (tr *Translator) translateFunc(env *ExprEnv, funcBlockPieces []*parse_tree.FuncBlockPiece) Expr {
-	argName := GetArgName()
 	var letExprs []*LetExpr
 
 	for _, piece := range funcBlockPieces {
@@ -280,8 +294,9 @@ func (tr *Translator) translateFunc(env *ExprEnv, funcBlockPieces []*parse_tree.
 			Decls: []*parse_tree.PatMatBlock{{
 				LVal: piece.LVal,
 				Expr: &parse_tree.JustExprBlock{
-					Expr: &parse_tree.InlineID{Name: argName},
+					Expr: &parse_tree.InlineID{Name: ArgName},
 				}},
+				argPatMatBlock,
 			},
 			Expr: piece.Expr,
 		}
@@ -289,7 +304,7 @@ func (tr *Translator) translateFunc(env *ExprEnv, funcBlockPieces []*parse_tree.
 		letExprs = append(letExprs, tr.translateLetBlock(env, letBlock))
 	}
 
-	return &FuncExpr{FuncPieceExprs: letExprs, ArgName: argName}
+	return &FuncExpr{FuncPieceExprs: letExprs}
 }
 
 func (tr *Translator) translateTupleDestructureBlock(env *ExprEnv, block *TupleDestructureBlock) Expr {
@@ -353,17 +368,10 @@ func (tr *Translator) translateConsBlock(env *ExprEnv, block *parse_tree.ConsBlo
 // This is the name that we bind to the argument
 // when a function is called. It's important that
 // it's not a legal identifier, so it will never
-// clash with identifiers in the program, and that
-// it be unique, so it doesn't clash with nested
-// function calls.
-var argNum = 0
-
-func GetArgName() string {
-	name := "@ARG_" + strconv.Itoa(argNum) + "@"
-	argNum++
-
-	return name
-}
+// clash with identifiers in the program, and so
+// user code cannot access it. (User code *can* access
+// "arg", which just looks up "@arg".)
+var ArgName = "@arg"
 
 func isNil(i interface{}) bool {
 	return i == nil || reflect.ValueOf(i).IsNil()

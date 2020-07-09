@@ -57,30 +57,16 @@ func (c *Cons) Inspect() string { return "INSPECTED_CONS" }
 
 type Func struct {
 	Env            *Env
-	ArgName        string
 	FuncPieceExprs []*ast.LetExpr
 }
 
 func (f *Func) Class() Class    { return FuncClass }
 func (f *Func) Inspect() string { return "INSPECTED_FUNC" }
 
-var identityArgName = "@ARG_IDENTITY@"
 var Identity = &Func{
-	Env:     EmptyEnv,
-	ArgName: identityArgName,
-	FuncPieceExprs: []*ast.LetExpr{
-		{
-			Env: &ast.ExprEnv{
-				Parent: &ast.ExprEnv{
-					Bindings: []*ast.ExprBinding{
-						{
-							Name: identityArgName,
-							Expr: ast.Arg,
-						},
-					},
-				},
-			},
-			Expr: &ast.LookupExpr{Name: identityArgName},
-		},
-	},
+	Env: EmptyEnv,
+	FuncPieceExprs: []*ast.LetExpr{{
+		Env:  ast.TopLevelExprEnv,
+		Expr: &ast.LookupExpr{Name: ast.ArgName},
+	}},
 }

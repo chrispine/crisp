@@ -66,7 +66,7 @@ func eval(env *value.Env, someExpr ast.Expr, binding *value.Binding) value.Value
 }
 
 func apply(fn *value.Func, arg value.Value) value.Value {
-	argBinding := &value.Binding{Name: fn.ArgName, Value: arg}
+	argBinding := &value.Binding{Name: ast.ArgName, Value: arg}
 	// For each function-piece (each of which is a `let` expression)...
 	for _, letExpr := range fn.FuncPieceExprs {
 		// ...we evaluate the let expression to see if the assertions hold...
@@ -377,48 +377,34 @@ func evalLetExpr(env *value.Env, expr *ast.LetExpr, maybeArg *value.Binding) (va
 func evalFuncExpr(env *value.Env, expr *ast.FuncExpr) *value.Func {
 	return &value.Func{
 		Env:            env,
-		ArgName:        expr.ArgName,
 		FuncPieceExprs: expr.FuncPieceExprs,
 	}
 }
 
-func composeFuncs(f *value.Func, g *value.Func) *value.Func {
-	argName := ast.GetArgName()
-	fName := ast.GetArgName()
-	gName := ast.GetArgName()
+var fName = "@f"
+var gName = "@g"
+var composedFuncPieceExprs = []*ast.LetExpr{
+	{
+		Env: ast.TopLevelExprEnv,
+		Expr: &ast.BinopExpr{
+			Token: token.AtToken,
+			LExpr: &ast.LookupExpr{Name: fName, Depth: 1, Index: 0},
+			RExpr: &ast.BinopExpr{
+				Token: token.AtToken,
+				LExpr: &ast.LookupExpr{Name: gName, Depth: 1, Index: 1},
+				RExpr: &ast.LookupExpr{Name: ast.ArgName, Depth: 0, Index: 0},
+			},
+		},
+	},
+}
 
+func composeFuncs(f *value.Func, g *value.Func) *value.Func {
 	env := value.NewEnv(value.EmptyEnv, []*value.Binding{
 		{Name: fName, Value: f},
 		{Name: gName, Value: g},
 	})
 
-	return &value.Func{
-		Env:     env,
-		ArgName: argName,
-		FuncPieceExprs: []*ast.LetExpr{
-			{
-				Env: &ast.ExprEnv{
-					Parent: &ast.ExprEnv{
-						Bindings: []*ast.ExprBinding{
-							{
-								Name: argName,
-								Expr: ast.Arg,
-							},
-						},
-					},
-				},
-				Expr: &ast.BinopExpr{
-					Token: token.AtToken,
-					LExpr: &ast.LookupExpr{Name: fName, Depth: 1, Index: 0},
-					RExpr: &ast.BinopExpr{
-						Token: token.AtToken,
-						LExpr: &ast.LookupExpr{Name: gName, Depth: 1, Index: 1},
-						RExpr: &ast.LookupExpr{Name: argName, Depth: 0, Index: 0},
-					},
-				},
-			},
-		},
-	}
+	return &value.Func{Env: env, FuncPieceExprs: composedFuncPieceExprs}
 }
 
 func isNil(i interface{}) bool {

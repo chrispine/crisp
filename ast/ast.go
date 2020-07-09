@@ -74,19 +74,11 @@ func (e *ConsExpr) expr()          {}
 func (e *ConsExpr) String() string { return "ConsExpr" }
 
 type FuncExpr struct {
-	ArgName        string
 	FuncPieceExprs []*LetExpr
 }
 
 func (e *FuncExpr) expr()          {}
 func (e *FuncExpr) String() string { return "FuncExpr" }
-
-type ArgExpr struct{}
-
-func (e *ArgExpr) expr()          {}
-func (e *ArgExpr) String() string { return "«Arg»" }
-
-var Arg = &ArgExpr{}
 
 type AssertEqualExpr struct {
 	LExpr *LookupExpr
