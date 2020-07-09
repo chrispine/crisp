@@ -5,7 +5,6 @@ import (
 	"crisp/parse_tree"
 	"crisp/token"
 	"fmt"
-	"reflect"
 )
 
 var unops = []token.TokType{
@@ -132,7 +131,7 @@ func calculateEndOfExprMap() map[token.TokType]bool {
 	eoes[token.RBracket] = true
 	eoes[token.RBrace] = true
 	eoes[token.NewLine] = true
-	// TODO: also add Dedent? Indent??
+	eoes[token.Indent] = true
 
 	return eoes
 }
@@ -205,21 +204,28 @@ func (p *Parser) parseDeclsAndExpr() ([]*parse_tree.PatMatBlock, parse_tree.Bloc
 	numDecls := p.curToken.NumLines - 1
 	p.expectToken(token.BlockLen)
 
-	prevWasFuncDecl := false
+	var currFunc *parse_tree.FuncBlock
+	var prevFunc *parse_tree.FuncBlock
+	var prevDecl *parse_tree.PatMatBlock
 
 	for i := 0; i < numDecls; i++ {
-		decl, wasFuncDecl := p.parseDeclBlock()
+		currDecl, wasFuncDecl := p.parseDeclBlock()
 
-		if wasFuncDecl && prevWasFuncDecl && shouldCombine(decls[len(decls)-1], decl) {
-			prevFunc := decls[len(decls)-1].Expr.(*parse_tree.FuncBlock)
-			currFunc := decl.Expr.(*parse_tree.FuncBlock)
+		prevFunc = currFunc
+		if wasFuncDecl {
+			currFunc = currDecl.Expr.(*parse_tree.FuncBlock)
+		} else {
+			currFunc = nil
+		}
 
+		if currFunc != nil && prevFunc != nil && shouldCombine(prevDecl, currDecl) {
 			// combine curr into prev
 			prevFunc.FuncBlockPieces = append(prevFunc.FuncBlockPieces, currFunc.FuncBlockPieces[0])
 		} else {
-			decls = append(decls, decl)
-			prevWasFuncDecl = wasFuncDecl
+			decls = append(decls, currDecl)
 		}
+
+		prevDecl = currDecl
 	}
 
 	return decls, p.parseExprBlock()
@@ -243,10 +249,10 @@ func (p *Parser) parseDeclBlock() (*parse_tree.PatMatBlock, bool) {
 	atom := p.parseAtom()
 
 	if p.curTokenIs(token.PatMat) {
-		return p.parsePatMatBlock(atom), false
+		return p.parsePatMatBlock(atom), false // false: this was not a function declaration
 	}
 
-	return p.parseFuncDeclBlock(atom), true
+	return p.parseFuncDeclBlock(atom), true // true: this was a function declaration
 }
 
 /*
@@ -326,6 +332,7 @@ func makeNestedFuncBlocks(arrowToken token.Token, args []parse_tree.Inline, inne
 	JustExprBlock
 	LetBlock
 	FuncBlock
+	CaseBlock
 	TupleBlock
 	ListBlock
 */
@@ -333,6 +340,8 @@ func (p *Parser) parseExprBlock() parse_tree.Block {
 	switch p.curToken.Type {
 	case token.Let:
 		return p.parseLetBlock()
+	case token.Case:
+		return p.parseCaseBlock()
 	case token.TBlock:
 		return p.parseTupleBlock()
 	case token.LBlock:
@@ -352,7 +361,7 @@ func (p *Parser) parseExprBlock() parse_tree.Block {
 JustExprBlock ->
 		Expr  '\n'                   // TODO: allow (by collapsing) multi-line expr
 */
-func (p *Parser) parseJustExprBlock(atom parse_tree.Inline) parse_tree.Block {
+func (p *Parser) parseJustExprBlock(atom parse_tree.Inline) *parse_tree.JustExprBlock {
 	lit := &parse_tree.JustExprBlock{
 		Token: token.ExprBlockToken,
 		Expr:  p.parseExprRest(atom),
@@ -369,7 +378,7 @@ func (p *Parser) parseJustExprBlock(atom parse_tree.Inline) parse_tree.Block {
 LetBlock ->
 	'let'  '|->'  DeclsAndExpr  '<-|'
 */
-func (p *Parser) parseLetBlock() parse_tree.Block {
+func (p *Parser) parseLetBlock() *parse_tree.LetBlock {
 	lit := &parse_tree.LetBlock{
 		Token: *p.curToken,
 	}
@@ -388,7 +397,7 @@ FuncBlock ->
 	LValAtom  '->'  ExprBlock
 	LValAtom  '->'  |->'  DeclsAndExpr  '<-|'                  // sugar for 'let'
 */
-func (p *Parser) parseFuncBlock(atom parse_tree.Inline) parse_tree.Block {
+func (p *Parser) parseFuncBlock(atom parse_tree.Inline) *parse_tree.FuncBlock {
 	p.expectToken(token.Arrow)
 
 	if !atom.IsLVal() {
@@ -419,10 +428,48 @@ func (p *Parser) parseFuncBlock(atom parse_tree.Inline) parse_tree.Block {
 }
 
 /*
+CaseBlock ->
+	'case'  Expr  '|->'  «BlockLen»  FuncBlock+  '<-|'
+*/
+func (p *Parser) parseCaseBlock() *parse_tree.CaseBlock {
+	lit := &parse_tree.CaseBlock{
+		Token: *p.curToken,
+	}
+	p.expectToken(token.Case)
+
+	lit.Expr = p.parseExpr()
+
+	p.expectToken(token.Indent)
+
+	numCases := p.curToken.NumLines
+	p.expectToken(token.BlockLen)
+
+	if numCases <= 0 {
+		p.error("Illegal case expression: must have at least one case")
+	}
+
+	atom := p.parseAtom()
+	caseFunc := p.parseFuncBlock(atom)
+
+	// now we combine them all into one multi-piece function
+	for i := 1; i < numCases; i++ {
+		atom = p.parseAtom()
+		funcBlock := p.parseFuncBlock(atom)
+
+		caseFunc.FuncBlockPieces = append(caseFunc.FuncBlockPieces, funcBlock.FuncBlockPieces[0])
+	}
+
+	lit.Cases = caseFunc
+	p.expectToken(token.Dedent)
+
+	return lit
+}
+
+/*
 TupleBlock ->
 	'(*)'  |->'  ExprBlock+  '<-|'
 */
-func (p *Parser) parseTupleBlock() parse_tree.Block {
+func (p *Parser) parseTupleBlock() *parse_tree.TupleBlock {
 	lit := &parse_tree.TupleBlock{Token: *p.curToken}
 	p.expectToken(token.TBlock)
 	p.expectToken(token.Indent)
@@ -470,7 +517,7 @@ func (p *Parser) parseListBlock() parse_tree.Block {
 		tail = p.parseExprBlock()
 	} else {
 		heads = append(heads, p.parseExprBlock())
-		// and tail stays nil
+		tail = parse_tree.NilBlock
 	}
 
 	p.expectToken(token.Dedent)
@@ -589,7 +636,7 @@ func (p *Parser) parseList() *parse_tree.InlineCons {
 	// check for nil (empty list)
 	if p.curTokenIs(token.RBracket) {
 		p.expectToken(token.RBracket)
-		return nil
+		return parse_tree.InlineNil
 	}
 
 	lit.Head = p.parseExpr()
@@ -605,7 +652,7 @@ func (p *Parser) parseList() *parse_tree.InlineCons {
 	// check for end of list
 	if p.curTokenIs(token.RBracket) {
 		p.expectToken(token.RBracket)
-		lit.Tail = nil
+		lit.Tail = parse_tree.InlineNil
 		return lit
 	}
 
@@ -732,7 +779,7 @@ func (p *Parser) parseExpressionLeft(precedence int, prevTree parse_tree.Inline)
 	return samePrecTree
 }
 
-func (p *Parser) parseFuncsAndApplyExprs(prevTree parse_tree.Inline) parse_tree.Inline {
+func (p *Parser) parseFuncsAndApplyExprs(prevTree parse_tree.Inline) *parse_tree.InlineBinopExpr {
 	var fn, arg parse_tree.Inline
 
 	if p.curTokenIs(token.Dot) {
@@ -757,8 +804,4 @@ func (p *Parser) parseFuncsAndApplyExprs(prevTree parse_tree.Inline) parse_tree.
 	// TODO: more arrow handling here?
 
 	return p.parseFuncsAndApplyExprs(applyExpr)
-}
-
-func isNil(i interface{}) bool {
-	return i == nil || reflect.ValueOf(i).IsNil()
 }

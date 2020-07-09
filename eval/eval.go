@@ -130,15 +130,16 @@ func evalTupleDestructure(env *value.Env, expr *ast.TupleDestructureExpr) value.
 }
 
 func evalConsExpr(env *value.Env, expr *ast.ConsExpr, binding *value.Binding) *value.Cons {
+	if expr == ast.NilList {
+		return nil
+	}
 	cons := &value.Cons{}
 	if binding != nil {
 		binding.Value = cons
 	}
 
 	cons.Head = Eval(env, expr.Head)
-	if !isNil(expr.Tail) {
-		cons.Tail = Eval(env, expr.Tail)
-	}
+	cons.Tail = Eval(env, expr.Tail)
 
 	return cons
 }

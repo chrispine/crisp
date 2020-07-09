@@ -620,24 +620,37 @@ inc 4
 
 
 `},
-		{5, `
+		{10, `
 
 
-5
-
-
-`},
-		{5, `
-
-
-5
+case 2+3
+	5 -> 10
+	x -> x+1
 
 
 `},
 		{5, `
 
 
-5
+case 2+2
+	5 -> 10
+	x -> x+1
+
+
+`},
+		{4, `
+
+
+head[h;_] -> h
+tail[_;t] -> t
+
+filter[   ] _ -> []
+filter[h;t] f ->
+	case f(h)
+		true  -> [h ; t.filter(f)]
+		false ->      t.filter(f)
+
+[1,2,3,4,5,6,7].filter(x -> x%2 == 0).tail.head
 
 
 `},
@@ -701,15 +714,20 @@ func TestEvalIntExpr2(t *testing.T) {
 		expected int
 		program  string
 	}{
-		{1, `
+		{4, `
 
 
-ones = [1; ones]
 
-head[h;t] -> h
-tail[h;t] -> t
+head[h;_] -> h
+tail[_;t] -> t
 
-ones.tail.head
+filter[   ] _ -> []
+filter[h;t] f ->
+	case f(h)
+		true  -> [h ; t.filter(f)]
+		false ->      t.filter(f)
+
+[1,2,3,4,5,6,7].filter(x -> x%2 == 0).tail.head
 
 
 `},

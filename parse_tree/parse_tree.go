@@ -3,7 +3,6 @@ package parse_tree
 import (
 	"bytes"
 	"crisp/token"
-	"reflect"
 )
 
 /*
@@ -43,6 +42,7 @@ FuncDeclBlock ->
 	JustExprBlock
 	LetBlock
 	FuncBlock
+	CaseBlock
 	TupleBlock
 	ListBlock
 
@@ -55,6 +55,9 @@ LetBlock ->
 FuncBlock ->
 	LValAtom  '->'  ExprBlock
 	LValAtom  '->'  |->'  DeclsAndExpr  '<-|'                  // sugar for 'let'
+
+CaseBlock ->
+	'case'  Expr  '|->'  «BlockLen»  FuncBlock+  '<-|'
 
 TupleBlock ->
 	'(*)'  |->'  ExprBlock+  '<-|'
@@ -199,6 +202,22 @@ func (flb *FuncBlock) String() string {
 	return out.String()
 }
 
+type CaseBlock struct {
+	Token token.Token // the token.Case token
+	Expr  Inline
+	Cases *FuncBlock
+}
+
+func (cb *CaseBlock) BlockNode()           {}
+func (cb *CaseBlock) TokenLiteral() string { return cb.Token.Literal }
+func (cb *CaseBlock) String() string {
+	var out bytes.Buffer
+
+	out.WriteString("[CASE BLOCK]")
+
+	return out.String()
+}
+
 type LetBlock struct {
 	Token token.Token // the token.Let token
 	Decls []*PatMatBlock
@@ -250,6 +269,8 @@ type ConsBlock struct {
 	Tail  Block
 }
 
+var NilBlock = &ConsBlock{Token: token.Token{Type: token.LBracket, Literal: "[]"}}
+
 func (cb *ConsBlock) BlockNode()           {}
 func (cb *ConsBlock) TokenLiteral() string { return cb.Token.Literal }
 func (cb *ConsBlock) String() string {
@@ -259,7 +280,7 @@ func (cb *ConsBlock) String() string {
 
 	out.WriteString(cb.Head.String())
 
-	if !isNil(cb.Tail) {
+	if cb.Tail != NilBlock {
 		out.WriteString("; " + cb.Tail.String())
 	}
 
@@ -342,11 +363,7 @@ func (it *InlineTuple) IsLVal() bool {
 }
 func (it *InlineTuple) TokenLiteral() string { return it.Token.Literal }
 func (it *InlineTuple) String() string {
-	if isNil(it) {
-		return "(☣ parser error: *InlineTuple was nil ☣)"
-	}
-
-	if isNil(it.Exprs) {
+	if len(it.Exprs) == 0 {
 		return "()"
 	}
 
@@ -371,18 +388,25 @@ type InlineCons struct {
 	Tail  Inline
 }
 
-func (ic *InlineCons) IsLVal() bool         { return ic.Head.IsLVal() && (isNil(ic.Tail) || ic.Tail.IsLVal()) }
+var InlineNil = &InlineCons{Token: token.Token{Type: token.LBracket, Literal: "[]"}}
+
+func (ic *InlineCons) IsLVal() bool {
+	if ic == InlineNil {
+		return true
+	}
+	return ic.Head.IsLVal() && ic.Tail.IsLVal()
+}
 func (ic *InlineCons) TokenLiteral() string { return ic.Token.Literal }
 func (ic *InlineCons) String() string {
 	var out bytes.Buffer
 
-	if isNil(ic) {
+	if ic == InlineNil {
 		out.WriteString("[]")
 	} else {
 		out.WriteString("[")
 		out.WriteString(ic.Head.String())
 
-		if !isNil(ic.Tail) {
+		if ic.Tail != InlineNil {
 			out.WriteString("; " + ic.Tail.String())
 		}
 		out.WriteString("]")
@@ -432,8 +456,4 @@ func (ibe *InlineBinopExpr) String() string {
 	out.WriteString(")")
 
 	return out.String()
-}
-
-func isNil(i interface{}) bool {
-	return i == nil || reflect.ValueOf(i).IsNil()
 }

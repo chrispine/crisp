@@ -43,6 +43,8 @@ func (tr *Translator) translateBlock(env *ExprEnv, blockTree parse_tree.Block) E
 		return tr.translateLetBlock(env, block)
 	case *parse_tree.FuncBlock:
 		return tr.translateFuncBlock(env, block)
+	case *parse_tree.CaseBlock:
+		return tr.translateCaseBlock(env, block)
 	case *parse_tree.TupleBlock:
 		return tr.translateTupleBlock(env, block)
 	case *parse_tree.ConsBlock:
@@ -209,16 +211,16 @@ func (tr *Translator) partitionDecl(
 	case *parse_tree.InlineCons:
 		// `[a, b]` = expr
 		// `[h; t]` = expr
-		// `[    ]` = expr  (requires nil check!)
-		asserts = append(asserts, toAssert{listIsCons: rhs})
-
-		rhsHead := &ConsDestructureBlock{true, rhs}
-		asserts = tr.partitionDecl(preEnv, postEnv, asserts, lhs.Head, rhsHead, shadowing)
-
-		rhsTail := &ConsDestructureBlock{false, rhs}
-		if isNil(lhs.Tail) {
-			asserts = append(asserts, toAssert{listIsNil: rhsTail})
+		// `[    ]` = expr
+		if lhs == parse_tree.InlineNil {
+			asserts = append(asserts, toAssert{listIsNil: rhs})
 		} else {
+			asserts = append(asserts, toAssert{listIsCons: rhs})
+
+			rhsHead := &ConsDestructureBlock{true, rhs}
+			asserts = tr.partitionDecl(preEnv, postEnv, asserts, lhs.Head, rhsHead, shadowing)
+
+			rhsTail := &ConsDestructureBlock{false, rhs}
 			asserts = tr.partitionDecl(preEnv, postEnv, asserts, lhs.Tail, rhsTail, shadowing)
 		}
 	default:
@@ -261,6 +263,14 @@ type ConsDestructureExpr struct {
 
 func (e *ConsDestructureExpr) expr()          {}
 func (e *ConsDestructureExpr) String() string { return "ConsDestructureExpr" }
+
+func (tr *Translator) translateCaseBlock(env *ExprEnv, block *parse_tree.CaseBlock) Expr {
+	return &BinopExpr{
+		Token: token.AtToken,
+		LExpr: tr.translateFuncBlock(env, block.Cases),
+		RExpr: tr.translateInline(env, block.Expr),
+	}
+}
 
 func (tr *Translator) translateFuncBlock(env *ExprEnv, block *parse_tree.FuncBlock) Expr {
 	return tr.translateFunc(env, block.FuncBlockPieces)
@@ -341,27 +351,23 @@ func (tr *Translator) translateTupleBlock(env *ExprEnv, block *parse_tree.TupleB
 }
 
 func (tr *Translator) translateInlineCons(env *ExprEnv, inline *parse_tree.InlineCons) Expr {
-	var tail Expr
-
-	if !isNil(inline.Tail) {
-		tail = tr.translateInline(env, inline.Tail)
+	if inline == parse_tree.InlineNil {
+		return NilList
 	}
 
 	return &ConsExpr{
 		Head: tr.translateInline(env, inline.Head),
-		Tail: tail,
+		Tail: tr.translateInline(env, inline.Tail),
 	}
 }
 func (tr *Translator) translateConsBlock(env *ExprEnv, block *parse_tree.ConsBlock) Expr {
-	var tail Expr
-
-	if !isNil(block.Tail) {
-		tail = tr.translateBlock(env, block.Tail)
+	if block == parse_tree.NilBlock {
+		return NilList
 	}
 
 	return &ConsExpr{
 		Head: tr.translateBlock(env, block.Head),
-		Tail: tail,
+		Tail: tr.translateBlock(env, block.Tail),
 	}
 }
 

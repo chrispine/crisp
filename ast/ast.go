@@ -70,6 +70,8 @@ type ConsExpr struct {
 	Tail Expr
 }
 
+var NilList = &ConsExpr{}
+
 func (e *ConsExpr) expr()          {}
 func (e *ConsExpr) String() string { return "ConsExpr" }
 
