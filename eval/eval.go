@@ -20,8 +20,6 @@ func Eval(env *value.Env, someExpr ast.Expr) value.Value {
 		return evalUnopExpr(env, expr)
 	case *ast.BinopExpr:
 		return evalBinopExpr(env, expr)
-	case *ast.LetExpr:
-		return evalLetExpr(env, expr)
 	case *ast.FuncExpr:
 		return evalFuncExpr(env, expr)
 	case *ast.TupleExpr:
@@ -32,10 +30,22 @@ func Eval(env *value.Env, someExpr ast.Expr) value.Value {
 		return evalConsExpr(env, expr)
 	case *ast.ConsDestructureExpr:
 		return evalConsDestructure(env, expr)
+	case *ast.AssertEqualExpr:
+		return evalAssertEqual(env, expr)
 	case *ast.AssertListIsConsExpr:
 		return evalAssertListIsCons(env, expr)
 	case *ast.AssertListIsNilExpr:
 		return evalAssertListIsNil(env, expr)
+	case *ast.LetExpr:
+		// LetExpr is special because it contains runtime assertions
+		// that must be tested. (In a function or `case` statement,
+		// these would determine which branch to follow, but that is
+		// handled in apply(func, val).)
+		val, ok := evalLetExpr(env, expr, nil)
+		if !ok {
+			panic("Runtime Error: failed assertion in `let` expression")
+		}
+		return val
 	}
 
 	panic(fmt.Sprintf("Runtime Error: unhandled expression %v of type %T", someExpr, someExpr))
@@ -43,15 +53,17 @@ func Eval(env *value.Env, someExpr ast.Expr) value.Value {
 }
 
 func apply(fn *value.Func, arg value.Value) value.Value {
-	for _, letExpr := range fn.FuncPartExprs {
-		argBindings := []*value.Binding{{Name: fn.ArgName, Value: arg}}
-		argEnv := value.NewEnv(fn.Env, argBindings)
-
-		if !checkAsserts(argEnv, letExpr) {
+	argBinding := &value.Binding{Name: fn.ArgName, Value: arg}
+	// For each function-piece (each of which is a `let` expression)...
+	for _, letExpr := range fn.FuncPieceExprs {
+		// ...we evaluate the let expression to see if the assertions hold...
+		val, ok := evalLetExpr(fn.Env, letExpr, argBinding)
+		// ...if not, we try the next one...
+		if !ok {
 			continue
 		}
-
-		return evalAssertedLetExpr(argEnv, letExpr)
+		// ...but if so, then this is the answer.
+		return val
 	}
 
 	panic("Runtime Error: no matching function piece for function call")
@@ -69,13 +81,13 @@ func evalBoolExpr(_ *value.Env, expr *ast.BoolExpr) *value.Bool {
 }
 
 func evalLookupExpr(env *value.Env, expr *ast.LookupExpr) value.Value {
-	maybeThunk := env.Get(expr.Name)
+	maybeThunk := env.Get(expr.Depth, expr.Index)
 
 	if thunk, ok := maybeThunk.(*value.Thunk); ok {
 		// force the thunk
-		val := Eval(env, thunk.Expr)
+		val := Eval(thunk.Env, thunk.Expr) // TODO: , env.GetBinding(expr.Depth, expr.Index))
 		// store the value so we don't have to force it again later
-		env.Update(expr.Name, val)
+		env.Update(expr.Depth, expr.Index, val)
 		return val
 	}
 
@@ -95,7 +107,7 @@ func evalTupleExpr(env *value.Env, expr *ast.TupleExpr) *value.Tuple {
 func evalTupleDestructure(env *value.Env, expr *ast.TupleDestructureExpr) value.Value {
 	tuple := Eval(env, expr.Tuple).(*value.Tuple)
 	// TODO: did I just eval the same expression multiple times, one for each element?
-	// TODO: same question with cons destructuring and "list is cons/nil" assertions
+	// TODO: same question with cons destructuring and all assertion types
 
 	return tuple.Values[expr.Index]
 }
@@ -121,6 +133,13 @@ func evalConsDestructure(env *value.Env, expr *ast.ConsDestructureExpr) value.Va
 	}
 
 	return cons.Tail
+}
+
+func evalAssertEqual(env *value.Env, expr *ast.AssertEqualExpr) *value.Bool {
+	lVal := Eval(env, expr.LExpr)
+	rVal := Eval(env, expr.RExpr)
+
+	return evalBinop(token.Equal, lVal, rVal).(*value.Bool)
 }
 
 func evalAssertListIsCons(env *value.Env, expr *ast.AssertListIsConsExpr) *value.Bool {
@@ -166,13 +185,16 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 	someLeftVal := Eval(env, expr.LExpr)
 	someRightVal := Eval(env, expr.RExpr)
 
+	return evalBinop(expr.Token.Type, someLeftVal, someRightVal)
+}
+func evalBinop(binopType token.TokType, someLeftVal value.Value, someRightVal value.Value) value.Value {
 	switch leftVal := someLeftVal.(type) {
 	case *value.Int:
 		if rightVal, ok := someRightVal.(*value.Int); ok {
 			l := leftVal.Value
 			r := rightVal.Value
 
-			switch expr.Token.Type {
+			switch binopType {
 			case token.Equal:
 				if l == r {
 					return value.True
@@ -238,7 +260,7 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 			l := leftVal.Value
 			r := rightVal.Value
 
-			switch expr.Token.Type {
+			switch binopType {
 			case token.Equal:
 				if l == r {
 					return value.True
@@ -266,7 +288,7 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 			}
 		}
 	case *value.Func:
-		switch expr.Token.Type {
+		switch binopType {
 		case token.At:
 			return apply(leftVal, someRightVal)
 		case token.Mult:
@@ -288,53 +310,57 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 		}
 	}
 
-	panic(fmt.Sprintf("RuntimeError: illegal binop expr: %v", expr))
+	panic(fmt.Sprintf("RuntimeError: illegal binop expr: %v", binopType))
 	return nil
 }
 
-func evalLetExpr(env *value.Env, expr *ast.LetExpr) value.Value {
-	// First, we validate the assertions
-	if !checkAsserts(env, expr) {
-		panic("Runtime Error: failed assertion in `let` expression")
-	}
-
-	return evalAssertedLetExpr(env, expr)
-}
-
-func evalAssertedLetExpr(env *value.Env, expr *ast.LetExpr) value.Value {
-	// Next, we create thunks for all of the bindings, allowing us to have recursive datatypes.
+func evalLetExpr(env *value.Env, expr *ast.LetExpr, maybeArg *value.Binding) (value.Value, bool) {
+	// First, we create a new environment in which we can evaluate
+	// assertions, bindings, and the actual expression. We do this
+	// by binding to thunks, since we obviously can't bind to the
+	// values we haven't evaluated yet.
 	var bindings []*value.Binding
 
 	for _, eb := range expr.Env.Bindings {
-		bindings = append(bindings, &value.Binding{eb.Name, &value.Thunk{Expr: eb.Expr}})
+		bindings = append(bindings, &value.Binding{
+			Name:  eb.Name,
+			Value: &value.Thunk{Expr: eb.Expr},
+		})
+	}
+	if maybeArg != nil {
+		bindings = append(bindings, maybeArg)
 	}
 
 	newEnv := value.NewEnv(env, bindings)
 
-	// Finally, we force all of the thunks, so none are left when we return.
+	for _, b := range bindings {
+		if th, ok := b.Value.(*value.Thunk); ok {
+			th.Env = newEnv
+		}
+	}
+	// Awesome, `newEnv` is looking good, and the thunks all know about it.
+
+	// Next, we attempt to validate the assertions
+	for _, assert := range expr.Asserts {
+		val := Eval(newEnv, assert)
+		if !val.(*value.Bool).Value {
+			return nil, false
+		}
+	}
+
+	// Finally, we force all of the thunks, so none remain when we return.
 	for _, b := range newEnv.Bindings {
 		Eval(newEnv, &ast.LookupExpr{Name: b.Name})
 	}
 
-	return Eval(newEnv, expr.Expr)
-}
-
-func checkAsserts(env *value.Env, expr *ast.LetExpr) bool {
-	for _, assert := range expr.Asserts {
-		val := Eval(env, assert)
-		if !val.(*value.Bool).Value {
-			return false
-		}
-	}
-
-	return true
+	return Eval(newEnv, expr.Expr), true
 }
 
 func evalFuncExpr(env *value.Env, expr *ast.FuncExpr) *value.Func {
 	return &value.Func{
-		Env:           env,
-		ArgName:       expr.ArgName,
-		FuncPartExprs: expr.FuncPartExprs,
+		Env:            env,
+		ArgName:        expr.ArgName,
+		FuncPieceExprs: expr.FuncPieceExprs,
 	}
 }
 
@@ -351,11 +377,11 @@ func composeFuncs(f *value.Func, g *value.Func) *value.Func {
 	return &value.Func{
 		Env:     env,
 		ArgName: argName,
-		FuncPartExprs: []*ast.LetExpr{
+		FuncPieceExprs: []*ast.LetExpr{
 			{
 				Env: &ast.ExprEnv{
 					Parent: &ast.ExprEnv{
-						Bindings: []ast.ExprBinding{
+						Bindings: []*ast.ExprBinding{
 							{
 								Name: argName,
 								Expr: ast.Arg,
@@ -365,11 +391,11 @@ func composeFuncs(f *value.Func, g *value.Func) *value.Func {
 				},
 				Expr: &ast.BinopExpr{
 					Token: token.AtToken,
-					LExpr: &ast.LookupExpr{Name: fName},
+					LExpr: &ast.LookupExpr{Name: fName, Depth: 1, Index: 0},
 					RExpr: &ast.BinopExpr{
 						Token: token.AtToken,
-						LExpr: &ast.LookupExpr{Name: gName},
-						RExpr: &ast.LookupExpr{Name: argName},
+						LExpr: &ast.LookupExpr{Name: gName, Depth: 1, Index: 1},
+						RExpr: &ast.LookupExpr{Name: argName, Depth: 0, Index: 0},
 					},
 				},
 			},

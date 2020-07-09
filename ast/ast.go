@@ -24,7 +24,9 @@ func (e *BoolExpr) expr()          {}
 func (e *BoolExpr) String() string { return "BoolExpr" }
 
 type LookupExpr struct {
-	Name string
+	Name  string
+	Depth int
+	Index int
 }
 
 func (e *LookupExpr) expr()          {}
@@ -72,8 +74,8 @@ func (e *ConsExpr) expr()          {}
 func (e *ConsExpr) String() string { return "ConsExpr" }
 
 type FuncExpr struct {
-	ArgName       string
-	FuncPartExprs []*LetExpr
+	ArgName        string
+	FuncPieceExprs []*LetExpr
 }
 
 func (e *FuncExpr) expr()          {}
@@ -85,6 +87,14 @@ func (e *ArgExpr) expr()          {}
 func (e *ArgExpr) String() string { return "«Arg»" }
 
 var Arg = &ArgExpr{}
+
+type AssertEqualExpr struct {
+	LExpr *LookupExpr
+	RExpr Expr
+}
+
+func (e *AssertEqualExpr) expr()          {}
+func (e *AssertEqualExpr) String() string { return "AssertEqualExpr" }
 
 type AssertListIsConsExpr struct {
 	List Expr

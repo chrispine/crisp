@@ -3,11 +3,10 @@ package value
 import (
 	"crisp/ast"
 	"fmt"
-	"strconv"
 )
 
 type Env struct {
-	parent   *Env
+	Parent   *Env
 	Bindings []*Binding
 }
 
@@ -23,6 +22,7 @@ var EmptyEnv = &Env{}
 // bindings will briefly be thunks to allow for
 // recursive or out-of-order declarations
 type Thunk struct {
+	Env  *Env
 	Expr ast.Expr
 }
 
@@ -33,62 +33,58 @@ func NewEnv(parent *Env, bindings []*Binding) *Env {
 	if parent == nil {
 		panic("Error: not allowed to create an Env with nil parent")
 	}
-	return &Env{parent: parent, Bindings: bindings}
+	return &Env{Parent: parent, Bindings: bindings}
 }
 
-func (e *Env) Get(name string) Value {
-	// check local bindings
-	for _, b := range e.Bindings {
-		if b.Name == name {
-			return b.Value
+func (e *Env) Get(depth int, idx int) Value {
+	if depth < 0 {
+		// So we're looking for things bound in the top level env.
+		// This is how we encode `true` and `false`.
+		if idx == ast.MaxInt {
+			return True
 		}
+		if idx == ast.MinInt {
+			return False
+		}
+
+		// It must just be an int, so we'll use the idx as the integer value.
+		return &Int{idx}
+	}
+	if depth > 0 {
+		return e.Parent.Get(depth-1, idx)
 	}
 
-	// nope, let's see if a parent has it
-	if e.parent != nil {
-		return e.parent.Get(name)
+	if idx == -1 {
+		return e.Bindings[len(e.Bindings)-1].Value
+	}
+	return e.Bindings[idx].Value
+}
+
+func (e *Env) GetBinding(depth int, idx int) *Binding {
+	if depth > 0 {
+		return e.Parent.GetBinding(depth-1, idx)
 	}
 
-	if e == TopLevelEnv {
-		return resolveTopLevelBinding(name)
+	if e != TopLevelEnv {
+		return e.Bindings[idx]
 	}
 
-	// How did we get here? There's no parent, but this isn't the TopLevelEnv?
-	panic("[very weird env error] not defined: " + name)
+	panic("[env error] TopLevelEnv has no explicit bindings!")
 	return nil
 }
 
-func (e *Env) Update(name string, val Value) {
-	// check local bindings
-	for _, b := range e.Bindings {
-		if b.Name == name {
-			b.Value = val
-			return
-		}
+func (e *Env) Update(depth int, idx int, val Value) {
+	if depth > 0 {
+		e.Parent.Update(depth-1, idx, val)
+		return
 	}
 
-	// nope, let's see if a parent has it
-	if e.parent != nil {
-		e.parent.Update(name, val)
+	if e != TopLevelEnv {
+		e.Bindings[idx].Value = val
 		return
 	}
 
 	// How did we get here? Shouldn't even be possible.
-	panic("[very weird env update error] not defined: " + name)
+	panic("[env update error] may not modify top level environment")
 	return
-}
-
-func resolveTopLevelBinding(name string) Value {
-	if name == "true" {
-		return True
-	}
-	if name == "false" {
-		return False
-	}
-	if i, err := strconv.Atoi(name); err == nil {
-		return &Int{i}
-	}
-
-	panic("[env error] not defined: " + name)
-	return nil
 }

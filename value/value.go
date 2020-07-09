@@ -56,9 +56,9 @@ func (c *Cons) Class() Class    { return ConsClass }
 func (c *Cons) Inspect() string { return "INSPECTED_CONS" }
 
 type Func struct {
-	Env           *Env
-	ArgName       string
-	FuncPartExprs []*ast.LetExpr
+	Env            *Env
+	ArgName        string
+	FuncPieceExprs []*ast.LetExpr
 }
 
 func (f *Func) Class() Class    { return FuncClass }
@@ -68,11 +68,11 @@ var identityArgName = "@ARG_IDENTITY@"
 var Identity = &Func{
 	Env:     EmptyEnv,
 	ArgName: identityArgName,
-	FuncPartExprs: []*ast.LetExpr{
+	FuncPieceExprs: []*ast.LetExpr{
 		{
 			Env: &ast.ExprEnv{
 				Parent: &ast.ExprEnv{
-					Bindings: []ast.ExprBinding{
+					Bindings: []*ast.ExprBinding{
 						{
 							Name: identityArgName,
 							Expr: ast.Arg,

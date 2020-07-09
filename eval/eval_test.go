@@ -8,6 +8,8 @@ import (
 	"testing"
 )
 
+// TODO: add tests to catch every error and panic, to make sure we are generating them correctly.
+
 func TestEvalIntExpr(t *testing.T) {
 	tests := []struct {
 		expected int
@@ -610,21 +612,25 @@ fact(10)
 	}
 }
 
-func testEvalIntExpr2(t *testing.T) {
+func TestEvalIntExpr2(t *testing.T) {
 	tests := []struct {
 		expected int
 		program  string
 	}{
 		{1, `
 
+fact(0) -> 1
 
-ones = [1; ones]
+fact(0)
 
-head[h;t] -> h
-tail[h;t] -> t
 
-ones.tail.head
-head(ones)
+#ones = [1; ones]
+
+#head[h;t] -> h
+#tail[h;t] -> t
+
+#ones.tail.head
+#head(ones)
 
 
 `},
@@ -670,6 +676,22 @@ func TestEvalBoolExpr(t *testing.T) {
 		{"3 > 2", true},
 		{"3 > 3", false},
 		{"3 > 4", false},
+		{`
+
+same(x,x) -> true
+same(x,y) -> false
+
+same(7,7)
+
+`, true},
+		{`
+
+same(x,x) -> true
+same(x,y) -> false
+
+same(7,77)
+
+`, false},
 	}
 
 	for _, tt := range tests {

@@ -61,7 +61,14 @@ func (tr *Translator) translateBlock(env *ExprEnv, blockTree parse_tree.Block) E
 func (tr *Translator) translateInline(env *ExprEnv, inlineTree parse_tree.Inline) Expr {
 	switch inline := inlineTree.(type) {
 	case *parse_tree.InlineID:
-		return &LookupExpr{Name: inline.Name} // TODO optimize lookup
+		if inline.Name[0] == '@' { // TODO: is this ridiculous?
+			// this is an argument binding, which will be appended
+			// to the end of the bindings, hence (0, -1) meaning
+			// "last element of this env"
+			return &LookupExpr{Name: inline.Name, Depth: 0, Index: -1}
+		}
+		depth, idx := env.LookupIndices(inline.Name)
+		return &LookupExpr{Name: inline.Name, Depth: depth, Index: idx}
 	case *parse_tree.InlineUnopExpr:
 		return &UnopExpr{
 			Token: inline.Token,
@@ -90,13 +97,11 @@ func (tr *Translator) translateJustExprBlock(env *ExprEnv, block *parse_tree.Jus
 }
 
 type toAssert struct {
-	lhsEqual   parse_tree.Inline
+	lhsEqual   *parse_tree.InlineID
 	rhsEqual   parse_tree.Block
 	listIsCons parse_tree.Block
 	listIsNil  parse_tree.Block
 }
-
-var equalToken = token.Token{Type: token.Equal, Literal: "=="}
 
 func (tr *Translator) translateLetBlock(env *ExprEnv, block *parse_tree.LetBlock) *LetExpr {
 	// We create two new envs: one temporary one to hold the
@@ -119,6 +124,17 @@ func (tr *Translator) translateLetBlock(env *ExprEnv, block *parse_tree.LetBlock
 		preAsserts = tr.partitionDecl(preEnv, postEnv, preAsserts, decl.LVal, decl.Expr, false)
 	}
 
+	// ensure binding names are unique
+	uniqueNames := map[string]bool{}
+
+	for _, b := range postEnv.Bindings {
+		if _, ok := uniqueNames[b.Name]; ok {
+			panic("[internal translator error] should not be possible to get two bindings with the same name")
+		}
+
+		uniqueNames[b.Name] = true
+	}
+
 	// Now that we know the name half of all bindings in preEnv,
 	// we can proceed with translation of sub-expressions to populate
 	// postEnv and le.Asserts.
@@ -131,15 +147,17 @@ func (tr *Translator) translateLetBlock(env *ExprEnv, block *parse_tree.LetBlock
 		case !isNil(ta.listIsNil):
 			newAssert = &AssertListIsNilExpr{List: tr.translateBlock(postEnv, ta.listIsNil)}
 		default:
-			newAssert = &BinopExpr{
-				Token: equalToken,
-				LExpr: tr.translateInline(postEnv, ta.lhsEqual),
+			depth, idx := postEnv.LookupIndices(ta.lhsEqual.Name)
+
+			newAssert = &AssertEqualExpr{
+				LExpr: &LookupExpr{Name: ta.lhsEqual.Name, Depth: depth, Index: idx},
 				RExpr: tr.translateBlock(postEnv, ta.rhsEqual),
 			}
 		}
 
 		le.Asserts = append(le.Asserts, newAssert)
 	}
+
 	for i, bindBlock := range preEnv.Bindings {
 		postEnv.Bindings[i].Expr = tr.translateBlock(postEnv, bindBlock.Expr)
 	}
@@ -175,9 +193,9 @@ func (tr *Translator) partitionDecl(
 			asserts = append(asserts, toAssert{lhsEqual: lhs, rhsEqual: rhs})
 		} else {
 			// binding
-			preEnv.Bindings = append(preEnv.Bindings, ParseBinding{Name: lhs.Name, Expr: rhs})
-			postEnv.Bindings = append(postEnv.Bindings, ExprBinding{Name: lhs.Name, Expr: nil})
-			// that `nil` will be populated in just a bit with the translated `rhs`
+			preEnv.Bindings = append(preEnv.Bindings, &ParseBinding{Name: lhs.Name, Expr: rhs})
+			postEnv.Bindings = append(postEnv.Bindings, &ExprBinding{Name: lhs.Name, Expr: nil})
+			// that `Expr: nil` will be populated in just a bit with the translated `rhs`
 		}
 	case *parse_tree.InlineTuple:
 		// `(a, b) = expr`
@@ -268,15 +286,10 @@ func (tr *Translator) translateFunc(env *ExprEnv, funcBlockPieces []*parse_tree.
 			Expr: piece.Expr,
 		}
 
-		argEnv := &ExprEnv{
-			Parent:   env,
-			Bindings: []ExprBinding{{Name: argName, Expr: Arg}},
-		}
-
-		letExprs = append(letExprs, tr.translateLetBlock(argEnv, letBlock))
+		letExprs = append(letExprs, tr.translateLetBlock(env, letBlock))
 	}
 
-	return &FuncExpr{FuncPartExprs: letExprs, ArgName: argName}
+	return &FuncExpr{FuncPieceExprs: letExprs, ArgName: argName}
 }
 
 func (tr *Translator) translateTupleDestructureBlock(env *ExprEnv, block *TupleDestructureBlock) Expr {

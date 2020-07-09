@@ -17,7 +17,7 @@ import (
 
 type ExprEnv struct {
 	Parent   *ExprEnv
-	Bindings []ExprBinding
+	Bindings []*ExprBinding
 }
 
 type ExprBinding struct {
@@ -47,6 +47,35 @@ func (e *ExprEnv) isDefined(name string) bool {
 	return false
 }
 
+func (e *ExprEnv) LookupIndices(name string) (int, int) {
+	var depth int
+	env := e
+
+	for ; env != TopLevelExprEnv; depth++ {
+		// check local bindings
+		for idx, b := range env.Bindings {
+			if b.Name == name {
+				return depth, idx
+			}
+		}
+		env = env.Parent
+	}
+	// A depth of -1 means this is a top-level binding.
+	// TODO: create literals for these
+	if name == "true" {
+		return -1, MaxInt
+	}
+	if name == "false" {
+		return -1, MinInt
+	}
+	if i, err := strconv.Atoi(name); err == nil {
+		return -1, i
+	}
+
+	panic("LookupError: undefined identifier: " + name)
+	return -1, -1
+}
+
 func topLevelDefined(name string) bool {
 	if name == "true" {
 		return true
@@ -65,7 +94,7 @@ func topLevelDefined(name string) bool {
 
 type ParseEnv struct {
 	parent   *ParseEnv
-	Bindings []ParseBinding
+	Bindings []*ParseBinding
 }
 
 type ParseBinding struct {
@@ -94,3 +123,6 @@ func (e *ParseEnv) isDefined(name string) bool {
 
 	return false
 }
+
+const MaxInt = int(^uint(0) >> 1)
+const MinInt = -MaxInt - 1
