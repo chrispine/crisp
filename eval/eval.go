@@ -255,6 +255,17 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 	return evalBinop(expr.Token.Type, someLeftVal, someRightVal)
 }
 func evalBinop(binopType token.TokType, someLeftVal value.Value, someRightVal value.Value) value.Value {
+	// the nil list is represented by a nil pointer, so we have to test that first
+	if isNil(someLeftVal) {
+		switch binopType {
+		case token.Equal:
+			if isNil(someRightVal) {
+				return value.True
+			}
+			return value.False
+		}
+	}
+
 	switch leftVal := someLeftVal.(type) {
 	case *value.Int:
 		if rightVal, ok := someRightVal.(*value.Int); ok {
@@ -356,6 +367,9 @@ func evalBinop(binopType token.TokType, someLeftVal value.Value, someRightVal va
 		}
 	case *value.Func:
 		switch binopType {
+		case token.Equal:
+			panic("not allowed to see if two functions are equal (no notion of function equality)")
+			return nil
 		case token.At:
 			return apply(leftVal, someRightVal)
 		case token.Mult:
@@ -373,6 +387,54 @@ func evalBinop(binopType token.TokType, someLeftVal value.Value, someRightVal va
 
 					return composition
 				}
+			}
+		}
+	case *value.Tuple:
+		if rightVal, ok := someRightVal.(*value.Tuple); ok {
+			switch binopType {
+			case token.Equal:
+				// TODO: type checker should ensure they are the same size tuple, rather than a runtime check
+				if len(leftVal.Values) != len(rightVal.Values) {
+					return value.False
+				}
+				for i, v := range leftVal.Values {
+					if !evalBinop(token.Equal, v, rightVal.Values[i]).(*value.Bool).Value {
+						return value.False
+					}
+				}
+				return value.True
+			}
+		}
+	case *value.Record:
+		if rightVal, ok := someRightVal.(*value.Record); ok {
+			switch binopType {
+			case token.Equal:
+				// TODO: type checker should ensure they have the same fields, rather than a runtime check
+				if len(leftVal.Fields) != len(rightVal.Fields) {
+					return value.False
+				}
+				for i, f := range leftVal.Fields {
+					if f.Name != rightVal.Fields[i].Name {
+						return value.False
+					}
+					if !evalBinop(token.Equal, f.Value, rightVal.Fields[i].Value).(*value.Bool).Value {
+						return value.False
+					}
+				}
+				return value.True
+			}
+		}
+	case *value.Cons:
+		if rightVal, ok := someRightVal.(*value.Cons); ok {
+			switch binopType {
+			case token.Equal:
+				if isNil(rightVal) {
+					return value.False
+				}
+				if !evalBinop(token.Equal, leftVal.Head, rightVal.Head).(*value.Bool).Value {
+					return value.False
+				}
+				return evalBinop(token.Equal, leftVal.Tail, rightVal.Tail)
 			}
 		}
 	}

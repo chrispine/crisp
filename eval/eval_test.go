@@ -812,6 +812,8 @@ func TestEvalBoolExpr(t *testing.T) {
 		{"true != true", false},
 		{"true != false", true},
 		{"3 == 3", true},
+		{"3 == (3)", true},
+		{"(3) == (3)", true},
 		{"3 != 3", false},
 		{"3 != 4", true},
 		{"3 < 4", true},
@@ -826,6 +828,16 @@ func TestEvalBoolExpr(t *testing.T) {
 		{"3 > 2", true},
 		{"3 > 3", false},
 		{"3 > 4", false},
+		{"() == ()", true},
+		{"(1,2,3) == (1,2,3)", true},
+		{"(1,2,3) == (1,3,2)", false},
+		{"{x:2} == {x:2}", true},
+		{"{x:2} == {x:3}", false},
+		{"{x:2, y:3} == {y:3, x:2}", true},
+		{"[] == []", true},
+		{"[1,2,3] == [1,2,3]", true},
+		{"[1,2] == [1,2,3]", false},
+		{"[1,2,3] == [1,2]", false},
 		{`
 
 same(x,x) -> true
