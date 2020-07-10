@@ -211,11 +211,16 @@ DeclsAndExpr ->
 	«BlockLen»  DeclBlock*  ExprBlock
 */
 func (p *Parser) parseDeclsAndExpr() ([]*parse_tree.PatMatBlock, parse_tree.Block) {
-	var decls []*parse_tree.PatMatBlock
-
 	numDecls := p.curToken.NumLines - 1
 	p.expectToken(token.BlockLen)
 
+	decls := p.parseDeclBlocks(numDecls)
+
+	return decls, p.parseExprBlock()
+}
+
+func (p *Parser) parseDeclBlocks(numDecls int) []*parse_tree.PatMatBlock {
+	var decls []*parse_tree.PatMatBlock
 	var currFunc *parse_tree.FuncBlock
 	var prevFunc *parse_tree.FuncBlock
 	var prevDecl *parse_tree.PatMatBlock
@@ -240,7 +245,7 @@ func (p *Parser) parseDeclsAndExpr() ([]*parse_tree.PatMatBlock, parse_tree.Bloc
 		prevDecl = currDecl
 	}
 
-	return decls, p.parseExprBlock()
+	return decls
 }
 
 func shouldCombine(prevDecl *parse_tree.PatMatBlock, currDecl *parse_tree.PatMatBlock) bool {
@@ -255,9 +260,14 @@ func shouldCombine(prevDecl *parse_tree.PatMatBlock, currDecl *parse_tree.PatMat
 /*
 ☉DeclBlock ->
 	PatMatBlock
+	ModuleDeclBlock
 	FuncDeclBlock
 */
 func (p *Parser) parseDeclBlock() (*parse_tree.PatMatBlock, bool) {
+	if p.curTokenIs(token.Module) {
+		return p.parseModuleDeclBlock(), false // false: this was not a function declaration
+	}
+
 	atom := p.parseAtom()
 
 	if p.curTokenIs(token.PatMat) {
@@ -283,6 +293,30 @@ func (p *Parser) parsePatMatBlock(atom parse_tree.Inline) *parse_tree.PatMatBloc
 	lit.Expr = p.parseExprBlock()
 
 	return lit
+}
+
+/*
+ModuleDeclBlock ->
+	'module'  ID  '|->'  ModuleBody  '<-|'
+*/
+func (p *Parser) parseModuleDeclBlock() *parse_tree.PatMatBlock {
+	lit := &parse_tree.ModuleBlock{Token: *p.curToken}
+
+	p.expectToken(token.Module)
+
+	atom := p.parseID()
+	if !atom.IsLVal() {
+		p.error(fmt.Sprintf("atom %v is not an l-value", atom))
+	}
+
+	p.expectToken(token.Indent)
+	p.parseModuleBody(lit)
+	p.expectToken(token.Dedent)
+
+	return &parse_tree.PatMatBlock{Token: token.Token{
+		Type:    token.PatMat,
+		Literal: "=",
+	}, LVal: atom, Expr: lit}
 }
 
 /*
@@ -347,6 +381,7 @@ func makeNestedFuncBlocks(arrowToken token.Token, args []parse_tree.Inline, inne
 	CaseBlock
 	TupleBlock
 	ListBlock
+	ModuleBlock
 */
 func (p *Parser) parseExprBlock() parse_tree.Block {
 	switch p.curToken.Type {
@@ -360,6 +395,8 @@ func (p *Parser) parseExprBlock() parse_tree.Block {
 		return p.parseRecordBlock()
 	case token.LBlock:
 		return p.parseListBlock()
+	case token.Module:
+		return p.parseModuleBlock()
 	}
 	// so it's either a FuncBlock or a JustExprBlock
 	atom := p.parseAtom()
@@ -481,7 +518,7 @@ func (p *Parser) parseCaseBlock() *parse_tree.CaseBlock {
 
 /*
 TupleBlock ->
-	'(*)'  |->'  ExprBlock+  '<-|'
+	'(*)'  '|->'  «BlockLen»  ExprBlock+  '<-|'
 */
 func (p *Parser) parseTupleBlock() *parse_tree.TupleBlock {
 	lit := &parse_tree.TupleBlock{Token: *p.curToken}
@@ -504,7 +541,7 @@ func (p *Parser) parseTupleBlock() *parse_tree.TupleBlock {
 
 /*
 RecordBlock ->
-	'(*)'  |->'  (ID  ':'  ExprBlock)+  '<-|'
+	'(*)'  '|->'  «BlockLen»  (ID  ':'  ExprBlock)+  '<-|'
 */
 func (p *Parser) parseRecordBlock() *parse_tree.RecordBlock {
 	lit := &parse_tree.RecordBlock{Token: *p.curToken, Elems: map[string]parse_tree.Block{}}
@@ -532,7 +569,7 @@ func (p *Parser) parseRecordBlock() *parse_tree.RecordBlock {
 
 /*
 ListBlock ->
-	'[*]'  |->'  ExprBlock+  (';'  ExprBlock)?  '<-|'
+	'[*]'  '|->'  «BlockLen»  ExprBlock+  (';'  ExprBlock)?  '<-|'
 */
 func (p *Parser) parseListBlock() parse_tree.Block {
 	lBlockToken := *p.curToken
@@ -576,6 +613,45 @@ func makeNestedConsBlocks(lBlockToken token.Token, heads []parse_tree.Block, tai
 		Token: lBlockToken,
 		Head:  heads[0],
 		Tail:  makeNestedConsBlocks(lBlockToken, heads[1:], tail),
+	}
+}
+
+/*
+ModuleBlock ->
+	'module'  '|->'  ModuleBody  '<-|'
+*/
+func (p *Parser) parseModuleBlock() *parse_tree.ModuleBlock {
+	lit := &parse_tree.ModuleBlock{Token: *p.curToken}
+
+	p.expectToken(token.Module)
+	p.expectToken(token.Indent)
+	p.parseModuleBody(lit)
+	p.expectToken(token.Dedent)
+
+	return lit
+}
+
+/*
+ModuleBody ->
+	«BlockLen»  ('export'  ID  '\n')+  DeclBlock+
+*/
+func (p *Parser) parseModuleBody(lit *parse_tree.ModuleBlock) {
+	numLines := p.curToken.NumLines
+	p.expectToken(token.BlockLen)
+
+	for p.curTokenIs(token.Export) {
+		p.expectToken(token.Export)
+		lit.Exports = append(lit.Exports, p.curToken.Literal)
+		p.expectToken(token.ID)
+		p.expectToken(token.NewLine)
+	}
+
+	numDecls := numLines - len(lit.Exports)
+
+	lit.Decls = p.parseDeclBlocks(numDecls)
+
+	if len(lit.Decls) < 1 {
+		p.error("invalid module definition: must include at least one declaration")
 	}
 }
 

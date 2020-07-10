@@ -24,16 +24,23 @@ Program ->
 DeclsAndExpr ->
 	«BlockLen»  DeclBlock*  ExprBlock
 
+ModuleBody ->
+	«BlockLen»  ('export'  ID  '\n')+  DeclBlock+
+
 
 // block elements
 
 
 ☉DeclBlock ->
 	PatMatBlock
+	ModuleDeclBlock
 	FuncDeclBlock
 
 PatMatBlock ->
 	LValAtom  '='  ExprBlock
+
+ModuleDeclBlock ->
+	'module'  ID  '|->'  ModuleBody  '<-|'
 
 FuncDeclBlock ->
 	ID  (LValAtom)*  FuncBlock                   // sugar for currying and 'let'
@@ -45,6 +52,7 @@ FuncDeclBlock ->
 	CaseBlock
 	TupleBlock
 	ListBlock
+	ModuleBlock
 
 JustExprBlock ->
 		Expr  '\n'                   // TODO: allow (by collapsing) multi-line expr
@@ -60,13 +68,16 @@ CaseBlock ->
 	'case'  Expr  '|->'  «BlockLen»  FuncBlock+  '<-|'
 
 TupleBlock ->
-	'(*)'  |->'  ExprBlock+  '<-|'
+	'(*)'  '|->'  «BlockLen»  ExprBlock+  '<-|'
 
 RecordBlock ->
-	'(*)'  |->'  (ID  ':'  ExprBlock)+  '<-|'
+	'(*)'  '|->'  «BlockLen»  (ID  ':'  ExprBlock)+  '<-|'
 
 ListBlock ->
-	'[*]'  |->'  ExprBlock+  (';'  ExprBlock)?  '<-|'
+	'[*]'  '|->'  «BlockLen»  ExprBlock+  (';'  ExprBlock)?  '<-|'
+
+ModuleBlock ->
+	'module'  '|->'  ModuleBody  '<-|'
 
 
 // inline elements
@@ -312,6 +323,22 @@ func (cb *ConsBlock) String() string {
 	}
 
 	out.WriteString("}\n")
+
+	return out.String()
+}
+
+type ModuleBlock struct {
+	Token   token.Token // the token.Module token
+	Exports []string
+	Decls   []*PatMatBlock
+}
+
+func (mb *ModuleBlock) BlockNode()           {}
+func (mb *ModuleBlock) TokenLiteral() string { return mb.Token.Literal }
+func (mb *ModuleBlock) String() string {
+	var out bytes.Buffer
+
+	out.WriteString("[MODULE BLOCK]")
 
 	return out.String()
 }

@@ -45,6 +45,8 @@ func (tr *Translator) translateBlock(env *ExprEnv, blockTree parse_tree.Block) E
 		return tr.translateFuncBlock(env, block)
 	case *parse_tree.CaseBlock:
 		return tr.translateCaseBlock(env, block)
+	case *parse_tree.ModuleBlock:
+		return tr.translateModuleBlock(env, block)
 	case *parse_tree.TupleBlock:
 		return tr.translateTupleBlock(env, block)
 	case *parse_tree.RecordBlock:
@@ -305,6 +307,36 @@ func (tr *Translator) translateCaseBlock(env *ExprEnv, block *parse_tree.CaseBlo
 		LExpr: tr.translateFuncBlock(env, block.Cases),
 		RExpr: tr.translateInline(env, block.Expr),
 	}
+}
+
+func (tr *Translator) translateModuleBlock(env *ExprEnv, block *parse_tree.ModuleBlock) *LetExpr {
+	elems := map[string]parse_tree.Inline{}
+
+	for _, ex := range block.Exports {
+		elems[ex] = &parse_tree.InlineID{
+			Token: token.Token{Type: token.ID, Literal: ex},
+			Name:  ex,
+		}
+	}
+
+	if len(elems) != len(block.Exports) {
+		tr.error("illegal module definition: exports must be unique")
+	}
+
+	record := &parse_tree.InlineRecord{
+		Token: token.Token{Type: token.LBrace, Literal: "{"},
+		Elems: elems,
+	}
+	lit := &parse_tree.LetBlock{
+		Token: token.Token{Type: token.Let, Literal: "let"},
+		Decls: block.Decls,
+		Expr: &parse_tree.JustExprBlock{
+			Token: token.ExprBlockToken,
+			Expr:  record,
+		},
+	}
+
+	return tr.translateLetBlock(env, lit)
 }
 
 func (tr *Translator) translateFuncBlock(env *ExprEnv, block *parse_tree.FuncBlock) *FuncExpr {

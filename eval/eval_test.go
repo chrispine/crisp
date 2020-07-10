@@ -708,17 +708,27 @@ get_y{x: 11, z: 33, y: 22}
 
 
 `},
-		{5, `
+		{55, `
 
 
-5
+module foo
+	export b
+	a = 99
+	b = 55
+
+foo:b
 
 
 `},
-		{5, `
+		{55, `
 
 
-5
+foo = module
+	export b
+	a = 22
+	b = 33 + a
+
+foo:b
 
 
 `},
