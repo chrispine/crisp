@@ -704,7 +704,7 @@ add @ {y:3, x:2}
 
 get_y{y: y_val, _} -> y_val
 
-get_y{x: 11, z: 33, y: 22}
+get_y{x: 11, foo: true, y: 22}
 
 
 `},
@@ -738,7 +738,7 @@ foo:b
 len[   ] -> 0
 len[_;t] -> 1 + len(t)
 
-len[1, 2, 3] + len[true, false]
+len[1, 2, 3] + len[{x:5, b:true}, {b:false, x:-5}]
 
 
 `},

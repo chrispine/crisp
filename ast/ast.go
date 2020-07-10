@@ -73,8 +73,13 @@ type TupleExpr struct {
 func (e *TupleExpr) expr()          {}
 func (e *TupleExpr) String() string { return "TupleExpr" }
 
+type RecordFieldExpr struct {
+	Name string
+	Expr Expr
+}
+
 type RecordExpr struct {
-	Elems       map[string]Expr
+	Fields      []RecordFieldExpr
 	PartialLVal bool
 }
 

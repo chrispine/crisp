@@ -5,7 +5,6 @@ import (
 	"crisp/token"
 	"crisp/value"
 	"fmt"
-	"sort"
 )
 
 func Eval(env *value.Env, someExpr ast.Expr) value.Value {
@@ -134,19 +133,9 @@ func evalRecordExpr(env *value.Env, expr *ast.RecordExpr, binding *value.Binding
 		binding.Value = record
 	}
 
-	keys := make([]string, len(expr.Elems))
-
-	i := 0
-	for k := range expr.Elems {
-		keys[i] = k
-		i++
-	}
-
-	sort.Strings(keys)
-
-	for _, name := range keys {
-		val := Eval(env, expr.Elems[name])
-		record.Fields = append(record.Fields, value.RecordField{Name: name, Value: val})
+	for _, field := range expr.Fields {
+		val := Eval(env, field.Expr)
+		record.Fields = append(record.Fields, value.RecordField{Name: field.Name, Value: val})
 	}
 
 	return record

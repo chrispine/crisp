@@ -5,6 +5,7 @@ import (
 	"crisp/token"
 	"fmt"
 	"reflect"
+	"sort"
 )
 
 // translates parse trees into ASTs
@@ -431,7 +432,7 @@ func (tr *Translator) translateInlineRecord(env *ExprEnv, inline *parse_tree.Inl
 		elems[k] = tr.translateInline(env, v)
 	}
 
-	return &RecordExpr{elems, inline.PartialLVal}
+	return createRecordExpr(elems, inline.PartialLVal)
 }
 func (tr *Translator) translateRecordBlock(env *ExprEnv, block *parse_tree.RecordBlock) *RecordExpr {
 	elems := map[string]Expr{}
@@ -440,8 +441,37 @@ func (tr *Translator) translateRecordBlock(env *ExprEnv, block *parse_tree.Recor
 		elems[k] = tr.translateBlock(env, v)
 	}
 
-	return &RecordExpr{Elems: elems}
+	return createRecordExpr(elems, false)
 }
+func createRecordExpr(elems map[string]Expr, partialLVal bool) *RecordExpr {
+	record := &RecordExpr{PartialLVal: partialLVal}
+
+	keys := make([]string, len(elems))
+
+	i := 0
+	for k := range elems {
+		keys[i] = k
+		i++
+	}
+
+	sort.Strings(keys)
+
+	for _, name := range keys {
+		val := elems[name]
+		record.Fields = append(record.Fields, RecordFieldExpr{Name: name, Expr: val})
+	}
+
+	return record
+}
+
+/*
+func evalRecordExpr(env *value.Env, expr *ast.RecordExpr, binding *value.Binding) *value.Record {
+
+
+
+	return record
+}
+*/
 
 func (tr *Translator) translateInlineCons(env *ExprEnv, inline *parse_tree.InlineCons) *ConsExpr {
 	if inline == parse_tree.InlineNil {

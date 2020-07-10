@@ -556,6 +556,10 @@ func (p *Parser) parseRecordBlock() *parse_tree.RecordBlock {
 		lit.Elems[name] = p.parseExprBlock()
 	}
 
+	if len(lit.Elems) != numElems {
+		p.error("illegal record block: field names must be unique")
+	}
+
 	p.expectToken(token.Dedent)
 
 	return lit
@@ -752,6 +756,8 @@ func (p *Parser) parseRecord() *parse_tree.InlineRecord {
 		return nil
 	}
 
+	numElems := 0
+
 Loop:
 	for {
 		if p.curTokenIs(token.NoMatch) {
@@ -766,6 +772,7 @@ Loop:
 		p.expectToken(token.Colon)
 
 		lit.Elems[name] = p.parseExpr()
+		numElems++
 
 		switch p.curToken.Type {
 		case token.RBrace:
@@ -777,6 +784,10 @@ Loop:
 			p.error(fmt.Sprintf("malformed record: found token %v", p.curToken))
 			return nil
 		}
+	}
+
+	if len(lit.Elems) != numElems {
+		p.error("illegal inline record: field names must be unique")
 	}
 
 	return lit
