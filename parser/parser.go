@@ -68,6 +68,13 @@ var binopPrecs = []BinopPrecList{
 		token.Exp,
 		token.DblExp,
 	}},
+	{lAssoc: true, ops: []token.TokType{ //  .  @
+		token.Dot,
+		token.At,
+	}},
+	{lAssoc: true, ops: []token.TokType{ //  :
+		token.Colon,
+	}},
 }
 
 type Parser struct {
@@ -149,6 +156,11 @@ func (p *Parser) expectToken(ts ...token.TokType) {
 	}
 
 	p.error(fmt.Sprintf("expected next token to be in %v, got %v instead", ts, p.curToken))
+}
+
+func (p *Parser) injectToken(tok *token.Token) {
+	p.curToken = tok
+	p.l.Rewind()
 }
 
 func (p *Parser) curTokenIs(t token.TokType) bool {
@@ -344,6 +356,8 @@ func (p *Parser) parseExprBlock() parse_tree.Block {
 		return p.parseCaseBlock()
 	case token.TBlock:
 		return p.parseTupleBlock()
+	case token.RBlock:
+		return p.parseRecordBlock()
 	case token.LBlock:
 		return p.parseListBlock()
 	}
@@ -477,10 +491,38 @@ func (p *Parser) parseTupleBlock() *parse_tree.TupleBlock {
 	p.expectToken(token.BlockLen)
 
 	if numElems <= 0 {
-		p.error(fmt.Sprintf("invalide TupleBlock parsed with %v elements", numElems))
+		p.error(fmt.Sprintf("invalid TupleBlock parsed with %v elements", numElems))
 	}
 	for i := 0; i < numElems; i++ {
 		lit.Exprs = append(lit.Exprs, p.parseExprBlock())
+	}
+
+	p.expectToken(token.Dedent)
+
+	return lit
+}
+
+/*
+RecordBlock ->
+	'(*)'  |->'  (ID  ':'  ExprBlock)+  '<-|'
+*/
+func (p *Parser) parseRecordBlock() *parse_tree.RecordBlock {
+	lit := &parse_tree.RecordBlock{Token: *p.curToken, Elems: map[string]parse_tree.Block{}}
+	p.expectToken(token.RBlock)
+	p.expectToken(token.Indent)
+	numElems := p.curToken.NumLines
+	p.expectToken(token.BlockLen)
+
+	if numElems <= 0 {
+		p.error(fmt.Sprintf("invalid RecordBlock parsed with %v elements", numElems))
+	}
+	for i := 0; i < numElems; i++ {
+		//lit.Exprs = append(lit.Exprs, p.parseExprBlock())
+		name := p.curToken.Literal
+		p.expectToken(token.ID)
+		p.expectToken(token.Colon)
+
+		lit.Elems[name] = p.parseExprBlock()
 	}
 
 	p.expectToken(token.Dedent)
@@ -500,7 +542,7 @@ func (p *Parser) parseListBlock() parse_tree.Block {
 	p.expectToken(token.BlockLen)
 
 	if numElems <= 0 {
-		p.error(fmt.Sprintf("invalide ListBlock parsed with %v elements", numElems))
+		p.error(fmt.Sprintf("invalid ListBlock parsed with %v elements", numElems))
 	}
 
 	var heads []parse_tree.Block
@@ -541,6 +583,7 @@ func makeNestedConsBlocks(lBlockToken token.Token, heads []parse_tree.Block, tai
 ☉Atom ->
 	ID
 	Tuple
+	Record
 	List
 	UnopExpr
 */
@@ -552,6 +595,8 @@ func (p *Parser) parseAtom() parse_tree.Inline {
 		return p.parseNoMatch()
 	case token.LParen:
 		return p.parseTuple()
+	case token.LBrace:
+		return p.parseRecord()
 	case token.LBracket:
 		return p.parseList()
 	}
@@ -617,6 +662,52 @@ Loop:
 	}
 
 	lit.Exprs = exprs
+
+	return lit
+}
+
+/*
+Record ->
+	'{'  ID  ':'  Expr  (','  ID  ':'  Expr)*  '}'
+*/
+func (p *Parser) parseRecord() *parse_tree.InlineRecord {
+	lit := &parse_tree.InlineRecord{Token: *p.curToken, Elems: map[string]parse_tree.Inline{}}
+
+	p.expectToken(token.LBrace)
+
+	// check for unit (empty tuple)
+	if p.curTokenIs(token.RBrace) {
+		p.expectToken(token.RBrace)
+		p.error("Chris wants to know why what use-case calls for empty records.")
+		return nil
+	}
+
+Loop:
+	for {
+		if p.curTokenIs(token.NoMatch) {
+			// this must be an l-value in a partial pattern match
+			lit.PartialLVal = true
+			p.expectToken(token.NoMatch)
+			p.expectToken(token.RBrace)
+			break
+		}
+		name := p.curToken.Literal
+		p.expectToken(token.ID)
+		p.expectToken(token.Colon)
+
+		lit.Elems[name] = p.parseExpr()
+
+		switch p.curToken.Type {
+		case token.RBrace:
+			p.expectToken(token.RBrace)
+			break Loop
+		case token.Comma:
+			p.expectToken(token.Comma)
+		default:
+			p.error(fmt.Sprintf("malformed record: found token %v", p.curToken))
+			return nil
+		}
+	}
 
 	return lit
 }
@@ -734,7 +825,8 @@ func (p *Parser) parseExpressionRest(precedence int, atom parse_tree.Inline) par
 
 		// If we got here, then the next token indicates that
 		// this should be a function call.
-		return p.parseFuncsAndApplyExprs(atom)
+		p.injectToken(&token.AtToken)
+		return atom // was: return p.parseFuncsAndApplyExprs(atom)
 	}
 
 	higherPrecTree := p.parseExpressionRest(precedence+1, atom)
@@ -777,31 +869,4 @@ func (p *Parser) parseExpressionLeft(precedence int, prevTree parse_tree.Inline)
 	}
 
 	return samePrecTree
-}
-
-func (p *Parser) parseFuncsAndApplyExprs(prevTree parse_tree.Inline) *parse_tree.InlineBinopExpr {
-	var fn, arg parse_tree.Inline
-
-	if p.curTokenIs(token.Dot) {
-		p.expectToken(token.Dot)
-		fn = p.parseAtom()
-		arg = prevTree
-	} else {
-		fn = prevTree
-		arg = p.parseAtom()
-	}
-
-	applyExpr := &parse_tree.InlineBinopExpr{
-		Token: token.AtToken,
-		LExpr: fn,
-		RExpr: arg,
-	}
-
-	if isBinop[p.curToken.Type] || isEndOfExpr[p.curToken.Type] {
-		return applyExpr
-	}
-
-	// TODO: more arrow handling here?
-
-	return p.parseFuncsAndApplyExprs(applyExpr)
 }

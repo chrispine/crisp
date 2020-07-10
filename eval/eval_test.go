@@ -490,7 +490,7 @@ double(x) -> 2*x
 
 sqr(x) -> x^2
 
-(double*sqr) 5
+(double*sqr)@5
 
 
 `},
@@ -654,6 +654,67 @@ filter[h;t] f ->
 
 
 `},
+		{3, `
+
+
+point = {x: 3, y: 5}
+
+point:x
+
+
+`},
+		{5, `
+
+
+point = {*}
+	x: 3
+	y: 5
+
+point:y
+
+
+`},
+		{22, `
+
+get_y{x: x_val, y: y_val, z: z_val} -> y_val
+
+get_y{x: 11, y: 22, z: 33}
+
+`},
+		{22, `
+
+
+get_y{x: x_val, y: y_val, z: z_val} -> y_val
+
+get_y{x: 11, z: 33, y: 22}
+
+
+`},
+		{5, `
+
+
+add{x:x, y:y} -> x+y
+
+add @ {y:3, x:2}
+
+
+`},
+		{22, `
+
+
+get_y{y: y_val, _} -> y_val
+
+get_y{x: 11, z: 33, y: 22}
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
 		{5, `
 
 
@@ -714,20 +775,12 @@ func TestEvalIntExpr2(t *testing.T) {
 		expected int
 		program  string
 	}{
-		{4, `
+		{3, `
 
 
+point = {x: 3, y: 5}
 
-head[h;_] -> h
-tail[_;t] -> t
-
-filter[   ] _ -> []
-filter[h;t] f ->
-	case f(h)
-		true  -> [h ; t.filter(f)]
-		false ->      t.filter(f)
-
-[1,2,3,4,5,6,7].filter(x -> x%2 == 0).tail.head
+point:x
 
 
 `},

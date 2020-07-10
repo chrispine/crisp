@@ -6,6 +6,7 @@ import (
 	"crisp/value"
 	"fmt"
 	"reflect"
+	"sort"
 )
 
 func Eval(env *value.Env, someExpr ast.Expr) value.Value {
@@ -31,11 +32,16 @@ func eval(env *value.Env, someExpr ast.Expr, binding *value.Binding) value.Value
 	case *ast.TupleExpr:
 		val = evalTupleExpr(env, expr, binding)
 		binding = nil
-	case *ast.TupleDestructureExpr:
-		val = evalTupleDestructure(env, expr)
+	case *ast.RecordExpr:
+		val = evalRecordExpr(env, expr, binding)
+		binding = nil
 	case *ast.ConsExpr:
 		val = evalConsExpr(env, expr, binding)
 		binding = nil
+	case *ast.RecordLookupExpr:
+		val = evalRecordLookupExpr(env, expr)
+	case *ast.TupleDestructureExpr:
+		val = evalTupleDestructure(env, expr)
 	case *ast.ConsDestructureExpr:
 		val = evalConsDestructure(env, expr)
 	case *ast.AssertEqualExpr:
@@ -105,12 +111,13 @@ func evalLookupExpr(env *value.Env, expr *ast.LookupExpr) value.Value {
 }
 
 func evalTupleExpr(env *value.Env, expr *ast.TupleExpr, binding *value.Binding) *value.Tuple {
-	var values []value.Value
-
 	tuple := &value.Tuple{}
+
 	if binding != nil {
 		binding.Value = tuple
 	}
+
+	var values []value.Value
 
 	for _, elem := range expr.Exprs {
 		values = append(values, Eval(env, elem))
@@ -121,19 +128,38 @@ func evalTupleExpr(env *value.Env, expr *ast.TupleExpr, binding *value.Binding) 
 	return tuple
 }
 
-func evalTupleDestructure(env *value.Env, expr *ast.TupleDestructureExpr) value.Value {
-	tuple := Eval(env, expr.Tuple).(*value.Tuple)
-	// TODO: did I just eval the same expression multiple times, one for each element?
-	// TODO: same question with cons destructuring and all assertion types
+func evalRecordExpr(env *value.Env, expr *ast.RecordExpr, binding *value.Binding) *value.Record {
+	record := &value.Record{}
 
-	return tuple.Values[expr.Index]
+	if binding != nil {
+		binding.Value = record
+	}
+
+	keys := make([]string, len(expr.Elems))
+
+	i := 0
+	for k := range expr.Elems {
+		keys[i] = k
+		i++
+	}
+
+	sort.Strings(keys)
+
+	for _, name := range keys {
+		val := Eval(env, expr.Elems[name])
+		record.Fields = append(record.Fields, value.RecordField{Name: name, Value: val})
+	}
+
+	return record
 }
 
 func evalConsExpr(env *value.Env, expr *ast.ConsExpr, binding *value.Binding) *value.Cons {
 	if expr == ast.NilList {
 		return nil
 	}
+
 	cons := &value.Cons{}
+
 	if binding != nil {
 		binding.Value = cons
 	}
@@ -142,6 +168,28 @@ func evalConsExpr(env *value.Env, expr *ast.ConsExpr, binding *value.Binding) *v
 	cons.Tail = Eval(env, expr.Tail)
 
 	return cons
+}
+
+func evalRecordLookupExpr(env *value.Env, expr *ast.RecordLookupExpr) value.Value {
+	record := Eval(env, expr.Record).(*value.Record)
+
+	// TODO: optimize this to just use an index (once we have types)
+	for _, field := range record.Fields {
+		if expr.Name == field.Name {
+			return field.Value
+		}
+	}
+
+	panic("illegal record name")
+	return nil
+}
+
+func evalTupleDestructure(env *value.Env, expr *ast.TupleDestructureExpr) value.Value {
+	tuple := Eval(env, expr.Tuple).(*value.Tuple)
+	// TODO: did I just eval the same expression multiple times, one for each element?
+	// TODO: same question with cons destructuring and all assertion types, and record lookup
+
+	return tuple.Values[expr.Index]
 }
 
 func evalConsDestructure(env *value.Env, expr *ast.ConsDestructureExpr) value.Value {
@@ -327,6 +375,10 @@ func evalBinop(binopType token.TokType, someLeftVal value.Value, someRightVal va
 				}
 			}
 		}
+	}
+
+	if rightVal, ok := someRightVal.(*value.Func); ok {
+		return apply(rightVal, someLeftVal)
 	}
 
 	panic(fmt.Sprintf("RuntimeError: illegal binop expr: %v", binopType))

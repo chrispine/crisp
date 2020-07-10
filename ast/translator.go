@@ -47,10 +47,14 @@ func (tr *Translator) translateBlock(env *ExprEnv, blockTree parse_tree.Block) E
 		return tr.translateCaseBlock(env, block)
 	case *parse_tree.TupleBlock:
 		return tr.translateTupleBlock(env, block)
+	case *parse_tree.RecordBlock:
+		return tr.translateRecordBlock(env, block)
 	case *parse_tree.ConsBlock:
 		return tr.translateConsBlock(env, block)
 	case *TupleDestructureBlock:
 		return tr.translateTupleDestructureBlock(env, block)
+	case *RecordDestructureBlock:
+		return tr.translateRecordDestructureBlock(env, block)
 	case *ConsDestructureBlock:
 		return tr.translateConsDestructureBlock(env, block)
 	}
@@ -76,6 +80,14 @@ func (tr *Translator) translateInline(env *ExprEnv, inlineTree parse_tree.Inline
 			Expr:  tr.translateInline(env, inline.Expr),
 		}
 	case *parse_tree.InlineBinopExpr:
+		if inline.Token.Type == token.Colon {
+			// this is actually a record lookup
+			name := inline.RExpr.(*parse_tree.InlineID).Name
+			return &RecordLookupExpr{
+				Name:   name,
+				Record: tr.translateInline(env, inline.LExpr),
+			}
+		}
 		return &BinopExpr{
 			Token: inline.Token,
 			LExpr: tr.translateInline(env, inline.LExpr),
@@ -85,6 +97,8 @@ func (tr *Translator) translateInline(env *ExprEnv, inlineTree parse_tree.Inline
 		return tr.translateInlineFunc(env, inline)
 	case *parse_tree.InlineTuple:
 		return tr.translateInlineTuple(env, inline)
+	case *parse_tree.InlineRecord:
+		return tr.translateInlineRecord(env, inline)
 	case *parse_tree.InlineCons:
 		return tr.translateInlineCons(env, inline)
 	case *parse_tree.InlineNoMatch:
@@ -100,10 +114,13 @@ func (tr *Translator) translateJustExprBlock(env *ExprEnv, block *parse_tree.Jus
 }
 
 type toAssert struct {
-	lhsEqual   *parse_tree.InlineID
-	rhsEqual   parse_tree.Block
+	// lhs and rhs are equal
+	lhsEqual *parse_tree.InlineID
+	rhsEqual parse_tree.Block
+	// rhs is a cons cell
 	listIsCons parse_tree.Block
-	listIsNil  parse_tree.Block
+	// rhs is a nil list
+	listIsNil parse_tree.Block
 }
 
 func (tr *Translator) translateLetBlock(env *ExprEnv, block *parse_tree.LetBlock) *LetExpr {
@@ -204,9 +221,18 @@ func (tr *Translator) partitionDecl(
 		// `(a, b) = expr`
 		// Note that we don't need to assert that `rhs` is a tuple, or what size of tuple,
 		// because the type checker will flag that at compile time.
+		// TODO: type checker needs to make sure these are the same size tuples
 		for i, elem := range lhs.Exprs {
 			td := &TupleDestructureBlock{i, rhs}
 			asserts = tr.partitionDecl(preEnv, postEnv, asserts, elem, td, shadowing)
+		}
+	case *parse_tree.InlineRecord:
+		// `{x: foo, y: bar} = expr`
+		// TODO: type checker needs to make sure lhs has all the same fields rhs has, unless lhs.PartialLVal is true
+
+		for k, v := range lhs.Elems {
+			rd := &RecordDestructureBlock{k, rhs}
+			asserts = tr.partitionDecl(preEnv, postEnv, asserts, v, rd, shadowing)
 		}
 	case *parse_tree.InlineCons:
 		// `[a, b]` = expr
@@ -239,6 +265,15 @@ func (td *TupleDestructureBlock) BlockNode()           {}
 func (td *TupleDestructureBlock) TokenLiteral() string { return "«TupleDestructureBlock»" }
 func (td *TupleDestructureBlock) String() string       { return "«TupleDestructureBlock»" }
 
+type RecordDestructureBlock struct {
+	name   string
+	record parse_tree.Block
+}
+
+func (rd *RecordDestructureBlock) BlockNode()           {}
+func (rd *RecordDestructureBlock) TokenLiteral() string { return "«RecordDestructureBlock»" }
+func (rd *RecordDestructureBlock) String() string       { return "«RecordDestructureBlock»" }
+
 type ConsDestructureBlock struct {
 	isHead bool
 	list   parse_tree.Block
@@ -264,7 +299,7 @@ type ConsDestructureExpr struct {
 func (e *ConsDestructureExpr) expr()          {}
 func (e *ConsDestructureExpr) String() string { return "ConsDestructureExpr" }
 
-func (tr *Translator) translateCaseBlock(env *ExprEnv, block *parse_tree.CaseBlock) Expr {
+func (tr *Translator) translateCaseBlock(env *ExprEnv, block *parse_tree.CaseBlock) *BinopExpr {
 	return &BinopExpr{
 		Token: token.AtToken,
 		LExpr: tr.translateFuncBlock(env, block.Cases),
@@ -272,10 +307,10 @@ func (tr *Translator) translateCaseBlock(env *ExprEnv, block *parse_tree.CaseBlo
 	}
 }
 
-func (tr *Translator) translateFuncBlock(env *ExprEnv, block *parse_tree.FuncBlock) Expr {
+func (tr *Translator) translateFuncBlock(env *ExprEnv, block *parse_tree.FuncBlock) *FuncExpr {
 	return tr.translateFunc(env, block.FuncBlockPieces)
 }
-func (tr *Translator) translateInlineFunc(env *ExprEnv, inline *parse_tree.InlineFunc) Expr {
+func (tr *Translator) translateInlineFunc(env *ExprEnv, inline *parse_tree.InlineFunc) *FuncExpr {
 	funcBlockPieces := []*parse_tree.FuncBlockPiece{{
 		LVal: inline.LVal,
 		Expr: &parse_tree.JustExprBlock{Expr: inline.Expr},
@@ -296,7 +331,7 @@ var argPatMatBlock = &parse_tree.PatMatBlock{
 	},
 }
 
-func (tr *Translator) translateFunc(env *ExprEnv, funcBlockPieces []*parse_tree.FuncBlockPiece) Expr {
+func (tr *Translator) translateFunc(env *ExprEnv, funcBlockPieces []*parse_tree.FuncBlockPiece) *FuncExpr {
 	var letExprs []*LetExpr
 
 	for _, piece := range funcBlockPieces {
@@ -317,21 +352,28 @@ func (tr *Translator) translateFunc(env *ExprEnv, funcBlockPieces []*parse_tree.
 	return &FuncExpr{FuncPieceExprs: letExprs}
 }
 
-func (tr *Translator) translateTupleDestructureBlock(env *ExprEnv, block *TupleDestructureBlock) Expr {
+func (tr *Translator) translateTupleDestructureBlock(env *ExprEnv, block *TupleDestructureBlock) *TupleDestructureExpr {
 	return &TupleDestructureExpr{
 		Index: block.index,
 		Tuple: tr.translateBlock(env, block.tuple),
 	}
 }
 
-func (tr *Translator) translateConsDestructureBlock(env *ExprEnv, block *ConsDestructureBlock) Expr {
+func (tr *Translator) translateRecordDestructureBlock(env *ExprEnv, block *RecordDestructureBlock) *RecordLookupExpr {
+	return &RecordLookupExpr{
+		Name:   block.name,
+		Record: tr.translateBlock(env, block.record),
+	}
+}
+
+func (tr *Translator) translateConsDestructureBlock(env *ExprEnv, block *ConsDestructureBlock) *ConsDestructureExpr {
 	return &ConsDestructureExpr{
 		IsHead: block.isHead,
 		List:   tr.translateBlock(env, block.list),
 	}
 }
 
-func (tr *Translator) translateInlineTuple(env *ExprEnv, inline *parse_tree.InlineTuple) Expr {
+func (tr *Translator) translateInlineTuple(env *ExprEnv, inline *parse_tree.InlineTuple) *TupleExpr {
 	var exprs []Expr
 
 	for _, elem := range inline.Exprs {
@@ -340,7 +382,7 @@ func (tr *Translator) translateInlineTuple(env *ExprEnv, inline *parse_tree.Inli
 
 	return &TupleExpr{exprs}
 }
-func (tr *Translator) translateTupleBlock(env *ExprEnv, block *parse_tree.TupleBlock) Expr {
+func (tr *Translator) translateTupleBlock(env *ExprEnv, block *parse_tree.TupleBlock) *TupleExpr {
 	var exprs []Expr
 
 	for _, elem := range block.Exprs {
@@ -350,7 +392,26 @@ func (tr *Translator) translateTupleBlock(env *ExprEnv, block *parse_tree.TupleB
 	return &TupleExpr{exprs}
 }
 
-func (tr *Translator) translateInlineCons(env *ExprEnv, inline *parse_tree.InlineCons) Expr {
+func (tr *Translator) translateInlineRecord(env *ExprEnv, inline *parse_tree.InlineRecord) *RecordExpr {
+	elems := map[string]Expr{}
+
+	for k, v := range inline.Elems {
+		elems[k] = tr.translateInline(env, v)
+	}
+
+	return &RecordExpr{elems, inline.PartialLVal}
+}
+func (tr *Translator) translateRecordBlock(env *ExprEnv, block *parse_tree.RecordBlock) *RecordExpr {
+	elems := map[string]Expr{}
+
+	for k, v := range block.Elems {
+		elems[k] = tr.translateBlock(env, v)
+	}
+
+	return &RecordExpr{Elems: elems}
+}
+
+func (tr *Translator) translateInlineCons(env *ExprEnv, inline *parse_tree.InlineCons) *ConsExpr {
 	if inline == parse_tree.InlineNil {
 		return NilList
 	}
@@ -360,7 +421,7 @@ func (tr *Translator) translateInlineCons(env *ExprEnv, inline *parse_tree.Inlin
 		Tail: tr.translateInline(env, inline.Tail),
 	}
 }
-func (tr *Translator) translateConsBlock(env *ExprEnv, block *parse_tree.ConsBlock) Expr {
+func (tr *Translator) translateConsBlock(env *ExprEnv, block *parse_tree.ConsBlock) *ConsExpr {
 	if block == parse_tree.NilBlock {
 		return NilList
 	}

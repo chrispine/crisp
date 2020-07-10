@@ -32,6 +32,14 @@ type LookupExpr struct {
 func (e *LookupExpr) expr()          {}
 func (e *LookupExpr) String() string { return "LookupExpr" }
 
+type RecordLookupExpr struct {
+	Name   string
+	Record Expr
+}
+
+func (e *RecordLookupExpr) expr()          {}
+func (e *RecordLookupExpr) String() string { return "RecordLookupExpr" }
+
 type UnopExpr struct {
 	Token token.Token // the unop token, e.g. !
 	Expr  Expr
@@ -64,6 +72,14 @@ type TupleExpr struct {
 
 func (e *TupleExpr) expr()          {}
 func (e *TupleExpr) String() string { return "TupleExpr" }
+
+type RecordExpr struct {
+	Elems       map[string]Expr
+	PartialLVal bool
+}
+
+func (e *RecordExpr) expr()          {}
+func (e *RecordExpr) String() string { return "RecordExpr" }
 
 type ConsExpr struct {
 	Head Expr

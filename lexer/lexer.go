@@ -90,6 +90,10 @@ func (l *Lexer) NextToken() *token.Token {
 	return tok
 }
 
+func (l *Lexer) Rewind() {
+	l.nextTokenIdx--
+}
+
 func (l *Lexer) blockLenInc() {
 	l.blockLenStack[len(l.blockLenStack)-1].NumLines++
 }

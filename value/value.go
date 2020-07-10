@@ -15,6 +15,7 @@ const (
 	FuncClass
 	ThunkClass
 	TupleClass
+	RecordClass
 	ConsClass
 )
 
@@ -46,6 +47,17 @@ type Tuple struct {
 
 func (t *Tuple) Class() Class    { return TupleClass }
 func (t *Tuple) Inspect() string { return "INSPECTED_TUPLE" }
+
+type RecordField struct {
+	Name  string
+	Value Value
+}
+type Record struct {
+	Fields []RecordField
+}
+
+func (t *Record) Class() Class    { return RecordClass }
+func (t *Record) Inspect() string { return "INSPECTED_RECORD" }
 
 type Cons struct {
 	Head Value

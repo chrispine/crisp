@@ -62,6 +62,9 @@ CaseBlock ->
 TupleBlock ->
 	'(*)'  |->'  ExprBlock+  '<-|'
 
+RecordBlock ->
+	'(*)'  |->'  (ID  ':'  ExprBlock)+  '<-|'
+
 ListBlock ->
 	'[*]'  |->'  ExprBlock+  (';'  ExprBlock)?  '<-|'
 
@@ -78,12 +81,16 @@ ListBlock ->
 ☉Atom ->
 	ID
 	Tuple
+	Record
 	List
 	UnopExpr
 
 Tuple ->
 	'('  ')'
 	'('  Expr  (','  Expr)*  ')'
+
+Record ->
+	'{'  ID  ':'  Expr  (','  ID  ':'  Expr)*  '}'
 
 List ->
 	'['  ']'
@@ -263,6 +270,26 @@ func (tb *TupleBlock) String() string {
 	return out.String()
 }
 
+type RecordBlock struct {
+	Token token.Token // the token.RBlock token
+	Elems map[string]Block
+}
+
+func (rb *RecordBlock) BlockNode()           {}
+func (rb *RecordBlock) TokenLiteral() string { return rb.Token.Literal }
+func (rb *RecordBlock) String() string {
+	var out bytes.Buffer
+
+	out.WriteString("{*} {\n")
+
+	for k, v := range rb.Elems {
+		out.WriteString(k + ": " + v.String())
+	}
+	out.WriteString("}")
+
+	return out.String()
+}
+
 type ConsBlock struct {
 	Token token.Token // the token.LBlock token
 	Head  Block
@@ -378,6 +405,45 @@ func (it *InlineTuple) String() string {
 		out.WriteString(e.String())
 	}
 	out.WriteString(")")
+
+	return out.String()
+}
+
+type InlineRecord struct {
+	Token       token.Token // the token.LParen token
+	Elems       map[string]Inline
+	PartialLVal bool
+}
+
+func (ir *InlineRecord) IsLVal() bool {
+	for _, v := range ir.Elems {
+		if !v.IsLVal() {
+			return false
+		}
+	}
+
+	return true
+}
+func (ir *InlineRecord) TokenLiteral() string { return ir.Token.Literal }
+func (ir *InlineRecord) String() string {
+	if len(ir.Elems) == 0 {
+		return "{}"
+	}
+
+	var out bytes.Buffer
+
+	firstElem := true
+
+	for k, v := range ir.Elems {
+		if firstElem {
+			out.WriteString("{")
+			firstElem = false
+		} else {
+			out.WriteString(", ")
+		}
+		out.WriteString(k + ": " + v.String())
+	}
+	out.WriteString("}")
 
 	return out.String()
 }

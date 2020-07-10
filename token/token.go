@@ -46,6 +46,7 @@ const (
 
 	// Operators
 	TBlock // (*)
+	RBlock // {*}
 	LBlock // [*]
 	PatMat // =
 	Arrow  // ->
@@ -80,10 +81,10 @@ const (
 	// Delimiters
 	LParen   // (
 	RParen   // )
-	LBracket // [
-	RBracket // ]
 	LBrace   // {
 	RBrace   // }
+	LBracket // [
+	RBracket // ]
 
 	Dot       // .
 	At        // @
@@ -136,13 +137,14 @@ func GetOperators() []Token {
 		{0, Not, strings.TrimSpace("          !     ")},
 
 		{0, TBlock, strings.TrimSpace("      (*)    ")},
+		{0, RBlock, strings.TrimSpace("      {*}    ")},
 		{0, LBlock, strings.TrimSpace("      [*]    ")},
 		{0, LParen, strings.TrimSpace("      (      ")},
 		{0, RParen, strings.TrimSpace("        )    ")},
-		{0, LBracket, strings.TrimSpace("    [      ")},
-		{0, RBracket, strings.TrimSpace("      ]    ")},
 		{0, LBrace, strings.TrimSpace("      {      ")},
 		{0, RBrace, strings.TrimSpace("        }    ")},
+		{0, LBracket, strings.TrimSpace("    [      ")},
+		{0, RBracket, strings.TrimSpace("      ]    ")},
 
 		{0, Dot, strings.TrimSpace("          .     ")},
 		{0, At, strings.TrimSpace("           @     ")},
