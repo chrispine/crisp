@@ -18,7 +18,7 @@ func NewTranslator() *Translator { return &Translator{} }
 // A Crisp program is treated as if it is the interior of a `let` expression.
 func (tr *Translator) Translate(program *parse_tree.Program) Expr {
 	lb := &parse_tree.LetBlock{
-		Token: token.Token{Type: token.Let, Literal: "let"},
+		Token: token.LetToken,
 		Decls: program.Decls,
 		Expr:  program.Expr,
 	}
@@ -328,7 +328,7 @@ func (tr *Translator) translateModuleBlock(env *ExprEnv, block *parse_tree.Modul
 		Elems: elems,
 	}
 	lit := &parse_tree.LetBlock{
-		Token: token.Token{Type: token.Let, Literal: "let"},
+		Token: token.LetToken,
 		Decls: block.Decls,
 		Expr: &parse_tree.JustExprBlock{
 			Token: token.ExprBlockToken,
@@ -351,7 +351,7 @@ func (tr *Translator) translateInlineFunc(env *ExprEnv, inline *parse_tree.Inlin
 }
 
 var argPatMatBlock = &parse_tree.PatMatBlock{
-	Token: token.Token{Type: token.PatMat, Literal: "="},
+	Token: token.PatMatToken,
 	LVal: &parse_tree.InlineUnopExpr{
 		Token: token.ShadowToken,
 		Expr: &parse_tree.InlineID{

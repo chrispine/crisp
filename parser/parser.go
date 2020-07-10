@@ -91,7 +91,7 @@ func New(l *lexer.Lexer) *Parser {
 		l:      l,
 		errors: []string{},
 		unit: &parse_tree.InlineTuple{
-			Token: token.Token{Type: token.LParen, Literal: "("},
+			Token: token.Token{Type: token.LParen, Literal: "()"},
 		},
 	}
 
@@ -313,10 +313,7 @@ func (p *Parser) parseModuleDeclBlock() *parse_tree.PatMatBlock {
 	p.parseModuleBody(lit)
 	p.expectToken(token.Dedent)
 
-	return &parse_tree.PatMatBlock{Token: token.Token{
-		Type:    token.PatMat,
-		Literal: "=",
-	}, LVal: atom, Expr: lit}
+	return &parse_tree.PatMatBlock{Token: token.PatMatToken, LVal: atom, Expr: lit}
 }
 
 /*
@@ -330,7 +327,7 @@ func (p *Parser) parseFuncDeclBlock(atom parse_tree.Inline) *parse_tree.PatMatBl
 	}
 
 	patmat := &parse_tree.PatMatBlock{
-		Token: token.Token{Type: token.PatMat, Literal: "="},
+		Token: token.PatMatToken,
 		LVal:  atom,
 	}
 
@@ -464,10 +461,7 @@ func (p *Parser) parseFuncBlock(atom parse_tree.Inline) *parse_tree.FuncBlock {
 
 	if p.curTokenIs(token.Indent) {
 		p.expectToken(token.Indent)
-		letBlock := &parse_tree.LetBlock{Token: token.Token{
-			Type:    token.Let,
-			Literal: "let",
-		}}
+		letBlock := &parse_tree.LetBlock{Token: token.LetToken}
 		letBlock.Decls, letBlock.Expr = p.parseDeclsAndExpr()
 		lit.FuncBlockPieces[0].Expr = letBlock
 		p.expectToken(token.Dedent)

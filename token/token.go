@@ -12,11 +12,11 @@ type Token struct {
 	Literal  string
 }
 
+// let's create some tokens for our later convenience
 var ExprBlockToken = Token{
 	Type:    ExprBlock,
 	Literal: "«ExprBlock»",
 }
-
 var AtToken = Token{
 	Type:    At,
 	Literal: "@",
@@ -24,6 +24,14 @@ var AtToken = Token{
 var ShadowToken = Token{
 	Type:    Shadow,
 	Literal: "$",
+}
+var LetToken = Token{
+	Type:    Let,
+	Literal: "let",
+}
+var PatMatToken = Token{
+	Type:    PatMat,
+	Literal: "=",
 }
 
 const (
