@@ -64,6 +64,8 @@ type Cons struct {
 	Tail Value
 }
 
+var Nil = &Cons{}
+
 func (c *Cons) Class() Class    { return ConsClass }
 func (c *Cons) Inspect() string { return "INSPECTED_CONS" }
 

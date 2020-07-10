@@ -735,7 +735,10 @@ foo:b
 		{5, `
 
 
-5
+len[   ] -> 0
+len[_;t] -> 1 + len(t)
+
+len[1, 2, 3] + len[true, false]
 
 
 `},

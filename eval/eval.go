@@ -5,7 +5,6 @@ import (
 	"crisp/token"
 	"crisp/value"
 	"fmt"
-	"reflect"
 	"sort"
 )
 
@@ -155,7 +154,7 @@ func evalRecordExpr(env *value.Env, expr *ast.RecordExpr, binding *value.Binding
 
 func evalConsExpr(env *value.Env, expr *ast.ConsExpr, binding *value.Binding) *value.Cons {
 	if expr == ast.NilList {
-		return nil
+		return value.Nil
 	}
 
 	cons := &value.Cons{}
@@ -212,7 +211,7 @@ func evalAssertEqual(env *value.Env, expr *ast.AssertEqualExpr) *value.Bool {
 func evalAssertListIsCons(env *value.Env, expr *ast.AssertListIsConsExpr) *value.Bool {
 	cons := Eval(env, expr.List)
 
-	if isNil(cons) {
+	if cons == value.Nil {
 		return value.False
 	}
 	return value.True
@@ -221,7 +220,7 @@ func evalAssertListIsCons(env *value.Env, expr *ast.AssertListIsConsExpr) *value
 func evalAssertListIsNil(env *value.Env, expr *ast.AssertListIsNilExpr) *value.Bool {
 	cons := Eval(env, expr.List)
 
-	if isNil(cons) {
+	if cons == value.Nil {
 		return value.True
 	}
 	return value.False
@@ -255,17 +254,6 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 	return evalBinop(expr.Token.Type, someLeftVal, someRightVal)
 }
 func evalBinop(binopType token.TokType, someLeftVal value.Value, someRightVal value.Value) value.Value {
-	// the nil list is represented by a nil pointer, so we have to test that first
-	if isNil(someLeftVal) {
-		switch binopType {
-		case token.Equal:
-			if isNil(someRightVal) {
-				return value.True
-			}
-			return value.False
-		}
-	}
-
 	switch leftVal := someLeftVal.(type) {
 	case *value.Int:
 		if rightVal, ok := someRightVal.(*value.Int); ok {
@@ -428,7 +416,14 @@ func evalBinop(binopType token.TokType, someLeftVal value.Value, someRightVal va
 		if rightVal, ok := someRightVal.(*value.Cons); ok {
 			switch binopType {
 			case token.Equal:
-				if isNil(rightVal) {
+				// first check for Nils
+				if leftVal == value.Nil {
+					if rightVal == value.Nil {
+						return value.True
+					}
+					return value.False
+				}
+				if rightVal == value.Nil {
 					return value.False
 				}
 				if !evalBinop(token.Equal, leftVal.Head, rightVal.Head).(*value.Bool).Value {
@@ -520,8 +515,4 @@ func composeFuncs(f *value.Func, g *value.Func) *value.Func {
 	})
 
 	return &value.Func{Env: env, FuncPieceExprs: composedFuncPieceExprs}
-}
-
-func isNil(i interface{}) bool {
-	return i == nil || reflect.ValueOf(i).IsNil()
 }
