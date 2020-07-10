@@ -64,13 +64,13 @@ var binopPrecs = []BinopPrecList{
 		token.Mod,
 		token.DblMod,
 	}},
-	{lAssoc: false, ops: []token.TokType{ //  ^  ^^
-		token.Exp,
-		token.DblExp,
-	}},
 	{lAssoc: true, ops: []token.TokType{ //  .  @
 		token.Dot,
 		token.At,
+	}},
+	{lAssoc: false, ops: []token.TokType{ //  ^  ^^
+		token.Exp,
+		token.DblExp,
 	}},
 	{lAssoc: true, ops: []token.TokType{ //  :
 		token.Colon,
