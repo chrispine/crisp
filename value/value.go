@@ -10,7 +10,8 @@ import (
 type Class int
 
 const (
-	IntClass = iota
+	UnitClass = iota
+	IntClass
 	BoolClass
 	FuncClass
 	ThunkClass
@@ -40,6 +41,13 @@ func (b *Bool) Inspect() string { return fmt.Sprintf("%v", b.Value) }
 
 var True = &Bool{true}
 var False = &Bool{false}
+
+type Unit_ struct{}
+
+func (b *Unit_) Class() Class    { return UnitClass }
+func (b *Unit_) Inspect() string { return "()" }
+
+var Unit = &Unit_{}
 
 type Tuple struct {
 	Values []Value
@@ -80,7 +88,13 @@ func (f *Func) Inspect() string { return "INSPECTED_FUNC" }
 var Identity = &Func{
 	Env: EmptyEnv,
 	FuncPieceExprs: []*ast.LetExpr{{
-		Env:  ast.TopLevelExprEnv,
+		Env: &ast.ExprEnv{
+			Parent: ast.TopLevelExprEnv,
+			Bindings: []*ast.ExprBinding{{
+				Name: ast.ArgName,
+				Expr: &ast.ArgExpr{},
+			}},
+		},
 		Expr: &ast.LookupExpr{Name: ast.ArgName},
 	}},
 }

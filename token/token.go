@@ -21,10 +21,6 @@ var AtToken = Token{
 	Type:    At,
 	Literal: "@",
 }
-var ShadowToken = Token{
-	Type:    Shadow,
-	Literal: "$",
-}
 var LetToken = Token{
 	Type:    Let,
 	Literal: "let",

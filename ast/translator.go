@@ -41,7 +41,7 @@ func (tr *Translator) translateBlock(env *ExprEnv, blockTree parse_tree.Block) E
 	case *parse_tree.JustExprBlock:
 		return tr.translateJustExprBlock(env, block)
 	case *parse_tree.LetBlock:
-		return tr.translateLetBlock(env, block)
+		return tr.translateLetBlock(env, block, false) // this let block is not part of a function
 	case *parse_tree.FuncBlock:
 		return tr.translateFuncBlock(env, block)
 	case *parse_tree.CaseBlock:
@@ -69,14 +69,7 @@ func (tr *Translator) translateBlock(env *ExprEnv, blockTree parse_tree.Block) E
 func (tr *Translator) translateInline(env *ExprEnv, inlineTree parse_tree.Inline) Expr {
 	switch inline := inlineTree.(type) {
 	case *parse_tree.InlineID:
-		if inline.Name == ArgName {
-			// this is an argument binding, which will be appended
-			// to the end of the bindings, hence (0, -1) meaning
-			// "last element of this env"
-			return &LookupExpr{Name: inline.Name, Depth: 0, Index: -1}
-		}
-		depth, idx := env.LookupIndices(inline.Name)
-		return &LookupExpr{Name: inline.Name, Depth: depth, Index: idx}
+		return env.LookupIndices(inline.Name)
 	case *parse_tree.InlineUnopExpr:
 		return &UnopExpr{
 			Token: inline.Token,
@@ -126,13 +119,24 @@ type toAssert struct {
 	listIsNil parse_tree.Block
 }
 
-func (tr *Translator) translateLetBlock(env *ExprEnv, block *parse_tree.LetBlock) *LetExpr {
+func (tr *Translator) translateLetBlock(env *ExprEnv, block *parse_tree.LetBlock, isFunc bool) *LetExpr {
 	// We create two new envs: one temporary one to hold the
 	// pre-translated parse tree expressions, and the one we
 	// will give to the LetExpr to hold the post-translated
 	// AST expressions.
 	preEnv := &ParseEnv{parent: nil}
 	postEnv := &ExprEnv{Parent: env}
+
+	if isFunc {
+		// Bindings[0] is the argument binding.
+		postEnv.Bindings = append(postEnv.Bindings, &ExprBinding{
+			Name: ArgName,
+			Expr: &ArgExpr{},
+		})
+		// We need to keep preEnv and postEnv matching, so toss
+		// in a nil.
+		preEnv.Bindings = append(preEnv.Bindings, nil)
+	}
 
 	le := &LetExpr{Env: postEnv}
 
@@ -170,10 +174,10 @@ func (tr *Translator) translateLetBlock(env *ExprEnv, block *parse_tree.LetBlock
 		case !isNil(ta.listIsNil):
 			newAssert = &AssertListIsNilExpr{List: tr.translateBlock(postEnv, ta.listIsNil)}
 		default:
-			depth, idx := postEnv.LookupIndices(ta.lhsEqual.Name)
+			lExpr := postEnv.LookupIndices(ta.lhsEqual.Name)
 
 			newAssert = &AssertEqualExpr{
-				LExpr: &LookupExpr{Name: ta.lhsEqual.Name, Depth: depth, Index: idx},
+				LExpr: lExpr,
 				RExpr: tr.translateBlock(postEnv, ta.rhsEqual),
 			}
 		}
@@ -182,7 +186,12 @@ func (tr *Translator) translateLetBlock(env *ExprEnv, block *parse_tree.LetBlock
 	}
 
 	for i, bindBlock := range preEnv.Bindings {
-		postEnv.Bindings[i].Expr = tr.translateBlock(postEnv, bindBlock.Expr)
+		if isFunc && i == 0 {
+			// This is the arg binding which we already took care of,
+			// so do nothing.
+		} else {
+			postEnv.Bindings[i].Expr = tr.translateBlock(postEnv, bindBlock.Expr)
+		}
 	}
 
 	le.Expr = tr.translateBlock(postEnv, block.Expr)
@@ -286,22 +295,6 @@ func (td *ConsDestructureBlock) BlockNode()           {}
 func (td *ConsDestructureBlock) TokenLiteral() string { return "«ConsDestructureBlock»" }
 func (td *ConsDestructureBlock) String() string       { return "«ConsDestructureBlock»" }
 
-type TupleDestructureExpr struct {
-	Index int
-	Tuple Expr
-}
-
-func (e *TupleDestructureExpr) expr()          {}
-func (e *TupleDestructureExpr) String() string { return "TupleDestructureExpr" }
-
-type ConsDestructureExpr struct {
-	IsHead bool
-	List   Expr
-}
-
-func (e *ConsDestructureExpr) expr()          {}
-func (e *ConsDestructureExpr) String() string { return "ConsDestructureExpr" }
-
 func (tr *Translator) translateCaseBlock(env *ExprEnv, block *parse_tree.CaseBlock) *BinopExpr {
 	return &BinopExpr{
 		Token: token.AtToken,
@@ -337,7 +330,7 @@ func (tr *Translator) translateModuleBlock(env *ExprEnv, block *parse_tree.Modul
 		},
 	}
 
-	return tr.translateLetBlock(env, lit)
+	return tr.translateLetBlock(env, lit, false) // this let block is not part of a function
 }
 
 func (tr *Translator) translateFuncBlock(env *ExprEnv, block *parse_tree.FuncBlock) *FuncExpr {
@@ -351,19 +344,6 @@ func (tr *Translator) translateInlineFunc(env *ExprEnv, inline *parse_tree.Inlin
 	return tr.translateFunc(env, funcBlockPieces)
 }
 
-var argPatMatBlock = &parse_tree.PatMatBlock{
-	Token: token.PatMatToken,
-	LVal: &parse_tree.InlineUnopExpr{
-		Token: token.ShadowToken,
-		Expr: &parse_tree.InlineID{
-			Token: token.Token{Type: token.ID, Literal: "arg"},
-			Name:  "arg",
-		}},
-	Expr: &parse_tree.JustExprBlock{
-		Expr: &parse_tree.InlineID{Name: ArgName},
-	},
-}
-
 func (tr *Translator) translateFunc(env *ExprEnv, funcBlockPieces []*parse_tree.FuncBlockPiece) *FuncExpr {
 	var letExprs []*LetExpr
 
@@ -374,12 +354,12 @@ func (tr *Translator) translateFunc(env *ExprEnv, funcBlockPieces []*parse_tree.
 				Expr: &parse_tree.JustExprBlock{
 					Expr: &parse_tree.InlineID{Name: ArgName},
 				}},
-				argPatMatBlock,
 			},
 			Expr: piece.Expr,
 		}
+		letExpr := tr.translateLetBlock(env, letBlock, true) // this let block is part of a function
 
-		letExprs = append(letExprs, tr.translateLetBlock(env, letBlock))
+		letExprs = append(letExprs, letExpr)
 	}
 
 	return &FuncExpr{FuncPieceExprs: letExprs}
@@ -406,23 +386,40 @@ func (tr *Translator) translateConsDestructureBlock(env *ExprEnv, block *ConsDes
 	}
 }
 
-func (tr *Translator) translateInlineTuple(env *ExprEnv, inline *parse_tree.InlineTuple) *TupleExpr {
+func (tr *Translator) translateInlineTuple(env *ExprEnv, inline *parse_tree.InlineTuple) Expr {
+	if len(inline.Exprs) < 1 {
+		return Unit
+	}
+	if len(inline.Exprs) == 1 {
+		tr.error("shouldn't be possible to have an inline tuple with one element")
+		return nil
+	}
+
 	var exprs []Expr
 
 	for _, elem := range inline.Exprs {
 		exprs = append(exprs, tr.translateInline(env, elem))
 	}
 
-	return &TupleExpr{exprs}
+	return &TupleExpr{Exprs: exprs}
 }
-func (tr *Translator) translateTupleBlock(env *ExprEnv, block *parse_tree.TupleBlock) *TupleExpr {
+func (tr *Translator) translateTupleBlock(env *ExprEnv, block *parse_tree.TupleBlock) Expr {
+	if len(block.Exprs) < 1 {
+		tr.error("shouldn't be possible to have a tuple block with no elements")
+		return Unit
+	}
+	if len(block.Exprs) == 1 {
+		tr.error("shouldn't be possible to have a tuple block with one element")
+		return nil
+	}
+
 	var exprs []Expr
 
 	for _, elem := range block.Exprs {
 		exprs = append(exprs, tr.translateBlock(env, elem))
 	}
 
-	return &TupleExpr{exprs}
+	return &TupleExpr{Exprs: exprs}
 }
 
 func (tr *Translator) translateInlineRecord(env *ExprEnv, inline *parse_tree.InlineRecord) *RecordExpr {
@@ -464,15 +461,6 @@ func createRecordExpr(elems map[string]Expr, partialLVal bool) *RecordExpr {
 	return record
 }
 
-/*
-func evalRecordExpr(env *value.Env, expr *ast.RecordExpr, binding *value.Binding) *value.Record {
-
-
-
-	return record
-}
-*/
-
 func (tr *Translator) translateInlineCons(env *ExprEnv, inline *parse_tree.InlineCons) *ConsExpr {
 	if inline == parse_tree.InlineNil {
 		return NilList
@@ -494,13 +482,8 @@ func (tr *Translator) translateConsBlock(env *ExprEnv, block *parse_tree.ConsBlo
 	}
 }
 
-// This is the name that we bind to the argument
-// when a function is called. It's important that
-// it's not a legal identifier, so it will never
-// clash with identifiers in the program, and so
-// user code cannot access it. (User code *can* access
-// "arg", which just looks up "@arg".)
-var ArgName = "@arg"
+// This is the name that we bind to the argument when a function is called.
+var ArgName = "arg"
 
 func isNil(i interface{}) bool {
 	return i == nil || reflect.ValueOf(i).IsNil()

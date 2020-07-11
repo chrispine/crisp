@@ -47,7 +47,7 @@ func (e *ExprEnv) isDefined(name string) bool {
 	return false
 }
 
-func (e *ExprEnv) LookupIndices(name string) (int, int) {
+func (e *ExprEnv) LookupIndices(name string) Expr {
 	var depth int
 	env := e
 
@@ -55,25 +55,24 @@ func (e *ExprEnv) LookupIndices(name string) (int, int) {
 		// check local bindings
 		for idx, b := range env.Bindings {
 			if b.Name == name {
-				return depth, idx
+				return &LookupExpr{Name: name, Depth: depth, Index: idx}
 			}
 		}
 		env = env.Parent
 	}
-	// A depth of -1 means this is a top-level binding.
-	// TODO: create literals for these
+	// implicit top level bindings
 	if name == "true" {
-		return -1, MaxInt
+		return TrueExpr
 	}
 	if name == "false" {
-		return -1, MinInt
+		return FalseExpr
 	}
 	if i, err := strconv.Atoi(name); err == nil {
-		return -1, i
+		return &IntExpr{Value: i}
 	}
 
 	panic("LookupError: undefined identifier: " + name)
-	return -1, -1
+	return nil
 }
 
 func topLevelDefined(name string) bool {
@@ -123,6 +122,3 @@ func (e *ParseEnv) isDefined(name string) bool {
 
 	return false
 }
-
-const MaxInt = int(^uint(0) >> 1)
-const MinInt = -MaxInt - 1

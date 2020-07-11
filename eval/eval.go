@@ -15,6 +15,8 @@ func eval(env *value.Env, someExpr ast.Expr, binding *value.Binding) value.Value
 	var val value.Value
 
 	switch expr := someExpr.(type) {
+	case *ast.UnitExpr:
+		val = value.Unit
 	case *ast.IntExpr:
 		val = evalIntExpr(env, expr)
 	case *ast.BoolExpr:
@@ -70,11 +72,10 @@ func eval(env *value.Env, someExpr ast.Expr, binding *value.Binding) value.Value
 }
 
 func apply(fn *value.Func, arg value.Value) value.Value {
-	argBinding := &value.Binding{Name: ast.ArgName, Value: arg}
 	// For each function-piece (each of which is a `let` expression)...
 	for _, letExpr := range fn.FuncPieceExprs {
 		// ...we evaluate the let expression to see if the assertions hold...
-		val, ok := evalLetExpr(fn.Env, letExpr, argBinding)
+		val, ok := evalLetExpr(fn.Env, letExpr, arg)
 		// ...if not, we try the next one...
 		if !ok {
 			continue
@@ -244,6 +245,10 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 }
 func evalBinop(binopType token.TokType, someLeftVal value.Value, someRightVal value.Value) value.Value {
 	switch leftVal := someLeftVal.(type) {
+	case *value.Unit_:
+		if _, ok := someRightVal.(*value.Unit_); ok {
+			return value.True
+		}
 	case *value.Int:
 		if rightVal, ok := someRightVal.(*value.Int); ok {
 			l := leftVal.Value
@@ -431,7 +436,7 @@ func evalBinop(binopType token.TokType, someLeftVal value.Value, someRightVal va
 	return nil
 }
 
-func evalLetExpr(env *value.Env, expr *ast.LetExpr, maybeArg *value.Binding) (value.Value, bool) {
+func evalLetExpr(env *value.Env, expr *ast.LetExpr, maybeArg value.Value) (value.Value, bool) {
 	// First, we create a new environment in which we can evaluate
 	// assertions, bindings, and the actual expression. We do this
 	// by binding to thunks, since we obviously can't bind to the
@@ -445,7 +450,13 @@ func evalLetExpr(env *value.Env, expr *ast.LetExpr, maybeArg *value.Binding) (va
 		})
 	}
 	if maybeArg != nil {
-		bindings = append(bindings, maybeArg)
+		if len(bindings) > 0 {
+			// this is where the actual argument is bound in the
+			// evaluating environment
+			bindings[0].Value = maybeArg
+		} else {
+			panic("should not be possible to call a function with no arg binding")
+		}
 	}
 
 	newEnv := value.NewEnv(env, bindings)
@@ -484,7 +495,13 @@ var fName = "@f"
 var gName = "@g"
 var composedFuncPieceExprs = []*ast.LetExpr{
 	{
-		Env: ast.TopLevelExprEnv,
+		Env: &ast.ExprEnv{
+			Parent: ast.TopLevelExprEnv,
+			Bindings: []*ast.ExprBinding{{
+				Name: ast.ArgName,
+				Expr: &ast.ArgExpr{},
+			}},
+		},
 		Expr: &ast.BinopExpr{
 			Token: token.AtToken,
 			LExpr: &ast.LookupExpr{Name: fName, Depth: 1, Index: 0},
