@@ -47,6 +47,14 @@ func (e *ExprEnv) isDefined(name string) bool {
 	return false
 }
 
+func (e *ExprEnv) Get(depth int, idx int) Expr {
+	if depth > 0 {
+		return e.Parent.Get(depth-1, idx)
+	}
+
+	return e.Bindings[idx].Expr
+}
+
 func (e *ExprEnv) LookupIndices(name string) Expr {
 	var depth int
 	env := e
@@ -55,7 +63,7 @@ func (e *ExprEnv) LookupIndices(name string) Expr {
 		// check local bindings
 		for idx, b := range env.Bindings {
 			if b.Name == name {
-				return &LookupExpr{Name: name, Depth: depth, Index: idx}
+				return &LookupExpr{Name: name, Depth: depth, Index: idx, Env: e}
 			}
 		}
 		env = env.Parent

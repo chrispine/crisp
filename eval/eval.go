@@ -219,7 +219,7 @@ func evalAssertListIsNil(env *value.Env, expr *ast.AssertListIsNilExpr) *value.B
 func evalUnopExpr(env *value.Env, expr *ast.UnopExpr) value.Value {
 	someVal := Eval(env, expr.Expr)
 
-	switch val := someVal.(type) {
+	switch val := someVal.(type) { // TODO: use Tipe instead of (type) for dispatch
 	case *value.Int:
 		if expr.Token.Type == token.Minus {
 			return &value.Int{Value: -val.Value}
@@ -244,10 +244,12 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 	return evalBinop(expr.Token.Type, someLeftVal, someRightVal)
 }
 func evalBinop(binopType token.TokType, someLeftVal value.Value, someRightVal value.Value) value.Value {
-	switch leftVal := someLeftVal.(type) {
+	switch leftVal := someLeftVal.(type) { // TODO: use Tipe instead of (type) for dispatch
 	case *value.Unit_:
 		if _, ok := someRightVal.(*value.Unit_); ok {
-			return value.True
+			if binopType == token.Equal {
+				return value.True
+			}
 		}
 	case *value.Int:
 		if rightVal, ok := someRightVal.(*value.Int); ok {
@@ -428,10 +430,6 @@ func evalBinop(binopType token.TokType, someLeftVal value.Value, someRightVal va
 		}
 	}
 
-	if rightVal, ok := someRightVal.(*value.Func); ok {
-		return apply(rightVal, someLeftVal)
-	}
-
 	panic(fmt.Sprintf("RuntimeError: illegal binop expr: %v", binopType))
 	return nil
 }
@@ -478,7 +476,8 @@ func evalLetExpr(env *value.Env, expr *ast.LetExpr, maybeArg value.Value) (value
 
 	// Finally, we force all of the thunks, so none remain when we return.
 	for _, b := range newEnv.Bindings {
-		Eval(newEnv, &ast.LookupExpr{Name: b.Name})
+		// we can skip Eval() and call evalLookupExpr() directly
+		evalLookupExpr(newEnv, &ast.LookupExpr{Name: b.Name})
 	}
 
 	return Eval(newEnv, expr.Expr), true
@@ -493,8 +492,14 @@ func evalFuncExpr(env *value.Env, expr *ast.FuncExpr) *value.Func {
 
 var fName = "@f"
 var gName = "@g"
-var composedFuncPieceExprs = []*ast.LetExpr{
-	{
+
+func composeFuncs(f *value.Func, g *value.Func) *value.Func {
+	// TODO: After type-checking, which parts of this can we pull out, aside from fName and gName?
+	env := value.NewEnv(value.EmptyEnv, []*value.Binding{
+		{Name: fName, Value: f},
+		{Name: gName, Value: g},
+	})
+	composedFuncPieceExprs := []*ast.LetExpr{{
 		Env: &ast.ExprEnv{
 			Parent: ast.TopLevelExprEnv,
 			Bindings: []*ast.ExprBinding{{
@@ -511,14 +516,8 @@ var composedFuncPieceExprs = []*ast.LetExpr{
 				RExpr: &ast.LookupExpr{Name: ast.ArgName, Depth: 0, Index: 0},
 			},
 		},
-	},
-}
-
-func composeFuncs(f *value.Func, g *value.Func) *value.Func {
-	env := value.NewEnv(value.EmptyEnv, []*value.Binding{
-		{Name: fName, Value: f},
-		{Name: gName, Value: g},
-	})
+		// TODO: create the Tipe
+	}}
 
 	return &value.Func{Env: env, FuncPieceExprs: composedFuncPieceExprs}
 }

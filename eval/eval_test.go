@@ -10,6 +10,23 @@ import (
 
 // TODO: add tests to catch every error and panic, to make sure we are generating them correctly.
 
+func testFirst(t *testing.T) {
+	expected := 5
+	program := `
+len[   ] -> 0
+len[_;t] -> 1 + len(t)
+
+len[1, 2, 3] + len[{x:22, b:true}, {b:false, x:-33}]
+`
+	val := testEval(t, program)
+
+	if intVal, ok := val.(*value.Int); !ok {
+		t.Fatalf("wow, expected an int, got %v", val.Inspect())
+	} else if intVal.Value != expected {
+		t.Fatalf("wrong int value: expected %d, got %d in program:\n%v", expected, intVal, program)
+	}
+}
+
 func TestEvalIntExpr(t *testing.T) {
 	tests := []struct {
 		expected int
@@ -335,12 +352,13 @@ second args
 		{5, `
 
 
+head = [h;t] -> h
 tail = [h;t] -> t
 args = [*]
 	90210
-	; 5
+	; [5]
 
-tail args
+head(tail args)
 
 
 `},
@@ -362,18 +380,6 @@ foo(a,(b,c),d) ->
 yyy = (33, 44)
 
 foo(111, yyy, 222)
-
-
-`},
-		{44, `
-
-
-foo[a,[b,c],d] ->
-	c
-
-yyy = [33, 44]
-
-foo[111, yyy, 222]
 
 
 `},
@@ -735,10 +741,9 @@ foo:b
 		{5, `
 
 
-len[   ] -> 0
-len[_;t] -> 1 + len(t)
+foo{_} -> 5
 
-len[1, 2, 3] + len[{x:5, b:true}, {b:false, x:-5}]
+foo{x:true, y:[22,33,44], z:(false, [55])}
 
 
 `},
@@ -746,6 +751,10 @@ len[1, 2, 3] + len[{x:5, b:true}, {b:false, x:-5}]
 
 
 5
+#len[   ] -> 0
+#len[_;t] -> 1 + len(t)
+
+#len[1, 2, 3] + len[{x:22, b:true}, {b:false, x:-33}]
 
 
 `},
@@ -772,32 +781,6 @@ len[1, 2, 3] + len[{x:5, b:true}, {b:false, x:-5}]
 `},
 	}
 
-	for _, tt := range tests {
-		val := testEval(t, tt.program)
-
-		if intVal, ok := val.(*value.Int); !ok {
-			t.Fatalf("wow, expected an int, got %v", val.Inspect())
-		} else if intVal.Value != tt.expected {
-			t.Fatalf("wrong int value: expected %d, got %d in program:\n%v", tt.expected, intVal, tt.program)
-		}
-	}
-}
-
-func TestEvalIntExpr2(t *testing.T) {
-	tests := []struct {
-		expected int
-		program  string
-	}{
-		{3, `
-
-
-point = {x: 3, y: 5}
-
-point:x
-
-
-`},
-	}
 	for _, tt := range tests {
 		val := testEval(t, tt.program)
 
@@ -865,6 +848,18 @@ same(x,x) -> true
 same(x,y) -> false
 
 same(7,77)
+
+`, false},
+		{`
+
+len[   ] -> 0
+len[_;t] -> 1 + len(t)
+
+is_even?(x) -> x%2 == 0
+
+is_even_len? = is_even? * len
+
+is_even_len?[1,2,3]
 
 `, false},
 	}

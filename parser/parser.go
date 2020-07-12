@@ -752,7 +752,7 @@ func (p *Parser) parseRecord() *parse_tree.InlineRecord {
 	// check for unit (empty tuple)
 	if p.curTokenIs(token.RBrace) {
 		p.expectToken(token.RBrace)
-		p.error("Chris wants to know why what use-case calls for empty records.")
+		p.error("Chris wants to know what use-case calls for empty records.")
 		return nil
 	}
 
@@ -788,6 +788,10 @@ Loop:
 
 	if len(lit.Elems) != numElems {
 		p.error("illegal inline record: field names must be unique")
+	}
+
+	if lit.PartialLVal && !lit.IsLVal() {
+		p.error("illegal inline record: must be a legal l-value")
 	}
 
 	return lit

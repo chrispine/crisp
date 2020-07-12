@@ -24,7 +24,13 @@ func (tr *Translator) Translate(program *parse_tree.Program) Expr {
 		Expr:  program.Expr,
 	}
 
-	return tr.translateLetBlock(TopLevelExprEnv, lb)
+	expr := tr.translateLetBlock(TopLevelExprEnv, lb, false) // this let block is not part of a function
+
+	for _, err := range CheckTipes(expr) {
+		tr.error(err)
+	}
+
+	return expr
 }
 
 func (tr *Translator) Errors() []string {
@@ -80,8 +86,18 @@ func (tr *Translator) translateInline(env *ExprEnv, inlineTree parse_tree.Inline
 			// this is actually a record lookup
 			name := inline.RExpr.(*parse_tree.InlineID).Name
 			return &RecordLookupExpr{
-				Name:   name,
-				Record: tr.translateInline(env, inline.LExpr),
+				Name:    name,
+				Names:   []string{name},
+				Partial: true,
+				Record:  tr.translateInline(env, inline.LExpr),
+			}
+		}
+		if inline.Token.Type == token.Dot {
+			// swap left/right and convert to '@'
+			return &BinopExpr{
+				Token: token.AtToken,
+				LExpr: tr.translateInline(env, inline.RExpr),
+				RExpr: tr.translateInline(env, inline.LExpr),
 			}
 		}
 		return &BinopExpr{
@@ -233,18 +249,17 @@ func (tr *Translator) partitionDecl(
 		// `(a, b) = expr`
 		// Note that we don't need to assert that `rhs` is a tuple, or what size of tuple,
 		// because the type checker will flag that at compile time.
-		// TODO: type checker needs to make sure these are the same size tuples
 		for i, elem := range lhs.Exprs {
-			td := &TupleDestructureBlock{i, rhs}
+			td := &TupleDestructureBlock{index: i, size: len(lhs.Exprs), tuple: rhs}
 			asserts = tr.partitionDecl(preEnv, postEnv, asserts, elem, td, shadowing)
 		}
 	case *parse_tree.InlineRecord:
 		// `{x: foo, y: bar} = expr`
-		// TODO: type checker needs to make sure lhs has all the same fields rhs has, unless lhs.PartialLVal is true
+		names := inlineRecordNames(lhs.Elems)
 
-		for k, v := range lhs.Elems {
-			rd := &RecordDestructureBlock{k, rhs}
-			asserts = tr.partitionDecl(preEnv, postEnv, asserts, v, rd, shadowing)
+		for name, elem := range lhs.Elems {
+			rd := &RecordDestructureBlock{name: name, names: names, partial: lhs.PartialLVal, record: rhs}
+			asserts = tr.partitionDecl(preEnv, postEnv, asserts, elem, rd, shadowing)
 		}
 	case *parse_tree.InlineCons:
 		// `[a, b]` = expr
@@ -270,6 +285,7 @@ func (tr *Translator) partitionDecl(
 
 type TupleDestructureBlock struct {
 	index int
+	size  int
 	tuple parse_tree.Block
 }
 
@@ -278,8 +294,10 @@ func (td *TupleDestructureBlock) TokenLiteral() string { return "«TupleDestruct
 func (td *TupleDestructureBlock) String() string       { return "«TupleDestructureBlock»" }
 
 type RecordDestructureBlock struct {
-	name   string
-	record parse_tree.Block
+	name    string
+	names   []string
+	partial bool
+	record  parse_tree.Block
 }
 
 func (rd *RecordDestructureBlock) BlockNode()           {}
@@ -368,14 +386,17 @@ func (tr *Translator) translateFunc(env *ExprEnv, funcBlockPieces []*parse_tree.
 func (tr *Translator) translateTupleDestructureBlock(env *ExprEnv, block *TupleDestructureBlock) *TupleDestructureExpr {
 	return &TupleDestructureExpr{
 		Index: block.index,
+		Size:  block.size,
 		Tuple: tr.translateBlock(env, block.tuple),
 	}
 }
 
 func (tr *Translator) translateRecordDestructureBlock(env *ExprEnv, block *RecordDestructureBlock) *RecordLookupExpr {
 	return &RecordLookupExpr{
-		Name:   block.name,
-		Record: tr.translateBlock(env, block.record),
+		Name:    block.name,
+		Names:   block.names,
+		Partial: block.partial,
+		Record:  tr.translateBlock(env, block.record),
 	}
 }
 
@@ -440,25 +461,44 @@ func (tr *Translator) translateRecordBlock(env *ExprEnv, block *parse_tree.Recor
 
 	return createRecordExpr(elems, false)
 }
-func createRecordExpr(elems map[string]Expr, partialLVal bool) *RecordExpr {
-	record := &RecordExpr{PartialLVal: partialLVal}
+func createRecordExpr(elems map[string]Expr, partial bool) *RecordExpr {
+	record := &RecordExpr{Partial: partial}
 
-	keys := make([]string, len(elems))
+	names := recordNames(elems)
 
-	i := 0
-	for k := range elems {
-		keys[i] = k
-		i++
-	}
-
-	sort.Strings(keys)
-
-	for _, name := range keys {
+	for _, name := range names {
 		val := elems[name]
 		record.Fields = append(record.Fields, RecordFieldExpr{Name: name, Expr: val})
 	}
 
 	return record
+}
+func recordNames(elems map[string]Expr) []string {
+	names := make([]string, len(elems))
+
+	i := 0
+	for name := range elems {
+		names[i] = name
+		i++
+	}
+
+	sort.Strings(names)
+	return names
+}
+func inlineRecordNames(elems map[string]parse_tree.Inline) []string {
+	// DO NOT EDIT THIS FUNCTION. Edit the above function and copy it here.
+	// If you know of a better way of dealing with Golang's lack of generics
+	// and map covariance, let me know. Because this is disgusting.
+	names := make([]string, len(elems))
+
+	i := 0
+	for name := range elems {
+		names[i] = name
+		i++
+	}
+
+	sort.Strings(names)
+	return names
 }
 
 func (tr *Translator) translateInlineCons(env *ExprEnv, inline *parse_tree.InlineCons) *ConsExpr {
