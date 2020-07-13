@@ -162,7 +162,7 @@ func evalConsExpr(env *value.Env, expr *ast.ConsExpr, binding *value.Binding) *v
 func evalRecordLookupExpr(env *value.Env, expr *ast.RecordLookupExpr) value.Value {
 	record := Eval(env, expr.Record).(*value.Record)
 
-	// TODO: optimize this to just use an index (once we have types)
+	// TODO: optimize this to just use an index (once we have a post-type-check optimizer)
 	for _, field := range record.Fields {
 		if expr.Name == field.Name {
 			return field.Value
@@ -195,7 +195,10 @@ func evalAssertEqual(env *value.Env, expr *ast.AssertEqualExpr) *value.Bool {
 	lVal := Eval(env, expr.LExpr)
 	rVal := Eval(env, expr.RExpr)
 
-	return evalBinop(token.Equal, lVal, rVal).(*value.Bool)
+	if equal(lVal, rVal) {
+		return value.True
+	}
+	return value.False
 }
 
 func evalAssertListIsCons(env *value.Env, expr *ast.AssertListIsConsExpr) *value.Bool {
@@ -217,16 +220,16 @@ func evalAssertListIsNil(env *value.Env, expr *ast.AssertListIsNilExpr) *value.B
 }
 
 func evalUnopExpr(env *value.Env, expr *ast.UnopExpr) value.Value {
-	someVal := Eval(env, expr.Expr)
+	val := Eval(env, expr.Expr)
 
-	switch val := someVal.(type) { // TODO: use Tipe instead of (type) for dispatch
-	case *value.Int:
+	switch expr.FinalTipe() {
+	case ast.IntTipe:
 		if expr.Token.Type == token.Minus {
-			return &value.Int{Value: -val.Value}
+			return &value.Int{Value: -val.(*value.Int).Value}
 		}
-	case *value.Bool:
+	case ast.BoolTipe:
 		if expr.Token.Type == token.Not {
-			if val.Value {
+			if val.(*value.Bool).Value {
 				return value.False
 			}
 			return value.True
@@ -238,17 +241,25 @@ func evalUnopExpr(env *value.Env, expr *ast.UnopExpr) value.Value {
 }
 
 func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
+	binopType := expr.Token.Type
 	someLeftVal := Eval(env, expr.LExpr)
 	someRightVal := Eval(env, expr.RExpr)
 
-	return evalBinop(expr.Token.Type, someLeftVal, someRightVal)
-}
-func evalBinop(binopType token.TokType, someLeftVal value.Value, someRightVal value.Value) value.Value {
 	switch leftVal := someLeftVal.(type) { // TODO: use Tipe instead of (type) for dispatch
 	case *value.Unit_:
-		if _, ok := someRightVal.(*value.Unit_); ok {
-			if binopType == token.Equal {
-				return value.True
+		if rightVal, ok := someRightVal.(*value.Unit_); ok {
+			// kind of silly, since there's literally only one value of tipe UnitTipe
+			switch binopType {
+			case token.Equal:
+				if equal(leftVal, rightVal) {
+					return value.True
+				}
+				return value.False // cannot reach this line
+			case token.NEq:
+				if !equal(leftVal, rightVal) {
+					return value.True // cannot reach this line
+				}
+				return value.False
 			}
 		}
 	case *value.Int:
@@ -258,17 +269,15 @@ func evalBinop(binopType token.TokType, someLeftVal value.Value, someRightVal va
 
 			switch binopType {
 			case token.Equal:
-				if l == r {
+				if equal(leftVal, rightVal) {
 					return value.True
-				} else {
-					return value.False
 				}
+				return value.False
 			case token.NEq:
-				if l == r {
-					return value.False
-				} else {
+				if !equal(leftVal, rightVal) {
 					return value.True
 				}
+				return value.False
 			case token.LT:
 				if l < r {
 					return value.True
@@ -324,17 +333,15 @@ func evalBinop(binopType token.TokType, someLeftVal value.Value, someRightVal va
 
 			switch binopType {
 			case token.Equal:
-				if l == r {
+				if equal(leftVal, rightVal) {
 					return value.True
-				} else {
-					return value.False
 				}
+				return value.False
 			case token.NEq:
-				if l == r {
-					return value.False
-				} else {
+				if !equal(leftVal, rightVal) {
 					return value.True
 				}
+				return value.False
 			case token.And:
 				if l && r {
 					return value.True
@@ -351,7 +358,7 @@ func evalBinop(binopType token.TokType, someLeftVal value.Value, someRightVal va
 		}
 	case *value.Func:
 		switch binopType {
-		case token.Equal:
+		case token.Equal, token.NEq:
 			panic("not allowed to see if two functions are equal (no notion of function equality)")
 			return nil
 		case token.At:
@@ -377,55 +384,47 @@ func evalBinop(binopType token.TokType, someLeftVal value.Value, someRightVal va
 		if rightVal, ok := someRightVal.(*value.Tuple); ok {
 			switch binopType {
 			case token.Equal:
-				// TODO: type checker should ensure they are the same size tuple, rather than a runtime check
-				if len(leftVal.Values) != len(rightVal.Values) {
-					return value.False
+				// Note: type checker already determined these tuples are the same tipe
+				if equal(leftVal, rightVal) {
+					return value.True
 				}
-				for i, v := range leftVal.Values {
-					if !evalBinop(token.Equal, v, rightVal.Values[i]).(*value.Bool).Value {
-						return value.False
-					}
+				return value.False
+			case token.NEq:
+				if !equal(leftVal, rightVal) {
+					return value.True
 				}
-				return value.True
+				return value.False
 			}
 		}
 	case *value.Record:
 		if rightVal, ok := someRightVal.(*value.Record); ok {
 			switch binopType {
 			case token.Equal:
-				// TODO: type checker should ensure they have the same fields, rather than a runtime check
-				if len(leftVal.Fields) != len(rightVal.Fields) {
-					return value.False
+				// Note: type checker already determined these records are the same tipe
+				if equal(leftVal, rightVal) {
+					return value.True
 				}
-				for i, f := range leftVal.Fields {
-					if f.Name != rightVal.Fields[i].Name {
-						return value.False
-					}
-					if !evalBinop(token.Equal, f.Value, rightVal.Fields[i].Value).(*value.Bool).Value {
-						return value.False
-					}
+				return value.False
+			case token.NEq:
+				if !equal(leftVal, rightVal) {
+					return value.True
 				}
-				return value.True
+				return value.False
 			}
 		}
 	case *value.Cons:
 		if rightVal, ok := someRightVal.(*value.Cons); ok {
 			switch binopType {
 			case token.Equal:
-				// first check for Nils
-				if leftVal == value.Nil {
-					if rightVal == value.Nil {
-						return value.True
-					}
-					return value.False
+				if equal(leftVal, rightVal) {
+					return value.True
 				}
-				if rightVal == value.Nil {
-					return value.False
+				return value.False
+			case token.NEq:
+				if !equal(leftVal, rightVal) {
+					return value.True
 				}
-				if !evalBinop(token.Equal, leftVal.Head, rightVal.Head).(*value.Bool).Value {
-					return value.False
-				}
-				return evalBinop(token.Equal, leftVal.Tail, rightVal.Tail)
+				return value.False
 			}
 		}
 	}
@@ -490,15 +489,81 @@ func evalFuncExpr(env *value.Env, expr *ast.FuncExpr) *value.Func {
 	}
 }
 
+func equal(aVal value.Value, bVal value.Value) bool {
+	switch a := aVal.(type) {
+
+	case *value.Unit_:
+		if _, ok := bVal.(*value.Unit_); ok {
+			// if they are both unit types, they must be equal
+			return true
+		}
+
+	case *value.Bool:
+		if b, ok := bVal.(*value.Bool); ok {
+			return a.Value == b.Value
+		}
+
+	case *value.Int:
+		if b, ok := bVal.(*value.Int); ok {
+			return a.Value == b.Value
+		}
+
+	case *value.Tuple:
+		if b, ok := bVal.(*value.Tuple); ok {
+			// these should be the same tipe, so no need to check tuple sizes
+			for i, elem := range a.Values {
+				if !equal(elem, b.Values[i]) {
+					return false
+				}
+			}
+			return true
+		}
+
+	case *value.Record:
+		if b, ok := bVal.(*value.Record); ok {
+			// these should be the same tipe, so no need to check field names
+			for i, elem := range a.Fields {
+				if !equal(elem.Value, b.Fields[i].Value) {
+					return false
+				}
+			}
+			return true
+		}
+
+	case *value.Cons:
+		if b, ok := bVal.(*value.Cons); ok {
+			// first check for Nils
+			if a == value.Nil {
+				if b == value.Nil {
+					return true
+				}
+				return false
+			}
+			if b == value.Nil {
+				return false
+			}
+			if !equal(a.Head, b.Head) {
+				return false
+			}
+			return equal(a.Tail, b.Tail)
+		}
+	}
+	// It should not be possible to get here. If we did get here,
+	// it means we were trying to compare values of different tipes,
+	// which should have been a type error.
+	panic("runtime error: unhandled value in equality check")
+	return false
+}
+
 var fName = "@f"
 var gName = "@g"
 
 func composeFuncs(f *value.Func, g *value.Func) *value.Func {
-	// TODO: After type-checking, which parts of this can we pull out, aside from fName and gName?
 	env := value.NewEnv(value.EmptyEnv, []*value.Binding{
 		{Name: fName, Value: f},
 		{Name: gName, Value: g},
 	})
+
 	composedFuncPieceExprs := []*ast.LetExpr{{
 		Env: &ast.ExprEnv{
 			Parent: ast.TopLevelExprEnv,
