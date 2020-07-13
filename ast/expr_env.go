@@ -75,6 +75,9 @@ func (e *ExprEnv) LookupIndices(name string) Expr {
 	if name == "false" {
 		return FalseExpr
 	}
+	if name == "!" {
+		return NotExpr
+	}
 	if i, err := strconv.Atoi(name); err == nil {
 		return &IntExpr{Value: i}
 	}

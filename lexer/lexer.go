@@ -221,7 +221,7 @@ func (l *Lexer) readIdentifier() string {
 }
 
 func (l *Lexer) consumeOperatorOrRewind() *token.Token {
-	for _, tok := range token.GetOperators() {
+	for _, tok := range token.Operators {
 		opStr := tok.Literal
 
 		if len(l.input) >= l.position+len(opStr) &&
@@ -229,6 +229,10 @@ func (l *Lexer) consumeOperatorOrRewind() *token.Token {
 			// advance the counter
 			for i := 0; i < len(opStr); i++ {
 				l.readRune()
+			}
+			// special handling for `!`
+			if tok.Type == token.Not {
+				return newToken(token.ID, "!")
 			}
 			return &tok
 		}

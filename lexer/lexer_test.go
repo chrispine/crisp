@@ -69,7 +69,7 @@ a|日本語&c<=!d<>=> !=== ,:;`
 		{0, token.And, "&"},
 		{0, token.ID, "c"},
 		{0, token.LTE, "<="},
-		{0, token.Not, "!"},
+		{0, token.ID, "!"},
 		{0, token.ID, "d"},
 		{0, token.LT, "<"},
 		{0, token.GTE, ">="},

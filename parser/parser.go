@@ -9,7 +9,6 @@ import (
 
 var unops = []token.TokType{
 	token.Minus,  //  -
-	token.Not,    //  !
 	token.Shadow, //  $
 }
 

@@ -13,10 +13,10 @@ import (
 func testFirst(t *testing.T) {
 	expected := 5
 	program := `
-len[   ] -> 0
-len[_;t] -> 1 + len(t)
+#len[   ] -> 0
+#len[_;t] -> 1 + len(t)
 
-len[1, 2, 3] + len[{x:22, b:true}, {b:false, x:-33}]
+#len[1, 2, 3] + len[{x:22, b:true}, {b:false, x:-33}]
 `
 	val := testEval(t, program)
 

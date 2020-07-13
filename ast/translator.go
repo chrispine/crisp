@@ -100,6 +100,19 @@ func (tr *Translator) translateInline(env *ExprEnv, inlineTree parse_tree.Inline
 				RExpr: tr.translateInline(env, inline.LExpr),
 			}
 		}
+		if inline.Token.Type == token.NEq {
+			// convert `a != b` to `!(a == b)`
+			equalBinop := &BinopExpr{
+				Token: token.EqualToken,
+				LExpr: tr.translateInline(env, inline.LExpr),
+				RExpr: tr.translateInline(env, inline.RExpr),
+			}
+			return &BinopExpr{
+				Token: token.AtToken,
+				LExpr: NotExpr,
+				RExpr: equalBinop,
+			}
+		}
 		return &BinopExpr{
 			Token: inline.Token,
 			LExpr: tr.translateInline(env, inline.LExpr),

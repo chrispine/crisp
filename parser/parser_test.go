@@ -30,9 +30,9 @@ func TestExprs(t *testing.T) {
 
 		{"-90210", "(- 90210)"},
 		{"-bar  ", "(- bar)"},
-		{"!true ", "(! true)"},
-		{"!false", "(! false)"},
-		{"!foo  ", "(! foo)"},
+		{"!true ", "(! @ true)"},
+		{"!false", "(! @ false)"},
+		{"!foo  ", "(! @ foo)"},
 
 		{"x+1", "(x + 1)"},
 		{"a+b+c", "((a + b) + c)"},
@@ -92,9 +92,6 @@ func TestUnopExprs(t *testing.T) {
 	}{
 		{"-90210", token.Minus, "90210"},
 		{"-bar  ", token.Minus, "bar"},
-		{"!true ", token.Not, "true"},
-		{"!false", token.Not, "false"},
-		{"!foo  ", token.Not, "foo"},
 	}
 
 	for _, tt := range prefixTests {

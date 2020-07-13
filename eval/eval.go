@@ -227,13 +227,6 @@ func evalUnopExpr(env *value.Env, expr *ast.UnopExpr) value.Value {
 		if expr.Token.Type == token.Minus {
 			return &value.Int{Value: -val.(*value.Int).Value}
 		}
-	case ast.BoolTipe:
-		if expr.Token.Type == token.Not {
-			if val.(*value.Bool).Value {
-				return value.False
-			}
-			return value.True
-		}
 	}
 
 	panic(fmt.Sprintf("RuntimeError: illegal unop expr: %v", expr))
@@ -255,11 +248,6 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 					return value.True
 				}
 				return value.False // cannot reach this line
-			case token.NEq:
-				if !equal(leftVal, rightVal) {
-					return value.True // cannot reach this line
-				}
-				return value.False
 			}
 		}
 	case *value.Int:
@@ -270,11 +258,6 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 			switch binopType {
 			case token.Equal:
 				if equal(leftVal, rightVal) {
-					return value.True
-				}
-				return value.False
-			case token.NEq:
-				if !equal(leftVal, rightVal) {
 					return value.True
 				}
 				return value.False
@@ -337,11 +320,6 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 					return value.True
 				}
 				return value.False
-			case token.NEq:
-				if !equal(leftVal, rightVal) {
-					return value.True
-				}
-				return value.False
 			case token.And:
 				if l && r {
 					return value.True
@@ -358,7 +336,7 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 		}
 	case *value.Func:
 		switch binopType {
-		case token.Equal, token.NEq:
+		case token.Equal:
 			panic("not allowed to see if two functions are equal (no notion of function equality)")
 			return nil
 		case token.At:
@@ -389,11 +367,6 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 					return value.True
 				}
 				return value.False
-			case token.NEq:
-				if !equal(leftVal, rightVal) {
-					return value.True
-				}
-				return value.False
 			}
 		}
 	case *value.Record:
@@ -405,11 +378,6 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 					return value.True
 				}
 				return value.False
-			case token.NEq:
-				if !equal(leftVal, rightVal) {
-					return value.True
-				}
-				return value.False
 			}
 		}
 	case *value.Cons:
@@ -417,11 +385,6 @@ func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 			switch binopType {
 			case token.Equal:
 				if equal(leftVal, rightVal) {
-					return value.True
-				}
-				return value.False
-			case token.NEq:
-				if !equal(leftVal, rightVal) {
 					return value.True
 				}
 				return value.False

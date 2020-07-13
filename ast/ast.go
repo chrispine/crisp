@@ -227,6 +227,31 @@ func (e *FuncExpr) TipeVar(tc *TipeChecker) *TipeVar {
 	return e.tipeVar
 }
 
+var NotExprEnv = &ExprEnv{
+	Parent:   nil,
+	Bindings: []*ExprBinding{{Name: ArgName, Expr: &ArgExpr{}}},
+}
+var NotExpr = &FuncExpr{
+	FuncPieceExprs: []*LetExpr{
+		{
+			Env: NotExprEnv,
+			Asserts: []Expr{&AssertEqualExpr{
+				LExpr: TrueExpr,
+				RExpr: &LookupExpr{Name: ArgName, Env: NotExprEnv},
+			}},
+			Expr: FalseExpr,
+		},
+		{
+			Env: NotExprEnv,
+			Asserts: []Expr{&AssertEqualExpr{
+				LExpr: FalseExpr,
+				RExpr: &LookupExpr{Name: ArgName, Env: NotExprEnv},
+			}},
+			Expr: TrueExpr,
+		},
+	},
+}
+
 // This is a placeholder node that, during runtime, is replaced
 // by the actual arg passed into the function. We need it for
 // type-checking functions.

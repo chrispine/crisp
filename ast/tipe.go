@@ -157,8 +157,6 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 		// let's see if we can learn more from the token
 		if expr.Token.Type == token.Minus {
 			tc.unify(tv, IntTipe)
-		} else if expr.Token.Type == token.Not {
-			tc.unify(tv, BoolTipe)
 		}
 
 		tc.inferTipes(expr.Expr)
@@ -172,7 +170,7 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 				Domain: expr.RExpr.TipeVar(tc),
 				Range:  tv,
 			}
-		case token.Equal, token.NEq:
+		case token.Equal:
 			tipe = BoolTipe
 			lTipe = expr.RExpr.TipeVar(tc)
 		case token.And, token.Or:
