@@ -12,10 +12,13 @@ import (
 // TODO: add tests to catch every error and panic, to make sure we are generating them correctly.
 
 func TestFirst(t *testing.T) {
-	expected := 5
+	expected := 121
 	program := `
 
-5
+f(1|2, n) -> n*n
+f( x , n) -> x+n
+
+f(2, 11)
 
 #len[   ] -> 0
 #len[_;t] -> 1 + len(t)
@@ -751,6 +754,25 @@ foo{x:true, y:[22,33,44], z:(false, [55])}
 
 
 `},
+		{121, `
+
+
+f(1|2, n) -> n*n
+f( x , n) -> x+n
+
+f(2, 11)
+
+
+`},
+		{55, `
+
+
+case (12, true)
+	( 5, _____) | (__, false) -> 44
+	(12, false) | (__, true ) -> 55
+
+
+`},
 		{5, `
 
 
@@ -759,13 +781,6 @@ foo{x:true, y:[22,33,44], z:(false, [55])}
 #len[_;t] -> 1 + len(t)
 
 #len[1, 2, 3] + len[{x:22, b:true}, {b:false, x:-33}]
-
-
-`},
-		{5, `
-
-
-5
 
 
 `},
@@ -896,7 +911,7 @@ func testEval(t *testing.T, code string) value.Value {
 	errors := tr.Errors()
 	if len(errors) > 0 {
 		for _, msg := range errors {
-			errStr += fmt.Sprintf("   translator error: %q\n", msg)
+			errStr += fmt.Sprintf("   translator error: %v\n", msg)
 		}
 		t.Errorf(errStr)
 		t.FailNow()
@@ -904,7 +919,7 @@ func testEval(t *testing.T, code string) value.Value {
 
 	val, err := Eval(value.TopLevelEnv, program)
 	if err != nil {
-		errStr = fmt.Sprintf("   runtime error: %q\n", err)
+		errStr = fmt.Sprintf("   runtime error: %v\n", err)
 		t.Errorf(errStr)
 		t.FailNow()
 	}

@@ -361,6 +361,14 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 
 		tc.inferTipes(expr.List)
 
+	case *AssertAnyOfTheseSets:
+		tc.unify(tv, BoolTipe)
+		for _, set := range expr.AssertSets {
+			for _, assert := range set {
+				tc.inferTipes(assert)
+			}
+		}
+
 	case *LetExpr:
 		tc.unify(tv, expr.Expr.TipeVar(tc))
 
@@ -910,6 +918,13 @@ func (tc *TipeChecker) finalizeTipes(someExpr Expr) {
 
 	case *AssertListIsNilExpr:
 		tc.finalizeTipes(expr.List)
+
+	case *AssertAnyOfTheseSets:
+		for _, set := range expr.AssertSets {
+			for _, assert := range set {
+				tc.finalizeTipes(assert)
+			}
+		}
 
 	case *TupleDestructureExpr:
 		tc.finalizeTipes(expr.Tuple)

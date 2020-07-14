@@ -57,6 +57,8 @@ func eval(env *value.Env, someExpr ast.Expr, binding *value.Binding) value.Value
 		val = evalAssertListIsCons(env, expr)
 	case *ast.AssertListIsNilExpr:
 		val = evalAssertListIsNil(env, expr)
+	case *ast.AssertAnyOfTheseSets:
+		val = evalAssertAnyOfTheseSets(env, expr)
 	case *ast.LetExpr:
 		// LetExpr is special because it contains runtime assertions
 		// that must be tested. (In a function or `case` statement,
@@ -223,6 +225,26 @@ func evalAssertListIsNil(env *value.Env, expr *ast.AssertListIsNilExpr) *value.B
 	if cons == value.Nil {
 		return value.True
 	}
+	return value.False
+}
+
+func evalAssertAnyOfTheseSets(env *value.Env, expr *ast.AssertAnyOfTheseSets) *value.Bool {
+	for _, set := range expr.AssertSets {
+		allMatch := true
+
+		for _, assert := range set {
+			val := eval(env, assert, nil)
+			if val == value.False {
+				allMatch = false
+				break
+			}
+		}
+
+		if allMatch {
+			return value.True
+		}
+	}
+	// none of the sets matched
 	return value.False
 }
 

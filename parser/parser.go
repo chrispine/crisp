@@ -257,25 +257,22 @@ func (p *Parser) parseDeclBlock() (*parse_tree.PatMatBlock, bool) {
 		return p.parseModuleDeclBlock(), false // false: this was not a function declaration
 	}
 
-	atom := p.parseAtom()
+	lVal := p.parseLVal()
 
 	if p.curTokenIs(token.PatMat) {
-		return p.parsePatMatBlock(atom), false // false: this was not a function declaration
+		return p.parsePatMatBlock(lVal), false // false: this was not a function declaration
 	}
 
-	return p.parseFuncDeclBlock(atom), true // true: this was a function declaration
+	id := lVal.(*parse_tree.InlineID)
+	return p.parseFuncDeclBlock(id), true // true: this was a function declaration
 }
 
 /*
 PatMatBlock ->
 	LValAtom  '='  ExprBlock
 */
-func (p *Parser) parsePatMatBlock(atom parse_tree.Inline) *parse_tree.PatMatBlock {
-	if !atom.IsLVal() {
-		p.error("atom %v is not an l-value", atom)
-	}
-
-	lit := &parse_tree.PatMatBlock{Token: *p.curToken, LVal: atom}
+func (p *Parser) parsePatMatBlock(lVal parse_tree.Inline) *parse_tree.PatMatBlock {
+	lit := &parse_tree.PatMatBlock{Token: *p.curToken, LVal: lVal}
 
 	p.expectToken(token.PatMat)
 
@@ -293,68 +290,57 @@ func (p *Parser) parseModuleDeclBlock() *parse_tree.PatMatBlock {
 
 	p.expectToken(token.Module)
 
-	atom := p.parseID()
-	if !atom.IsLVal() {
-		p.error("atom %v is not an l-value", atom)
-	}
+	lVal := p.parseID() // IDs are all l-values
 
 	p.expectToken(token.Indent)
 	p.parseModuleBody(lit)
 	p.expectToken(token.Dedent)
 
-	return &parse_tree.PatMatBlock{Token: token.PatMatToken, LVal: atom, Expr: lit}
+	return &parse_tree.PatMatBlock{Token: token.PatMatToken, LVal: lVal, Expr: lit}
 }
 
 /*
 FuncDeclBlock ->
 	ID  (LValAtom)*  FuncBlock  // sugar for currying and 'let'
 */
-func (p *Parser) parseFuncDeclBlock(atom parse_tree.Inline) *parse_tree.PatMatBlock {
-	// `atom` must be an identifier
-	if _, ok := atom.(*parse_tree.InlineID); !ok {
-		p.error("not a valid identifier: %v", atom)
-	}
-
+func (p *Parser) parseFuncDeclBlock(lVal *parse_tree.InlineID) *parse_tree.PatMatBlock {
 	patmat := &parse_tree.PatMatBlock{
 		Token: token.PatMatToken,
-		LVal:  atom,
+		LVal:  lVal,
 	}
 
-	var args []parse_tree.Inline
+	var params []parse_tree.Inline
 
 	// read LValAtoms up to token.Arrow
 	for !p.curTokenIs(token.Arrow) {
-		arg := p.parseAtom()
-		if !arg.IsLVal() {
-			p.error("arg is not an l-value: %v", arg)
-		}
-		args = append(args, arg)
+		param := p.parseLVal()
+		params = append(params, param)
 	}
 
 	var innermostFunc parse_tree.Block
-	if len(args) > 0 {
-		innermostFunc = p.parseFuncBlock(args[len(args)-1])
+	if len(params) > 0 {
+		innermostFunc = p.parseFuncBlock(params[len(params)-1])
 	} else {
 		p.error("should not be possible to get here in parseFuncDeclBlock!")
 	}
 
 	patmat.Expr = makeNestedFuncBlocks(
 		innermostFunc.(*parse_tree.FuncBlock).Token,
-		args[:len(args)-1],
+		params[:len(params)-1],
 		innermostFunc)
 
 	return patmat
 }
-func makeNestedFuncBlocks(arrowToken token.Token, args []parse_tree.Inline, inner parse_tree.Block) parse_tree.Block {
-	if len(args) <= 0 {
+func makeNestedFuncBlocks(arrowToken token.Token, params []parse_tree.Inline, inner parse_tree.Block) parse_tree.Block {
+	if len(params) <= 0 {
 		return inner
 	}
 
 	return &parse_tree.FuncBlock{
 		Token: arrowToken,
 		FuncBlockPieces: []*parse_tree.FuncBlockPiece{{
-			LVal: args[0],
-			Expr: makeNestedFuncBlocks(arrowToken, args[1:], inner),
+			LVal: params[0],
+			Expr: makeNestedFuncBlocks(arrowToken, params[1:], inner),
 		}},
 	}
 }
@@ -388,20 +374,32 @@ func (p *Parser) parseExprBlock() parse_tree.Block {
 	atom := p.parseAtom()
 
 	if p.curTokenIs(token.Arrow) {
-		return p.parseFuncBlock(atom)
+		if !atom.IsLVal() {
+			p.error("expected l-value, got %v", atom)
+		}
+		lVal := atom
+		return p.parseFuncBlock(lVal)
 	}
 
-	return p.parseJustExprBlock(atom)
+	if !atom.IsRVal() {
+		p.error("expected r-value, got %v", atom)
+	}
+	rVal := atom
+	return p.parseJustExprBlock(rVal)
 }
 
 /*
 JustExprBlock ->
 		Expr  '\n'                   // TODO: allow (by collapsing) multi-line expr
 */
-func (p *Parser) parseJustExprBlock(atom parse_tree.Inline) *parse_tree.JustExprBlock {
+func (p *Parser) parseJustExprBlock(rVal parse_tree.Inline) *parse_tree.JustExprBlock {
 	lit := &parse_tree.JustExprBlock{
 		Token: token.ExprBlockToken,
-		Expr:  p.parseExprRest(atom),
+		Expr:  p.parseExprRest(rVal),
+	}
+
+	if !lit.Expr.IsRVal() {
+		p.error("expected r-value, got %v", lit.Expr)
 	}
 
 	if !p.curTokenIs(token.EOF) {
@@ -434,17 +432,13 @@ FuncBlock ->
 	LValAtom  '->'  ExprBlock
 	LValAtom  '->'  |->'  DeclsAndExpr  '<-|'                  // sugar for 'let'
 */
-func (p *Parser) parseFuncBlock(atom parse_tree.Inline) *parse_tree.FuncBlock {
+func (p *Parser) parseFuncBlock(lVal parse_tree.Inline) *parse_tree.FuncBlock {
 	p.expectToken(token.Arrow)
-
-	if !atom.IsLVal() {
-		p.error("atom %v is not an l-value", atom)
-	}
 
 	lit := &parse_tree.FuncBlock{
 		Token: *p.curToken,
 		FuncBlockPieces: []*parse_tree.FuncBlockPiece{{
-			LVal: atom,
+			LVal: lVal,
 		}},
 	}
 
@@ -472,23 +466,26 @@ func (p *Parser) parseCaseBlock() *parse_tree.CaseBlock {
 	p.expectToken(token.Case)
 
 	lit.Expr = p.parseExpr()
+	if !lit.Expr.IsRVal() {
+		p.error("expected r-value, got %v", lit.Expr)
+	}
 
 	p.expectToken(token.Indent)
 
 	numCases := p.curToken.NumLines
 	p.expectToken(token.BlockLen)
 
-	if numCases <= 0 {
+	if numCases < 1 {
 		p.error("Illegal case expression: must have at least one case")
 	}
 
-	atom := p.parseAtom()
-	caseFunc := p.parseFuncBlock(atom)
+	lVal := p.parseLVal()
+	caseFunc := p.parseFuncBlock(lVal)
 
 	// now we combine them all into one multi-piece function
 	for i := 1; i < numCases; i++ {
-		atom = p.parseAtom()
-		funcBlock := p.parseFuncBlock(atom)
+		lVal = p.parseLVal()
+		funcBlock := p.parseFuncBlock(lVal)
 
 		caseFunc.FuncBlockPieces = append(caseFunc.FuncBlockPieces, funcBlock.FuncBlockPieces[0])
 	}
@@ -514,7 +511,8 @@ func (p *Parser) parseTupleBlock() *parse_tree.TupleBlock {
 		p.error("invalid TupleBlock parsed with %v elements", numElems)
 	}
 	for i := 0; i < numElems; i++ {
-		lit.Exprs = append(lit.Exprs, p.parseExprBlock())
+		expr := p.parseExprBlock()
+		lit.Exprs = append(lit.Exprs, expr)
 	}
 
 	p.expectToken(token.Dedent)
@@ -537,12 +535,12 @@ func (p *Parser) parseRecordBlock() *parse_tree.RecordBlock {
 		p.error("invalid RecordBlock parsed with %v elements", numElems)
 	}
 	for i := 0; i < numElems; i++ {
-		//lit.Exprs = append(lit.Exprs, p.parseExprBlock())
 		name := p.curToken.Literal
 		p.expectToken(token.ID)
 		p.expectToken(token.Colon)
 
-		lit.Elems[name] = p.parseExprBlock()
+		rVal := p.parseExprBlock()
+		lit.Elems[name] = rVal
 	}
 
 	if len(lit.Elems) != numElems {
@@ -574,7 +572,8 @@ func (p *Parser) parseListBlock() parse_tree.Block {
 
 	// End before numElems-1 because the last line may be a semicolon (tail), so needs special treatment.
 	for i := 0; i < numElems-1; i++ {
-		heads = append(heads, p.parseExprBlock())
+		rVal := p.parseExprBlock()
+		heads = append(heads, rVal)
 	}
 
 	// Now let's check that last line
@@ -582,7 +581,8 @@ func (p *Parser) parseListBlock() parse_tree.Block {
 		p.expectToken(token.Semicolon)
 		tail = p.parseExprBlock()
 	} else {
-		heads = append(heads, p.parseExprBlock())
+		rVal := p.parseExprBlock()
+		heads = append(heads, rVal)
 		tail = parse_tree.NilBlock
 	}
 
@@ -650,6 +650,29 @@ func (p *Parser) parseModuleBody(lit *parse_tree.ModuleBlock) {
 	List
 	UnopExpr
 */
+
+func (p *Parser) parseLVal() parse_tree.Inline {
+	atom := p.parseAtom()
+
+	if !atom.IsLVal() {
+		p.error("expected l-value, got %v", atom)
+	}
+
+	if p.curToken.Type == token.Or {
+		tok := p.curToken
+		p.expectToken(token.Or)
+		rest := p.parseLVal()
+
+		return &parse_tree.InlineBinopExpr{
+			Token: *tok,
+			LExpr: atom,
+			RExpr: rest,
+		}
+	}
+
+	return atom
+}
+
 func (p *Parser) parseAtom() parse_tree.Inline {
 	switch p.curToken.Type {
 	case token.ID:
@@ -883,10 +906,17 @@ func (p *Parser) parseExpressionRest(precedence int, atom parse_tree.Inline) par
 				p.error("atom %v is not an l-value", atom)
 			}
 
+			// Note that this resets the precedence; this is why
+			// token.Arrow is not treated as just another binop
+			expr := p.parseExpr()
+			if !expr.IsRVal() {
+				p.error("expected r-value, got %v", expr)
+			}
+
 			return &parse_tree.InlineFunc{
 				Token: *tok,
 				LVal:  atom,
-				Expr:  p.parseExpr(), // note that this resets the precedence; this is why token.Arrow is not treated as just another binop
+				Expr:  expr,
 			}
 		}
 

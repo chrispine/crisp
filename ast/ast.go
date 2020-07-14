@@ -319,6 +319,22 @@ func (e *AssertListIsNilExpr) TipeVar(tc *TipeChecker) *TipeVar {
 	return e.tipeVar
 }
 
+type AssertAnyOfTheseSets struct {
+	tipeVar    *TipeVar
+	finalTipe  Tipe
+	AssertSets [][]Expr
+}
+
+func (e *AssertAnyOfTheseSets) setFinalTipe(tipe Tipe) { e.finalTipe = tipe }
+func (e *AssertAnyOfTheseSets) FinalTipe() Tipe        { return e.finalTipe }
+func (e *AssertAnyOfTheseSets) String() string         { return "AssertAnyOfTheseSets" }
+func (e *AssertAnyOfTheseSets) TipeVar(tc *TipeChecker) *TipeVar {
+	if e.tipeVar == nil {
+		e.tipeVar = tc.newTipeVar()
+	}
+	return e.tipeVar
+}
+
 type TupleDestructureExpr struct {
 	tipeVar   *TipeVar
 	finalTipe Tipe

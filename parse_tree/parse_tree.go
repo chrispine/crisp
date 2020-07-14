@@ -125,10 +125,15 @@ ApplyExpr ->
 // lVal elements
 
 
-☉LLValAtom->
+☉LValAtom->
+	'$'  LValAtom
+	LValAtom  '|'  LValAtom
 	ID
+	'_'
 	LValTuple
 	LValList
+	LValRecord
+	LValRecordPartial
 
 LValTuple ->
 	'('  ')'
@@ -137,6 +142,13 @@ LValTuple ->
 LValList ->
 	'['  ']'
 	'['  LValAtom  (','  LValAtom)*  (';'  LValAtom)?  ']'
+
+LValRecord ->
+	'{'  ID  ':'  LValAtom  (','  ID  ':'  LValAtom)*  '}'
+
+LValRecordPartial ->
+	'{'  '_'  '}'
+	'{'  ID  ':'  LValAtom  (','  ID  ':'  LValAtom)*  ','  '_'  '}'
 
 */
 
@@ -156,6 +168,7 @@ type Block interface {
 type Inline interface {
 	Node
 	IsLVal() bool
+	IsRVal() bool
 }
 
 // neither Block nor Inline
@@ -369,6 +382,7 @@ type InlineID struct {
 }
 
 func (ii *InlineID) IsLVal() bool         { return true }
+func (ii *InlineID) IsRVal() bool         { return true }
 func (ii *InlineID) TokenLiteral() string { return ii.Token.Literal }
 func (ii *InlineID) String() string       { return ii.Name }
 
@@ -378,6 +392,7 @@ type InlineNoMatch struct {
 }
 
 func (ii *InlineNoMatch) IsLVal() bool         { return true }
+func (ii *InlineNoMatch) IsRVal() bool         { return false }
 func (ii *InlineNoMatch) TokenLiteral() string { return ii.Token.Literal }
 func (ii *InlineNoMatch) String() string       { return ii.Name }
 
@@ -388,6 +403,7 @@ type InlineFunc struct {
 }
 
 func (iFunc *InlineFunc) IsLVal() bool         { return false }
+func (iFunc *InlineFunc) IsRVal() bool         { return iFunc.LVal.IsLVal() && iFunc.Expr.IsRVal() }
 func (iFunc *InlineFunc) TokenLiteral() string { return iFunc.Token.Literal }
 func (iFunc *InlineFunc) String() string {
 	var out bytes.Buffer
@@ -409,6 +425,15 @@ type InlineTuple struct {
 func (it *InlineTuple) IsLVal() bool {
 	for _, expr := range it.Exprs {
 		if !expr.IsLVal() {
+			return false
+		}
+	}
+
+	return true
+}
+func (it *InlineTuple) IsRVal() bool {
+	for _, expr := range it.Exprs {
+		if !expr.IsRVal() {
 			return false
 		}
 	}
@@ -445,6 +470,15 @@ type InlineRecord struct {
 func (ir *InlineRecord) IsLVal() bool {
 	for _, v := range ir.Elems {
 		if !v.IsLVal() {
+			return false
+		}
+	}
+
+	return true
+}
+func (ir *InlineRecord) IsRVal() bool {
+	for _, v := range ir.Elems {
+		if !v.IsRVal() {
 			return false
 		}
 	}
@@ -489,6 +523,12 @@ func (ic *InlineCons) IsLVal() bool {
 	}
 	return ic.Head.IsLVal() && ic.Tail.IsLVal()
 }
+func (ic *InlineCons) IsRVal() bool {
+	if ic == InlineNil {
+		return true
+	}
+	return ic.Head.IsRVal() && ic.Tail.IsRVal()
+}
 func (ic *InlineCons) TokenLiteral() string { return ic.Token.Literal }
 func (ic *InlineCons) String() string {
 	var out bytes.Buffer
@@ -516,6 +556,9 @@ type InlineUnopExpr struct {
 func (iue *InlineUnopExpr) IsLVal() bool {
 	return iue.Token.Type == token.Shadow && iue.Expr.IsLVal()
 }
+func (iue *InlineUnopExpr) IsRVal() bool {
+	return iue.Token.Type == token.Minus && iue.Expr.IsRVal()
+}
 func (iue *InlineUnopExpr) Op() token.TokType    { return iue.Token.Type }
 func (iue *InlineUnopExpr) TokenLiteral() string { return iue.Token.Literal }
 func (iue *InlineUnopExpr) String() string {
@@ -536,7 +579,10 @@ type InlineBinopExpr struct {
 	RExpr Inline
 }
 
-func (ibe *InlineBinopExpr) IsLVal() bool         { return false }
+func (ibe *InlineBinopExpr) IsLVal() bool {
+	return ibe.Token.Type == token.Or && ibe.LExpr.IsLVal() && ibe.RExpr.IsLVal()
+}
+func (ibe *InlineBinopExpr) IsRVal() bool         { return ibe.LExpr.IsRVal() && ibe.RExpr.IsRVal() }
 func (ibe *InlineBinopExpr) Op() token.TokType    { return ibe.Token.Type }
 func (ibe *InlineBinopExpr) TokenLiteral() string { return ibe.Token.Literal }
 func (ibe *InlineBinopExpr) String() string {

@@ -27,8 +27,10 @@ func (tr *Translator) Translate(program *parse_tree.Program) Expr {
 
 	expr := tr.translateLetBlock(TopLevelExprEnv, lb, false) // this let block is not part of a function
 
-	for _, err := range CheckTipes(expr) {
-		tr.trErrors = append(tr.trErrors, err)
+	if len(tr.trErrors) == 0 {
+		for _, err := range CheckTipes(expr) {
+			tr.trErrors = append(tr.trErrors, err)
+		}
 	}
 
 	return expr
@@ -151,6 +153,8 @@ type toAssert struct {
 	listIsCons parse_tree.Block
 	// rhs is a nil list
 	listIsNil parse_tree.Block
+	// one of these assertions is true
+	anyOfTheseSets [][]toAssert
 }
 
 func (tr *Translator) translateLetBlock(env *ExprEnv, block *parse_tree.LetBlock, isFunc bool) *LetExpr {
@@ -182,7 +186,7 @@ func (tr *Translator) translateLetBlock(env *ExprEnv, block *parse_tree.LetBlock
 	var preAsserts []toAssert
 
 	for _, decl := range block.Decls {
-		preAsserts = tr.partitionDecl(preEnv, postEnv, preAsserts, decl.LVal, decl.Expr, false)
+		preAsserts = tr.partitionDecl(preEnv, postEnv, preAsserts, decl.LVal, decl.Expr, false, true)
 	}
 
 	// ensure binding names are unique
@@ -202,22 +206,7 @@ func (tr *Translator) translateLetBlock(env *ExprEnv, block *parse_tree.LetBlock
 	for _, ta := range preAsserts {
 		var newAssert Expr
 
-		switch {
-		case !isNil(ta.listIsCons):
-			newAssert = &AssertListIsConsExpr{List: tr.translateBlock(postEnv, ta.listIsCons)}
-		case !isNil(ta.listIsNil):
-			newAssert = &AssertListIsNilExpr{List: tr.translateBlock(postEnv, ta.listIsNil)}
-		default:
-			lExpr := postEnv.LookupIndices(ta.lhsEqual.Name)
-			if isNil(lExpr) {
-				tr.error("unknown identifier: " + ta.lhsEqual.Name)
-			}
-
-			newAssert = &AssertEqualExpr{
-				LExpr: lExpr,
-				RExpr: tr.translateBlock(postEnv, ta.rhsEqual),
-			}
-		}
+		newAssert = tr.translateAssertion(postEnv, ta)
 
 		le.Asserts = append(le.Asserts, newAssert)
 	}
@@ -242,7 +231,8 @@ func (tr *Translator) partitionDecl(
 	asserts []toAssert,
 	lVal parse_tree.Inline,
 	rhs parse_tree.Block,
-	shadowing bool) []toAssert {
+	shadowing bool,
+	bindingsAllowed bool) []toAssert {
 
 	switch lhs := lVal.(type) {
 	case *parse_tree.InlineNoMatch:
@@ -250,11 +240,22 @@ func (tr *Translator) partitionDecl(
 		// do nothing
 	case *parse_tree.InlineUnopExpr:
 		// `$(lval) = expr`
-		if lhs.Token.Type == token.Shadow {
-			asserts = tr.partitionDecl(preEnv, postEnv, asserts, lhs.Expr, rhs, true)
-		} else {
-			tr.error("illegal l-value (should not be possible to get here)")
+		if lhs.Token.Type != token.Shadow {
+			tr.error("illegal l-value (should not be possible to get here): %v", lhs)
 		}
+		asserts = tr.partitionDecl(preEnv, postEnv, asserts, lhs.Expr, rhs, true, bindingsAllowed)
+	case *parse_tree.InlineBinopExpr:
+		// `a | b`
+		if lhs.Token.Type != token.Or {
+			tr.error("illegal l-value (should not be possible to get here): %v", lhs)
+		}
+		if shadowing {
+			tr.error("shadowing of 'or' sub-patterns is not allowed; got %v", lhs)
+		}
+		lAsserts := tr.partitionDecl(preEnv, postEnv, nil, lhs.LExpr, rhs, false, false)
+		rAsserts := tr.partitionDecl(preEnv, postEnv, nil, lhs.RExpr, rhs, false, false)
+
+		asserts = append(asserts, toAssert{anyOfTheseSets: [][]toAssert{lAsserts, rAsserts}})
 	case *parse_tree.InlineID:
 		// `x = expr`
 		if !shadowing && postEnv.isDefined(lhs.Name) {
@@ -262,6 +263,9 @@ func (tr *Translator) partitionDecl(
 			asserts = append(asserts, toAssert{lhsEqual: lhs, rhsEqual: rhs})
 		} else {
 			// binding
+			if !bindingsAllowed {
+				tr.error("bindings not allowed on 'or' sub-patterns; got %v", lhs)
+			}
 			preEnv.Bindings = append(preEnv.Bindings, &ParseBinding{Name: lhs.Name, Expr: rhs})
 			postEnv.Bindings = append(postEnv.Bindings, &ExprBinding{Name: lhs.Name, Expr: nil})
 			// that `Expr: nil` will be populated in just a bit with the translated `rhs`
@@ -272,7 +276,7 @@ func (tr *Translator) partitionDecl(
 		// because the type checker will flag that at compile time.
 		for i, elem := range lhs.Exprs {
 			td := &TupleDestructureBlock{index: i, size: len(lhs.Exprs), tuple: rhs}
-			asserts = tr.partitionDecl(preEnv, postEnv, asserts, elem, td, shadowing)
+			asserts = tr.partitionDecl(preEnv, postEnv, asserts, elem, td, shadowing, bindingsAllowed)
 		}
 	case *parse_tree.InlineRecord:
 		// `{x: foo, y: bar} = expr`
@@ -280,7 +284,7 @@ func (tr *Translator) partitionDecl(
 
 		for name, elem := range lhs.Elems {
 			rd := &RecordDestructureBlock{name: name, names: names, partial: lhs.PartialLVal, record: rhs}
-			asserts = tr.partitionDecl(preEnv, postEnv, asserts, elem, rd, shadowing)
+			asserts = tr.partitionDecl(preEnv, postEnv, asserts, elem, rd, shadowing, bindingsAllowed)
 		}
 	case *parse_tree.InlineCons:
 		// `[a, b]` = expr
@@ -292,16 +296,47 @@ func (tr *Translator) partitionDecl(
 			asserts = append(asserts, toAssert{listIsCons: rhs})
 
 			rhsHead := &ConsDestructureBlock{true, rhs}
-			asserts = tr.partitionDecl(preEnv, postEnv, asserts, lhs.Head, rhsHead, shadowing)
+			asserts = tr.partitionDecl(preEnv, postEnv, asserts, lhs.Head, rhsHead, shadowing, bindingsAllowed)
 
 			rhsTail := &ConsDestructureBlock{false, rhs}
-			asserts = tr.partitionDecl(preEnv, postEnv, asserts, lhs.Tail, rhsTail, shadowing)
+			asserts = tr.partitionDecl(preEnv, postEnv, asserts, lhs.Tail, rhsTail, shadowing, bindingsAllowed)
 		}
 	default:
-		tr.error("illegal l-value (should not be possible to get here)")
+		tr.error("illegal l-value (should not be possible to get here): %v", lhs)
 	}
 
 	return asserts
+}
+
+func (tr *Translator) translateAssertion(env *ExprEnv, ta toAssert) Expr {
+	switch {
+	case !isNil(ta.listIsCons):
+		return &AssertListIsConsExpr{List: tr.translateBlock(env, ta.listIsCons)}
+	case !isNil(ta.listIsNil):
+		return &AssertListIsNilExpr{List: tr.translateBlock(env, ta.listIsNil)}
+	case !isNil(ta.anyOfTheseSets):
+		var assertSets [][]Expr
+
+		for _, set := range ta.anyOfTheseSets {
+			var assertSet []Expr
+
+			for _, assert := range set {
+				assertSet = append(assertSet, tr.translateAssertion(env, assert))
+			}
+			assertSets = append(assertSets, assertSet)
+		}
+		return &AssertAnyOfTheseSets{AssertSets: assertSets}
+	default:
+		lExpr := env.LookupIndices(ta.lhsEqual.Name)
+		if isNil(lExpr) {
+			tr.error("unknown identifier: " + ta.lhsEqual.Name)
+		}
+
+		return &AssertEqualExpr{
+			LExpr: lExpr,
+			RExpr: tr.translateBlock(env, ta.rhsEqual),
+		}
+	}
 }
 
 type TupleDestructureBlock struct {
