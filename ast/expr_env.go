@@ -82,7 +82,8 @@ func (e *ExprEnv) LookupIndices(name string) Expr {
 		return &IntExpr{Value: i}
 	}
 
-	panic("LookupError: undefined identifier: " + name)
+	// nothing was found
+	// TODO: as this is an error, convert this to a more explicit error
 	return nil
 }
 

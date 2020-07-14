@@ -1,14 +1,66 @@
 package main
 
 import (
+	"crisp/ast"
+	"crisp/eval"
+	"crisp/lexer"
+	"crisp/parser"
 	"crisp/repl"
+	"crisp/value"
 	"fmt"
+	"io/ioutil"
 	"os"
 )
 
 func main() {
-	fmt.Println("Welcome to the Crisp REPL.")
-	fmt.Println("Gimme some code!")
+	if len(os.Args) < 2 {
+		// no filename passed in, so start the REPL
+		repl.Start(os.Stdin, os.Stdout, run)
+		return
+	}
 
-	repl.Start(os.Stdin, os.Stdout)
+	// run the given program
+	filename := os.Args[1]
+	file, err := ioutil.ReadFile(filename)
+	if err != nil {
+		fmt.Print("file not found: " + filename)
+		return
+	}
+
+	output, ok := run(string(file))
+
+	if !ok {
+		fmt.Println("Crisp encountered an error:")
+	}
+	fmt.Print(output)
+}
+
+func run(code string) (string, bool) {
+	l := lexer.New(code)
+	p := parser.New(l)
+	pTree, err := p.ParseProgram()
+	if err != nil {
+		return err.Error(), false
+	}
+
+	tr := ast.NewTranslator()
+	program := tr.Translate(pTree)
+
+	// check for translation errors
+	errStr := ""
+	errors := tr.Errors()
+	if len(errors) > 0 {
+		for _, msg := range errors {
+			errStr += fmt.Sprintf("   translator error: %q\n", msg)
+		}
+		return errStr, false
+	}
+
+	val, err := eval.Eval(value.TopLevelEnv, program)
+	if err != nil {
+		errStr = fmt.Sprintf("   runtime error: %q\n", err)
+		return errStr, false
+	}
+
+	return val.Inspect() + "\n", true
 }

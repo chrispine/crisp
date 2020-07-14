@@ -4,11 +4,18 @@ import (
 	"crisp/ast"
 	"crisp/token"
 	"crisp/value"
+	"errors"
 	"fmt"
 )
 
-func Eval(env *value.Env, someExpr ast.Expr) value.Value {
-	return eval(env, someExpr, nil)
+func Eval(env *value.Env, someExpr ast.Expr) (val value.Value, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
+	return eval(env, someExpr, nil), nil
 }
 
 func eval(env *value.Env, someExpr ast.Expr, binding *value.Binding) value.Value {
@@ -61,7 +68,7 @@ func eval(env *value.Env, someExpr ast.Expr, binding *value.Binding) value.Value
 			panic("Runtime Error: failed assertion in `let` expression")
 		}
 	default:
-		panic(fmt.Sprintf("Runtime Error: unhandled expression %v of type %T", someExpr, someExpr))
+		panic(errors.New(fmt.Sprintf("Runtime Error: unhandled expression %v of type %T", someExpr, someExpr)))
 	}
 
 	if binding != nil {
@@ -119,7 +126,7 @@ func evalTupleExpr(env *value.Env, expr *ast.TupleExpr, binding *value.Binding) 
 	var values []value.Value
 
 	for _, elem := range expr.Exprs {
-		values = append(values, Eval(env, elem))
+		values = append(values, eval(env, elem, nil))
 	}
 
 	tuple.Values = values
@@ -135,7 +142,7 @@ func evalRecordExpr(env *value.Env, expr *ast.RecordExpr, binding *value.Binding
 	}
 
 	for _, field := range expr.Fields {
-		val := Eval(env, field.Expr)
+		val := eval(env, field.Expr, nil)
 		record.Fields = append(record.Fields, value.RecordField{Name: field.Name, Value: val})
 	}
 
@@ -153,14 +160,14 @@ func evalConsExpr(env *value.Env, expr *ast.ConsExpr, binding *value.Binding) *v
 		binding.Value = cons
 	}
 
-	cons.Head = Eval(env, expr.Head)
-	cons.Tail = Eval(env, expr.Tail)
+	cons.Head = eval(env, expr.Head, nil)
+	cons.Tail = eval(env, expr.Tail, nil)
 
 	return cons
 }
 
 func evalRecordLookupExpr(env *value.Env, expr *ast.RecordLookupExpr) value.Value {
-	record := Eval(env, expr.Record).(*value.Record)
+	record := eval(env, expr.Record, nil).(*value.Record)
 
 	// TODO: optimize this to just use an index (once we have a post-type-check optimizer)
 	for _, field := range record.Fields {
@@ -174,7 +181,7 @@ func evalRecordLookupExpr(env *value.Env, expr *ast.RecordLookupExpr) value.Valu
 }
 
 func evalTupleDestructure(env *value.Env, expr *ast.TupleDestructureExpr) value.Value {
-	tuple := Eval(env, expr.Tuple).(*value.Tuple)
+	tuple := eval(env, expr.Tuple, nil).(*value.Tuple)
 	// TODO: did I just eval the same expression multiple times, one for each element?
 	// TODO: same question with cons destructuring and all assertion types, and record lookup
 
@@ -182,7 +189,7 @@ func evalTupleDestructure(env *value.Env, expr *ast.TupleDestructureExpr) value.
 }
 
 func evalConsDestructure(env *value.Env, expr *ast.ConsDestructureExpr) value.Value {
-	cons := Eval(env, expr.List).(*value.Cons)
+	cons := eval(env, expr.List, nil).(*value.Cons)
 
 	if expr.IsHead {
 		return cons.Head
@@ -192,8 +199,8 @@ func evalConsDestructure(env *value.Env, expr *ast.ConsDestructureExpr) value.Va
 }
 
 func evalAssertEqual(env *value.Env, expr *ast.AssertEqualExpr) *value.Bool {
-	lVal := Eval(env, expr.LExpr)
-	rVal := Eval(env, expr.RExpr)
+	lVal := eval(env, expr.LExpr, nil)
+	rVal := eval(env, expr.RExpr, nil)
 
 	if equal(lVal, rVal) {
 		return value.True
@@ -202,7 +209,7 @@ func evalAssertEqual(env *value.Env, expr *ast.AssertEqualExpr) *value.Bool {
 }
 
 func evalAssertListIsCons(env *value.Env, expr *ast.AssertListIsConsExpr) *value.Bool {
-	cons := Eval(env, expr.List)
+	cons := eval(env, expr.List, nil)
 
 	if cons == value.Nil {
 		return value.False
@@ -211,7 +218,7 @@ func evalAssertListIsCons(env *value.Env, expr *ast.AssertListIsConsExpr) *value
 }
 
 func evalAssertListIsNil(env *value.Env, expr *ast.AssertListIsNilExpr) *value.Bool {
-	cons := Eval(env, expr.List)
+	cons := eval(env, expr.List, nil)
 
 	if cons == value.Nil {
 		return value.True
@@ -220,7 +227,7 @@ func evalAssertListIsNil(env *value.Env, expr *ast.AssertListIsNilExpr) *value.B
 }
 
 func evalUnopExpr(env *value.Env, expr *ast.UnopExpr) value.Value {
-	val := Eval(env, expr.Expr)
+	val := eval(env, expr.Expr, nil)
 
 	switch expr.FinalTipe() {
 	case ast.IntTipe:
@@ -235,8 +242,8 @@ func evalUnopExpr(env *value.Env, expr *ast.UnopExpr) value.Value {
 
 func evalBinopExpr(env *value.Env, expr *ast.BinopExpr) value.Value {
 	binopType := expr.Token.Type
-	someLeftVal := Eval(env, expr.LExpr)
-	someRightVal := Eval(env, expr.RExpr)
+	someLeftVal := eval(env, expr.LExpr, nil)
+	someRightVal := eval(env, expr.RExpr, nil)
 
 	switch leftVal := someLeftVal.(type) { // TODO: use Tipe instead of (type) for dispatch
 	case *value.Unit_:
@@ -430,7 +437,7 @@ func evalLetExpr(env *value.Env, expr *ast.LetExpr, maybeArg value.Value) (value
 
 	// Next, we attempt to validate the assertions
 	for _, assert := range expr.Asserts {
-		val := Eval(newEnv, assert)
+		val := eval(newEnv, assert, nil)
 		if !val.(*value.Bool).Value {
 			return nil, false
 		}
@@ -438,11 +445,11 @@ func evalLetExpr(env *value.Env, expr *ast.LetExpr, maybeArg value.Value) (value
 
 	// Finally, we force all of the thunks, so none remain when we return.
 	for _, b := range newEnv.Bindings {
-		// we can skip Eval() and call evalLookupExpr() directly
+		// we can skip eval() and call evalLookupExpr() directly
 		evalLookupExpr(newEnv, &ast.LookupExpr{Name: b.Name})
 	}
 
-	return Eval(newEnv, expr.Expr), true
+	return eval(newEnv, expr.Expr, nil), true
 }
 
 func evalFuncExpr(env *value.Env, expr *ast.FuncExpr) *value.Func {

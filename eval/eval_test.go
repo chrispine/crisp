@@ -5,14 +5,18 @@ import (
 	"crisp/lexer"
 	"crisp/parser"
 	"crisp/value"
+	"fmt"
 	"testing"
 )
 
 // TODO: add tests to catch every error and panic, to make sure we are generating them correctly.
 
-func testFirst(t *testing.T) {
+func TestFirst(t *testing.T) {
 	expected := 5
 	program := `
+
+5
+
 #len[   ] -> 0
 #len[_;t] -> 1 + len(t)
 
@@ -875,47 +879,35 @@ is_even_len?[1,2,3]
 	}
 }
 
-func testEval(t *testing.T, input string) value.Value {
-	l := lexer.New(input)
+func testEval(t *testing.T, code string) value.Value {
+	l := lexer.New(code)
 	p := parser.New(l)
-	pTree := p.ParseProgram()
-
-	if checkParserErrors(t, p) {
-		return nil
+	pTree, err := p.ParseProgram()
+	if err != nil {
+		t.Errorf(err.Error())
+		t.FailNow()
 	}
 
 	tr := ast.NewTranslator()
 	program := tr.Translate(pTree)
 
-	checkTranslatorErrors(t, tr)
-
-	return Eval(value.TopLevelEnv, program)
-}
-
-func checkParserErrors(t *testing.T, p *parser.Parser) bool {
-	errors := p.Errors()
-	if len(errors) == 0 {
-		return false
-	}
-
-	t.Errorf("parser has %d errors", len(errors))
-	for _, msg := range errors {
-		t.Errorf("parser error: %q", msg)
-	}
-	t.FailNow()
-
-	return true
-}
-
-func checkTranslatorErrors(t *testing.T, tr *ast.Translator) {
+	// check for translation errors
+	errStr := ""
 	errors := tr.Errors()
-	if len(errors) == 0 {
-		return
+	if len(errors) > 0 {
+		for _, msg := range errors {
+			errStr += fmt.Sprintf("   translator error: %q\n", msg)
+		}
+		t.Errorf(errStr)
+		t.FailNow()
 	}
 
-	t.Errorf("translator has %d errors", len(errors))
-	for _, msg := range errors {
-		t.Errorf("translator error: %q", msg)
+	val, err := Eval(value.TopLevelEnv, program)
+	if err != nil {
+		errStr = fmt.Sprintf("   runtime error: %q\n", err)
+		t.Errorf(errStr)
+		t.FailNow()
 	}
-	t.FailNow()
+
+	return val
 }

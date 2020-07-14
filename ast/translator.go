@@ -11,13 +11,14 @@ import (
 // translates parse trees into ASTs
 
 type Translator struct {
-	errors []string
+	trErrors []string
 }
 
 func NewTranslator() *Translator { return &Translator{} }
 
 // A Crisp program is treated as if it is the interior of a `let` expression.
 func (tr *Translator) Translate(program *parse_tree.Program) Expr {
+
 	lb := &parse_tree.LetBlock{
 		Token: token.LetToken,
 		Decls: program.Decls,
@@ -27,19 +28,18 @@ func (tr *Translator) Translate(program *parse_tree.Program) Expr {
 	expr := tr.translateLetBlock(TopLevelExprEnv, lb, false) // this let block is not part of a function
 
 	for _, err := range CheckTipes(expr) {
-		tr.error(err)
+		tr.trErrors = append(tr.trErrors, err)
 	}
 
 	return expr
 }
 
 func (tr *Translator) Errors() []string {
-	return tr.errors
+	return tr.trErrors
 }
 
-func (tr *Translator) error(err string) {
-	tr.errors = append(tr.errors, err)
-	panic(err) // TODO: remove this line when translator is stable
+func (tr *Translator) error(err string, a ...interface{}) {
+	tr.trErrors = append(tr.trErrors, fmt.Sprintf("Crisp translator error: "+err+"\n", a...))
 }
 
 func (tr *Translator) translateBlock(env *ExprEnv, blockTree parse_tree.Block) Expr {
@@ -68,14 +68,18 @@ func (tr *Translator) translateBlock(env *ExprEnv, blockTree parse_tree.Block) E
 		return tr.translateConsDestructureBlock(env, block)
 	}
 
-	tr.error(fmt.Sprintf("Translator Error: unhandled Block %v of type %T", blockTree, blockTree))
+	tr.error("unhandled block %v of type %T", blockTree, blockTree)
 	return nil
 }
 
 func (tr *Translator) translateInline(env *ExprEnv, inlineTree parse_tree.Inline) Expr {
 	switch inline := inlineTree.(type) {
 	case *parse_tree.InlineID:
-		return env.LookupIndices(inline.Name)
+		lookup := env.LookupIndices(inline.Name)
+		if isNil(lookup) {
+			tr.error("unknown identifier: " + inline.Name)
+		}
+		return lookup
 	case *parse_tree.InlineUnopExpr:
 		return &UnopExpr{
 			Token: inline.Token,
@@ -127,10 +131,11 @@ func (tr *Translator) translateInline(env *ExprEnv, inlineTree parse_tree.Inline
 	case *parse_tree.InlineCons:
 		return tr.translateInlineCons(env, inline)
 	case *parse_tree.InlineNoMatch:
-		panic("Invalid use of `_` outside of pattern matching.")
+		tr.error("Invalid use of `_` outside of pattern matching.")
+		return nil
 	}
 
-	tr.error(fmt.Sprintf("Translator Error: unhandled Inline %v of type %T", inlineTree, inlineTree))
+	tr.error("unhandled inline %v of type %T", inlineTree, inlineTree)
 	return nil
 }
 
@@ -204,6 +209,9 @@ func (tr *Translator) translateLetBlock(env *ExprEnv, block *parse_tree.LetBlock
 			newAssert = &AssertListIsNilExpr{List: tr.translateBlock(postEnv, ta.listIsNil)}
 		default:
 			lExpr := postEnv.LookupIndices(ta.lhsEqual.Name)
+			if isNil(lExpr) {
+				tr.error("unknown identifier: " + ta.lhsEqual.Name)
+			}
 
 			newAssert = &AssertEqualExpr{
 				LExpr: lExpr,

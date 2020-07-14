@@ -73,8 +73,10 @@ func TestExprs(t *testing.T) {
 	for _, tt := range atomTests {
 		l := lexer.New(tt.input)
 		p := New(l)
-		program := p.ParseProgram()
-		checkParserErrors(t, p)
+		program, err := p.ParseProgram()
+		if err != nil {
+			t.Errorf("error: %v", err)
+		}
 
 		progStr := program.String()
 
@@ -97,8 +99,11 @@ func TestUnopExprs(t *testing.T) {
 	for _, tt := range prefixTests {
 		l := lexer.New(tt.input)
 		p := New(l)
-		exprTree := p.ParseProgram().Expr.(*parse_tree.JustExprBlock).Expr
-		checkParserErrors(t, p)
+		program, err := p.ParseProgram()
+		if err != nil {
+			t.Errorf("error: %v", err)
+		}
+		exprTree := program.Expr.(*parse_tree.JustExprBlock).Expr
 
 		switch unopTree := exprTree.(type) {
 		case *parse_tree.InlineUnopExpr:
@@ -140,17 +145,4 @@ func testInlineID(t *testing.T, exp parse_tree.Inline, name string) bool {
 	}
 
 	return true
-}
-
-func checkParserErrors(t *testing.T, p *Parser) {
-	errors := p.Errors()
-	if len(errors) == 0 {
-		return
-	}
-
-	t.Errorf("parser has %d errors", len(errors))
-	for _, msg := range errors {
-		t.Errorf("parser error: %q", msg)
-	}
-	t.FailNow()
 }

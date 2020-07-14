@@ -23,17 +23,16 @@ func CheckTipes(expr Expr) []string {
 	// out the final tipes and assign them to the expressions themselves.
 	tc.finalizeTipes(expr)
 
-	return tc.errors
+	return tc.tcErrors
 }
 
 type TipeChecker struct {
-	dict   map[*TipeVar]Tipe
-	errors []string
+	dict     map[*TipeVar]Tipe
+	tcErrors []string
 }
 
-func (tc *TipeChecker) error(err string) {
-	tc.errors = append(tc.errors, err)
-	panic(err) // TODO: remove this line when type-checker is stable
+func (tc *TipeChecker) error(err string, a ...interface{}) {
+	tc.tcErrors = append(tc.tcErrors, fmt.Sprintf("Crisp type error: "+err+"\n", a...))
 }
 
 // the Tipe interface
@@ -128,6 +127,12 @@ func (tc *TipeChecker) newTipeVar() *TipeVar {
 // Type Checking
 
 func (tc *TipeChecker) inferTipes(someExpr Expr) {
+	defer func() {
+		if r := recover(); r != nil {
+			tc.error(r.(error).Error())
+		}
+	}()
+
 	tv := someExpr.TipeVar(tc)
 
 	switch expr := someExpr.(type) {
@@ -215,7 +220,7 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 
 			tc.unify(varTuple, &AmbiguousTipe{[]Tipe{intTuple, funcTuple}})
 		default:
-			tc.error("Whoops, looks like Chris forgot to implement type-checking for a binop expression!")
+			tc.error("Whoops, looks like Chris forgot to implement type-checking for a binop expression of type %v", expr.Token)
 		}
 
 		tc.unify(tv, tipe)
@@ -443,7 +448,7 @@ func (tc *TipeChecker) unify(tipe0 Tipe, tipe1 Tipe) {
 	if tt0, ok := tipe0.(*TupleTipe); ok {
 		if tt1, ok := tipe1.(*TupleTipe); ok {
 			if len(tt0.Tipes) != len(tt1.Tipes) {
-				tc.error("type error: incompatible tuple types")
+				tc.error("incompatible tuple types")
 				return
 			}
 			for i, t := range tt0.Tipes {
@@ -452,7 +457,7 @@ func (tc *TipeChecker) unify(tipe0 Tipe, tipe1 Tipe) {
 			return
 		}
 		if _, ok := tipe1.(*SimpleTipe); ok {
-			tc.error("type error: can't use simple type as record type")
+			tc.error("can't use simple type as tuple type")
 			return
 		}
 		for i, t := range tt0.Tipes {
@@ -475,7 +480,7 @@ func (tc *TipeChecker) unify(tipe0 Tipe, tipe1 Tipe) {
 		allegedTuple := ti0.Tuple
 		if tuple, ok := allegedTuple.(*TupleTipe); ok {
 			if len(tuple.Tipes) != ti0.Size {
-				tc.error("Type Error: tuple sizes don't match")
+				tc.error("tuple sizes don't match")
 				return
 			}
 			tc.unify(tuple.Tipes[ti0.Index], tipe1)
@@ -547,7 +552,7 @@ func (tc *TipeChecker) unify(tipe0 Tipe, tipe1 Tipe) {
 					// if we got here, then rt0.Fields[i].Name < f.Name,
 					// which means rt0 has a field rt1 lacks,
 					// which means they cannot be unified
-					tc.error("type error: incompatible record types")
+					tc.error("incompatible record types")
 					break
 				}
 				return
@@ -559,12 +564,12 @@ func (tc *TipeChecker) unify(tipe0 Tipe, tipe1 Tipe) {
 				return
 			}
 			if len(rt0.Fields) != len(rt1.Fields) {
-				tc.error("type error: incompatible record types")
+				tc.error("incompatible record types")
 				return
 			}
 			for i, f := range rt0.Fields {
 				if f.Name != rt1.Fields[i].Name {
-					tc.error("type error: incompatible record types")
+					tc.error("incompatible record types")
 					return
 				}
 			}
@@ -577,7 +582,7 @@ func (tc *TipeChecker) unify(tipe0 Tipe, tipe1 Tipe) {
 			return
 		}
 		if _, ok := tipe1.(*SimpleTipe); ok {
-			tc.error("type error: can't use simple type as record type")
+			tc.error("can't use simple type as record type")
 			return
 		}
 		panic("TODO")
@@ -600,7 +605,7 @@ func (tc *TipeChecker) unify(tipe0 Tipe, tipe1 Tipe) {
 			return
 		}
 		if _, ok := tipe1.(*SimpleTipe); ok {
-			tc.error("type error: can't use simple type as list type")
+			tc.error("can't use simple type as list type")
 			return
 		}
 		panic("TODO")
@@ -780,7 +785,7 @@ func (tc *TipeChecker) match(tipe0 Tipe, tipe1 Tipe) Match {
 			}
 			return Maybe
 		default:
-			tc.error("Chris missed a type in tc.match()")
+			tc.error("Chris missed a type in tc.match(Func): %T", t1)
 			return No
 		}
 	}
@@ -811,7 +816,7 @@ func (tc *TipeChecker) match(tipe0 Tipe, tipe1 Tipe) Match {
 			}
 			return tupleMatch
 		default:
-			tc.error("Chris missed a type in tc.match()")
+			tc.error("Chris missed a type in tc.match(Tuple): %T", t1)
 			return No
 		}
 	}
@@ -823,7 +828,7 @@ func (tc *TipeChecker) match(tipe0 Tipe, tipe1 Tipe) Match {
 		case *ConsTipe:
 			return tc.match(t0.Tipe, t1.Tipe)
 		default:
-			tc.error("Chris missed a type in tc.match()")
+			tc.error("Chris missed a type in tc.match(Cons): %T", t1)
 			return No
 		}
 	}
@@ -845,7 +850,7 @@ func (tc *TipeChecker) resolveAmbiTipe(ambiTipe *AmbiguousTipe, match func(Tipe)
 	ambiTipe.Tipes = matchingTipes
 
 	if len(ambiTipe.Tipes) < 1 {
-		tc.error("Type Error: no matches found when resolving ambiguous type")
+		tc.error("no matches found when resolving ambiguous type")
 	}
 }
 
@@ -916,7 +921,7 @@ func (tc *TipeChecker) finalizeTipes(someExpr Expr) {
 		tc.finalizeTipes(expr.Record)
 
 	default:
-		tc.error("failed to finalize type")
+		tc.error("failed to finalize type for expression: %v", expr)
 	}
 }
 
@@ -941,7 +946,7 @@ func (tc *TipeChecker) determineFinalTipe(someTipe Tipe) Tipe {
 
 	case *AmbiguousTipe:
 		if len(tipe.Tipes) != 1 {
-			tc.error("type error: failed to resolve ambiguous type")
+			tc.error("failed to resolve ambiguous type")
 			return nil
 		}
 		return tc.determineFinalTipe(tipe.Tipes[0])
@@ -979,28 +984,17 @@ func (tc *TipeChecker) determineFinalTipe(someTipe Tipe) Tipe {
 		allegedTuple := tc.determineFinalTipe(tipe.Tuple)
 		if tuple, ok := allegedTuple.(*TupleTipe); ok {
 			if len(tuple.Tipes) != tipe.Size { // TODO: is this check actually needed here?
-				tc.error("type error: wrong sized tuple")
+				tc.error("wrong sized tuple")
 				return nil
 			}
 			// tuple is already finalized, so no need to finalize sub-tipes
 			return tuple.Tipes[tipe.Index]
 		}
-		tc.error("type error: failed to resolve target of tuple-index type to be a tuple type")
+		tc.error("failed to resolve target of tuple-index type to be a tuple type")
 		return nil
 
-	/*
-		var lt = type as ListType;
-		if (lt != null)
-		{
-				var nodeType = FinalTypeOf(inferences, lt.NodeType);
-
-				return new ListType { NodeType = nodeType };
-		}
-
-		throw new Exception("type finalization failed");
-	*/
 	default:
-		tc.error("could not finalize this type")
+		tc.error("failed to finalize type: %T", tipe)
 		return nil
 	}
 }

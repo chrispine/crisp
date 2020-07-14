@@ -4,6 +4,7 @@ import (
 	"crisp/lexer"
 	"crisp/parse_tree"
 	"crisp/token"
+	"errors"
 	"fmt"
 )
 
@@ -76,23 +77,15 @@ var binopPrecs = []BinopPrecList{
 	}},
 }
 
+var unit = &parse_tree.InlineTuple{Token: token.Token{Type: token.LParen, Literal: "()"}}
+
 type Parser struct {
-	l      *lexer.Lexer
-	errors []string
-
-	unit *parse_tree.InlineTuple
-
+	l        *lexer.Lexer
 	curToken *token.Token
 }
 
 func New(l *lexer.Lexer) *Parser {
-	p := &Parser{
-		l:      l,
-		errors: []string{},
-		unit: &parse_tree.InlineTuple{
-			Token: token.Token{Type: token.LParen, Literal: "()"},
-		},
-	}
+	p := &Parser{l: l}
 
 	isBinop = calculateBinopMap()
 	isEndOfExpr = calculateEndOfExprMap()
@@ -154,7 +147,7 @@ func (p *Parser) expectToken(ts ...token.TokType) {
 		}
 	}
 
-	p.error(fmt.Sprintf("expected next token to be in %v, got %v instead", ts, p.curToken))
+	p.error("expected next token to be in %v, got %v instead", ts, p.curToken)
 }
 
 func (p *Parser) injectToken(tok *token.Token) {
@@ -166,24 +159,21 @@ func (p *Parser) curTokenIs(t token.TokType) bool {
 	return p.curToken.Type == t
 }
 
-func (p *Parser) Errors() []string {
-	return p.errors
-}
-
-func (p *Parser) error(err string) {
-	p.errors = append(p.errors, err)
-	panic(err) // TODO: remove this line when parser is stable
-}
-
-func (p *Parser) noPrefixParseFnError(t token.TokType) {
-	p.error(fmt.Sprintf("no prefix parse function for %v found", t))
+func (p *Parser) error(err string, a ...interface{}) {
+	panic(errors.New(fmt.Sprintf("Crisp parse error: "+err+"\n", a...)))
 }
 
 /*
 Program ->
 	DeclsAndExpr
 */
-func (p *Parser) ParseProgram() *parse_tree.Program {
+func (p *Parser) ParseProgram() (prog *parse_tree.Program, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
 	decls, expr := p.parseDeclsAndExpr()
 
 	program := &parse_tree.Program{
@@ -199,10 +189,10 @@ func (p *Parser) ParseProgram() *parse_tree.Program {
 	}
 
 	if len(leftoverTokens) > 0 {
-		p.error(fmt.Sprintf("failed to consume all tokens; tokens remaining: %v", leftoverTokens))
+		p.error("failed to consume all tokens; tokens remaining: %v", leftoverTokens)
 	}
 
-	return program
+	return program, nil
 }
 
 /*
@@ -282,7 +272,7 @@ PatMatBlock ->
 */
 func (p *Parser) parsePatMatBlock(atom parse_tree.Inline) *parse_tree.PatMatBlock {
 	if !atom.IsLVal() {
-		p.error(fmt.Sprintf("atom %v is not an l-value", atom))
+		p.error("atom %v is not an l-value", atom)
 	}
 
 	lit := &parse_tree.PatMatBlock{Token: *p.curToken, LVal: atom}
@@ -305,7 +295,7 @@ func (p *Parser) parseModuleDeclBlock() *parse_tree.PatMatBlock {
 
 	atom := p.parseID()
 	if !atom.IsLVal() {
-		p.error(fmt.Sprintf("atom %v is not an l-value", atom))
+		p.error("atom %v is not an l-value", atom)
 	}
 
 	p.expectToken(token.Indent)
@@ -322,7 +312,7 @@ FuncDeclBlock ->
 func (p *Parser) parseFuncDeclBlock(atom parse_tree.Inline) *parse_tree.PatMatBlock {
 	// `atom` must be an identifier
 	if _, ok := atom.(*parse_tree.InlineID); !ok {
-		p.error(fmt.Sprintf("not a valid identifier: %v", atom))
+		p.error("not a valid identifier: %v", atom)
 	}
 
 	patmat := &parse_tree.PatMatBlock{
@@ -336,7 +326,7 @@ func (p *Parser) parseFuncDeclBlock(atom parse_tree.Inline) *parse_tree.PatMatBl
 	for !p.curTokenIs(token.Arrow) {
 		arg := p.parseAtom()
 		if !arg.IsLVal() {
-			p.error(fmt.Sprintf("arg is not an l-value: %v", arg))
+			p.error("arg is not an l-value: %v", arg)
 		}
 		args = append(args, arg)
 	}
@@ -448,7 +438,7 @@ func (p *Parser) parseFuncBlock(atom parse_tree.Inline) *parse_tree.FuncBlock {
 	p.expectToken(token.Arrow)
 
 	if !atom.IsLVal() {
-		p.error(fmt.Sprintf("atom %v is not an l-value", atom))
+		p.error("atom %v is not an l-value", atom)
 	}
 
 	lit := &parse_tree.FuncBlock{
@@ -521,7 +511,7 @@ func (p *Parser) parseTupleBlock() *parse_tree.TupleBlock {
 	p.expectToken(token.BlockLen)
 
 	if numElems <= 0 {
-		p.error(fmt.Sprintf("invalid TupleBlock parsed with %v elements", numElems))
+		p.error("invalid TupleBlock parsed with %v elements", numElems)
 	}
 	for i := 0; i < numElems; i++ {
 		lit.Exprs = append(lit.Exprs, p.parseExprBlock())
@@ -544,7 +534,7 @@ func (p *Parser) parseRecordBlock() *parse_tree.RecordBlock {
 	p.expectToken(token.BlockLen)
 
 	if numElems <= 0 {
-		p.error(fmt.Sprintf("invalid RecordBlock parsed with %v elements", numElems))
+		p.error("invalid RecordBlock parsed with %v elements", numElems)
 	}
 	for i := 0; i < numElems; i++ {
 		//lit.Exprs = append(lit.Exprs, p.parseExprBlock())
@@ -576,7 +566,7 @@ func (p *Parser) parseListBlock() parse_tree.Block {
 	p.expectToken(token.BlockLen)
 
 	if numElems <= 0 {
-		p.error(fmt.Sprintf("invalid ListBlock parsed with %v elements", numElems))
+		p.error("invalid ListBlock parsed with %v elements", numElems)
 	}
 
 	var heads []parse_tree.Block
@@ -709,7 +699,7 @@ func (p *Parser) parseTuple() parse_tree.Inline {
 	// check for unit (empty tuple)
 	if p.curTokenIs(token.RParen) {
 		p.expectToken(token.RParen)
-		return p.unit
+		return unit
 	}
 
 	var exprs []parse_tree.Inline
@@ -724,7 +714,7 @@ Loop:
 		case token.Comma:
 			p.expectToken(token.Comma)
 		default:
-			p.error(fmt.Sprintf("malformed tuple: found token %v", p.curToken))
+			p.error("malformed tuple: found token %v", p.curToken)
 			return nil
 		}
 	}
@@ -780,7 +770,7 @@ Loop:
 		case token.Comma:
 			p.expectToken(token.Comma)
 		default:
-			p.error(fmt.Sprintf("malformed record: found token %v", p.curToken))
+			p.error("malformed record: found token %v", p.curToken)
 			return nil
 		}
 	}
@@ -852,7 +842,7 @@ func (p *Parser) parseUnopExpr() *parse_tree.InlineUnopExpr {
 		}
 	}
 
-	p.error(fmt.Sprintf("failed to parse %v as atom", p.curToken))
+	p.error("failed to parse %v as atom", p.curToken)
 	return nil
 }
 
@@ -890,7 +880,7 @@ func (p *Parser) parseExpressionRest(precedence int, atom parse_tree.Inline) par
 			p.expectToken(token.Arrow)
 
 			if !atom.IsLVal() {
-				p.error(fmt.Sprintf("atom %v is not an l-value", atom))
+				p.error("atom %v is not an l-value", atom)
 			}
 
 			return &parse_tree.InlineFunc{
