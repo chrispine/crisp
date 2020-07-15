@@ -5,6 +5,7 @@ import (
 	"crisp/token"
 	"errors"
 	"fmt"
+	"reflect"
 )
 
 func Eval(env *Env, someExpr ast.Expr) (val Value, err error) {
@@ -14,10 +15,30 @@ func Eval(env *Env, someExpr ast.Expr) (val Value, err error) {
 		}
 	}()
 
-	return eval(env, someExpr, nil), nil
+	return force(eval(env, someExpr)), nil
 }
 
-func eval(env *Env, someExpr ast.Expr, binding *Binding) Value {
+func force(maybeThunk Value) Value {
+	for {
+		switch expr := maybeThunk.(type) {
+		case *Thunk:
+			if expr.Val == nil {
+				val := eval(expr.Env, expr.Expr)
+				expr.Val = val
+				// let's make sure we never have a thunk's val pointing to a thunk
+				maybeThunk = force(val)
+				expr.Val = maybeThunk
+			} else {
+				maybeThunk = expr.Val
+			}
+		default:
+			val := maybeThunk
+			return val
+		}
+	}
+}
+
+func eval(env *Env, someExpr ast.Expr) Value {
 	var val Value
 
 	switch expr := someExpr.(type) {
@@ -36,14 +57,11 @@ func eval(env *Env, someExpr ast.Expr, binding *Binding) Value {
 	case *ast.FuncExpr:
 		val = evalFuncExpr(env, expr)
 	case *ast.TupleExpr:
-		val = evalTupleExpr(env, expr, binding)
-		binding = nil
+		val = evalTupleExpr(env, expr)
 	case *ast.RecordExpr:
-		val = evalRecordExpr(env, expr, binding)
-		binding = nil
+		val = evalRecordExpr(env, expr)
 	case *ast.ConsExpr:
-		val = evalConsExpr(env, expr, binding)
-		binding = nil
+		val = evalConsExpr(env, expr)
 	case *ast.RecordLookupExpr:
 		val = evalRecordLookupExpr(env, expr)
 	case *ast.TupleDestructureExpr:
@@ -65,15 +83,12 @@ func eval(env *Env, someExpr ast.Expr, binding *Binding) Value {
 		// handled in apply(func, val).)
 		var ok bool
 		val, ok = evalLetExpr(env, expr, nil)
+		// In this situation (unlike function and `case`), failure means crashing.
 		if !ok {
 			panic("Runtime Error: failed assertion in `let` expression")
 		}
 	default:
 		panic(errors.New(fmt.Sprintf("Runtime Error: unhandled expression %v of type %T", someExpr, someExpr)))
-	}
-
-	if binding != nil {
-		binding.Value = val
 	}
 
 	return val
@@ -108,26 +123,17 @@ func evalBoolExpr(_ *Env, expr *ast.BoolExpr) *Bool {
 
 func evalLookupExpr(env *Env, expr *ast.LookupExpr) Value {
 	maybeThunk := env.Get(expr.Depth, expr.Index)
-
-	if thunk, ok := maybeThunk.(*Thunk); ok {
-		// force the thunk
-		return eval(thunk.Env, thunk.Expr, env.GetBinding(expr.Depth, expr.Index))
-	}
-
+	// I don't *think* we care that this might be a thunk, I'm just saying.
 	return maybeThunk
 }
 
-func evalTupleExpr(env *Env, expr *ast.TupleExpr, binding *Binding) *Tuple {
+func evalTupleExpr(env *Env, expr *ast.TupleExpr) *Tuple {
 	tuple := &Tuple{}
-
-	if binding != nil {
-		binding.Value = tuple
-	}
 
 	var values []Value
 
 	for _, elem := range expr.Exprs {
-		values = append(values, eval(env, elem, nil))
+		values = append(values, &Thunk{Env: env, Expr: elem})
 	}
 
 	tuple.Values = values
@@ -135,40 +141,32 @@ func evalTupleExpr(env *Env, expr *ast.TupleExpr, binding *Binding) *Tuple {
 	return tuple
 }
 
-func evalRecordExpr(env *Env, expr *ast.RecordExpr, binding *Binding) *Record {
+func evalRecordExpr(env *Env, expr *ast.RecordExpr) *Record {
 	record := &Record{}
 
-	if binding != nil {
-		binding.Value = record
-	}
-
 	for _, field := range expr.Fields {
-		val := eval(env, field.Expr, nil)
+		val := &Thunk{Env: env, Expr: field.Expr}
 		record.Fields = append(record.Fields, RecordField{Name: field.Name, Value: val})
 	}
 
 	return record
 }
 
-func evalConsExpr(env *Env, expr *ast.ConsExpr, binding *Binding) *Cons {
+func evalConsExpr(env *Env, expr *ast.ConsExpr) *Cons {
 	if expr == ast.NilList {
 		return Nil
 	}
 
 	cons := &Cons{}
 
-	if binding != nil {
-		binding.Value = cons
-	}
-
-	cons.Head = eval(env, expr.Head, nil)
-	cons.Tail = eval(env, expr.Tail, nil).(*Cons)
+	cons.Head = &Thunk{Env: env, Expr: expr.Head}
+	cons.Tail = &Thunk{Env: env, Expr: expr.Tail}
 
 	return cons
 }
 
 func evalRecordLookupExpr(env *Env, expr *ast.RecordLookupExpr) Value {
-	record := eval(env, expr.Record, nil).(*Record)
+	record := force(eval(env, expr.Record)).(*Record)
 
 	// TODO: optimize this to just use an index (once we have a post-type-check optimizer)
 	for _, field := range record.Fields {
@@ -182,7 +180,7 @@ func evalRecordLookupExpr(env *Env, expr *ast.RecordLookupExpr) Value {
 }
 
 func evalTupleDestructure(env *Env, expr *ast.TupleDestructureExpr) Value {
-	tuple := eval(env, expr.Tuple, nil).(*Tuple)
+	tuple := force(eval(env, expr.Tuple)).(*Tuple)
 	// TODO: did I just eval the same expression multiple times, one for each element?
 	// TODO: same question with cons destructuring and all assertion types, and record lookup
 
@@ -190,7 +188,7 @@ func evalTupleDestructure(env *Env, expr *ast.TupleDestructureExpr) Value {
 }
 
 func evalConsDestructure(env *Env, expr *ast.ConsDestructureExpr) Value {
-	cons := eval(env, expr.List, nil).(*Cons)
+	cons := force(eval(env, expr.List)).(*Cons)
 
 	if expr.IsHead {
 		return cons.Head
@@ -200,8 +198,8 @@ func evalConsDestructure(env *Env, expr *ast.ConsDestructureExpr) Value {
 }
 
 func evalAssertEqual(env *Env, expr *ast.AssertEqualExpr) *Bool {
-	lVal := eval(env, expr.LExpr, nil)
-	rVal := eval(env, expr.RExpr, nil)
+	lVal := force(eval(env, expr.LExpr))
+	rVal := force(eval(env, expr.RExpr))
 
 	if equal(lVal, rVal) {
 		return True
@@ -210,7 +208,7 @@ func evalAssertEqual(env *Env, expr *ast.AssertEqualExpr) *Bool {
 }
 
 func evalAssertListIsCons(env *Env, expr *ast.AssertListIsConsExpr) *Bool {
-	cons := eval(env, expr.List, nil)
+	cons := force(eval(env, expr.List)).(*Cons)
 
 	if cons == Nil {
 		return False
@@ -219,7 +217,7 @@ func evalAssertListIsCons(env *Env, expr *ast.AssertListIsConsExpr) *Bool {
 }
 
 func evalAssertListIsNil(env *Env, expr *ast.AssertListIsNilExpr) *Bool {
-	cons := eval(env, expr.List, nil)
+	cons := force(eval(env, expr.List)).(*Cons)
 
 	if cons == Nil {
 		return True
@@ -232,7 +230,7 @@ func evalAssertAnyOfTheseSets(env *Env, expr *ast.AssertAnyOfTheseSets) *Bool {
 		allMatch := true
 
 		for _, assert := range set {
-			val := eval(env, assert, nil)
+			val := force(eval(env, assert))
 			if val == False {
 				allMatch = false
 				break
@@ -248,7 +246,7 @@ func evalAssertAnyOfTheseSets(env *Env, expr *ast.AssertAnyOfTheseSets) *Bool {
 }
 
 func evalUnopExpr(env *Env, expr *ast.UnopExpr) Value {
-	val := eval(env, expr.Expr, nil)
+	val := eval(env, expr.Expr)
 
 	switch expr.FinalTipe() {
 	case ast.IntTipe:
@@ -263,160 +261,188 @@ func evalUnopExpr(env *Env, expr *ast.UnopExpr) Value {
 
 func evalBinopExpr(env *Env, expr *ast.BinopExpr) Value {
 	binopType := expr.Token.Type
-	someLeftVal := eval(env, expr.LExpr, nil)
-	someRightVal := eval(env, expr.RExpr, nil)
+	lTipe := expr.LExpr.FinalTipe()
 
-	switch leftVal := someLeftVal.(type) { // TODO: use Tipe instead of (type) for dispatch
-	case *Unit_:
-		if rightVal, ok := someRightVal.(*Unit_); ok {
-			// kind of silly, since there's literally only one value of tipe UnitTipe
-			switch binopType {
-			case token.Equal:
-				if equal(leftVal, rightVal) {
-					return True
-				}
-				return False // cannot reach this line
-			}
-		}
-	case *Int:
-		if rightVal, ok := someRightVal.(*Int); ok {
-			l := leftVal.Value
-			r := rightVal.Value
+	switch lTipe.(type) {
 
-			switch binopType {
-			case token.Equal:
-				if equal(leftVal, rightVal) {
+	case *ast.SimpleTipe:
+		{
+			switch lTipe {
+			case ast.UnitTipe:
+				switch binopType {
+				case token.Equal:
+					// Since there's only one value of UnitTipe, and type-checking passed,
+					// this has to be true.
+					// TODO: generate a warning during type-checking?
 					return True
 				}
-				return False
-			case token.LT:
-				if l < r {
-					return True
-				} else {
-					return False
-				}
-			case token.LTE:
-				if l <= r {
-					return True
-				} else {
-					return False
-				}
-			case token.GT:
-				if l > r {
-					return True
-				} else {
-					return False
-				}
-			case token.GTE:
-				if l >= r {
-					return True
-				} else {
-					return False
-				}
-			case token.Plus:
-				return &Int{Value: l + r}
-			case token.Minus:
-				return &Int{Value: l - r}
-			case token.Mult:
-				return &Int{Value: l * r}
-			case token.Div:
-				return &Int{Value: l / r}
-			case token.Mod:
-				m := l % r
-				if m < 0 { // awesomeMod! <3
-					m += r
-				}
-				return &Int{Value: m}
-			case token.Exp:
-				if r >= 0 {
-					val := 1
-					for i := 0; i < r; i++ {
-						val *= l
+			case ast.NilTipe:
+				switch binopType {
+				case token.Equal:
+					// Note: type checker already determined these lists are the same tipe
+					leftVal := eval(env, expr.LExpr)
+					rightVal := eval(env, expr.RExpr)
+					if equal(leftVal, rightVal) {
+						return True
 					}
-					return &Int{Value: val}
+					return False
 				}
-			}
-		}
-	case *Bool:
-		if rightVal, ok := someRightVal.(*Bool); ok {
-			l := leftVal.Value
-			r := rightVal.Value
+			case ast.BoolTipe:
+				l := force(eval(env, expr.LExpr)).(*Bool).Value
 
-			switch binopType {
-			case token.Equal:
-				if equal(leftVal, rightVal) {
-					return True
-				}
-				return False
-			case token.And:
-				if l && r {
-					return True
-				} else {
+				switch binopType {
+				case token.Equal:
+					r := force(eval(env, expr.RExpr)).(*Bool).Value
+					if l == r {
+						return True
+					}
+					return False
+				case token.And:
+					// don't eval `r` if we don't have to
+					if !l {
+						return False
+					}
+					r := force(eval(env, expr.RExpr)).(*Bool).Value
+					if r {
+						return True
+					}
+					return False
+				case token.Or:
+					// don't eval `r` if we don't have to
+					if l {
+						return True
+					}
+					r := force(eval(env, expr.RExpr)).(*Bool).Value
+					if r {
+						return True
+					}
 					return False
 				}
-			case token.Or:
-				if l || r {
-					return True
-				} else {
+			case ast.IntTipe:
+				l := force(eval(env, expr.LExpr)).(*Int).Value
+				r := force(eval(env, expr.RExpr)).(*Int).Value
+
+				switch binopType {
+				case token.Equal:
+					if l == r {
+						return True
+					}
 					return False
+				case token.LT:
+					if l < r {
+						return True
+					} else {
+						return False
+					}
+				case token.LTE:
+					if l <= r {
+						return True
+					} else {
+						return False
+					}
+				case token.GT:
+					if l > r {
+						return True
+					} else {
+						return False
+					}
+				case token.GTE:
+					if l >= r {
+						return True
+					} else {
+						return False
+					}
+				case token.Plus:
+					return &Int{Value: l + r}
+				case token.Minus:
+					return &Int{Value: l - r}
+				case token.Mult:
+					return &Int{Value: l * r}
+				case token.Div:
+					return &Int{Value: l / r}
+				case token.Mod:
+					m := l % r
+					if m < 0 { // awesomeMod! <3
+						m += r
+					}
+					return &Int{Value: m}
+				case token.Exp:
+					if r >= 0 {
+						val := 1
+						for i := 0; i < r; i++ {
+							val *= l
+						}
+						return &Int{Value: val}
+					}
 				}
 			}
 		}
-	case *Func:
+	case *ast.FuncTipe:
 		switch binopType {
 		case token.Equal:
 			panic("not allowed to see if two functions are equal (no notion of function equality)")
 			return nil
 		case token.At:
-			return apply(leftVal, someRightVal)
+			leftVal := force(eval(env, expr.LExpr)).(*Func)
+			rightVal := &Thunk{Env: env, Expr: expr.RExpr}
+			return apply(leftVal, rightVal)
 		case token.Mult:
-			if rightVal, ok := someRightVal.(*Func); ok {
-				return composeFuncs(leftVal, rightVal)
-			}
+			// we don't need to force these
+			leftVal := &Thunk{Env: env, Expr: expr.LExpr}
+			rightVal := &Thunk{Env: env, Expr: expr.RExpr}
+			return composeFuncs(leftVal,
+				expr.LExpr.FinalTipe().(*ast.FuncTipe),
+				rightVal,
+				expr.RExpr.FinalTipe().(*ast.FuncTipe))
 		case token.Exp:
-			if rightVal, ok := someRightVal.(*Int); ok {
-				if rightVal.Value >= 0 {
-					composition := Identity
+			// we don't need to force the function
+			leftVal := &Thunk{Env: env, Expr: expr.LExpr}
+			rightVal := force(eval(env, expr.RExpr)).(*Int)
+			if rightVal.Value >= 0 {
+				var composition Value = &Thunk{Env: TopLevelEnv, Expr: ast.IdentityExpr}
 
-					for i := 0; i < rightVal.Value; i++ {
-						composition = composeFuncs(composition, leftVal)
-					}
+				// this is the tipe of f and g
+				tipe := expr.LExpr.FinalTipe().(*ast.FuncTipe)
 
-					return composition
+				for i := 0; i < rightVal.Value; i++ {
+					composition = composeFuncs(composition, tipe, leftVal, tipe)
 				}
+
+				return composition
 			}
 		}
-	case *Tuple:
-		if rightVal, ok := someRightVal.(*Tuple); ok {
-			switch binopType {
-			case token.Equal:
-				// Note: type checker already determined these tuples are the same tipe
-				if equal(leftVal, rightVal) {
-					return True
-				}
-				return False
+	case *ast.TupleTipe:
+		switch binopType {
+		case token.Equal:
+			// Note: type checker already determined these tuples are the same tipe
+			leftVal := eval(env, expr.LExpr)
+			rightVal := eval(env, expr.RExpr)
+			if equal(leftVal, rightVal) {
+				return True
 			}
+			return False
 		}
-	case *Record:
-		if rightVal, ok := someRightVal.(*Record); ok {
-			switch binopType {
-			case token.Equal:
-				// Note: type checker already determined these records are the same tipe
-				if equal(leftVal, rightVal) {
-					return True
-				}
-				return False
+	case *ast.RecordTipe:
+		switch binopType {
+		case token.Equal:
+			// Note: type checker already determined these records are the same tipe
+			leftVal := eval(env, expr.LExpr)
+			rightVal := eval(env, expr.RExpr)
+			if equal(leftVal, rightVal) {
+				return True
 			}
+			return False
 		}
-	case *Cons:
-		if rightVal, ok := someRightVal.(*Cons); ok {
-			switch binopType {
-			case token.Equal:
-				if equal(leftVal, rightVal) {
-					return True
-				}
-				return False
+	case *ast.ConsTipe:
+		switch binopType {
+		case token.Equal:
+			// Note: type checker already determined these lists are the same tipe
+			leftVal := eval(env, expr.LExpr)
+			rightVal := eval(env, expr.RExpr)
+			if equal(leftVal, rightVal) {
+				return True
 			}
+			return False
 		}
 	}
 
@@ -449,28 +475,29 @@ func evalLetExpr(env *Env, expr *ast.LetExpr, maybeArg Value) (Value, bool) {
 
 	newEnv := NewEnv(env, bindings)
 
+	// Now we need to set the correct env for those thunks.
+	// However, if this is a function call, the first binding
+	// is a value we don't want to mess with, even if it is
+	// a thunk. (If it is, the env on it is already correct.)
+	skipNextBinding := maybeArg != nil
 	for _, b := range bindings {
-		if th, ok := b.Value.(*Thunk); ok {
-			th.Env = newEnv
+		if skipNextBinding {
+			skipNextBinding = false
+			continue
 		}
+		b.Value.(*Thunk).Env = newEnv
 	}
 	// Awesome, `newEnv` is looking good, and the thunks all know about it.
 
 	// Next, we attempt to validate the assertions
 	for _, assert := range expr.Asserts {
-		val := eval(newEnv, assert, nil)
-		if !val.(*Bool).Value {
+		val := force(eval(newEnv, assert)).(*Bool)
+		if !val.Value {
 			return nil, false
 		}
 	}
 
-	// Finally, we force all of the thunks, so none remain when we return.
-	for _, b := range newEnv.Bindings {
-		// we can skip eval() and call evalLookupExpr() directly
-		evalLookupExpr(newEnv, &ast.LookupExpr{Name: b.Name})
-	}
-
-	return eval(newEnv, expr.Expr, nil), true
+	return &Thunk{Env: newEnv, Expr: expr.Expr}, true
 }
 
 func evalFuncExpr(env *Env, expr *ast.FuncExpr) *Func {
@@ -481,26 +508,24 @@ func evalFuncExpr(env *Env, expr *ast.FuncExpr) *Func {
 }
 
 func equal(aVal Value, bVal Value) bool {
-	switch a := aVal.(type) {
+	switch a := force(aVal).(type) {
 
 	case *Unit_:
-		if _, ok := bVal.(*Unit_); ok {
-			// if they are both unit types, they must be equal
-			return true
-		}
+		// if they are both unit types, they must be equal
+		return true
 
 	case *Bool:
-		if b, ok := bVal.(*Bool); ok {
+		if b, ok := force(bVal).(*Bool); ok {
 			return a.Value == b.Value
 		}
 
 	case *Int:
-		if b, ok := bVal.(*Int); ok {
+		if b, ok := force(bVal).(*Int); ok {
 			return a.Value == b.Value
 		}
 
 	case *Tuple:
-		if b, ok := bVal.(*Tuple); ok {
+		if b, ok := force(bVal).(*Tuple); ok {
 			// these should be the same tipe, so no need to check tuple sizes
 			for i, elem := range a.Values {
 				if !equal(elem, b.Values[i]) {
@@ -511,7 +536,7 @@ func equal(aVal Value, bVal Value) bool {
 		}
 
 	case *Record:
-		if b, ok := bVal.(*Record); ok {
+		if b, ok := force(bVal).(*Record); ok {
 			// these should be the same tipe, so no need to check field names
 			for i, elem := range a.Fields {
 				if !equal(elem.Value, b.Fields[i].Value) {
@@ -522,7 +547,7 @@ func equal(aVal Value, bVal Value) bool {
 		}
 
 	case *Cons:
-		if b, ok := bVal.(*Cons); ok {
+		if b, ok := force(bVal).(*Cons); ok {
 			// first check for Nils
 			if a == Nil {
 				if b == Nil {
@@ -549,31 +574,60 @@ func equal(aVal Value, bVal Value) bool {
 var fName = "@f"
 var gName = "@g"
 
-func composeFuncs(f *Func, g *Func) *Func {
+func composeFuncs(f Value, fTipe *ast.FuncTipe, g Value, gTipe *ast.FuncTipe) *Func {
 	env := NewEnv(EmptyEnv, []*Binding{
 		{Name: fName, Value: f},
 		{Name: gName, Value: g},
 	})
 
-	composedFuncPieceExprs := []*ast.LetExpr{{
+	arg := &ast.ArgExpr{}
+	arg.Code = "«ArgExpr»"
+	arg.SetFinalTipe(gTipe.Domain)
+
+	lookupF := &ast.LookupExpr{Name: fName, Depth: 1, Index: 0}
+	lookupF.Code = "«" + fName + " 1,0»"
+	lookupF.SetFinalTipe(fTipe)
+
+	lookupG := &ast.LookupExpr{Name: gName, Depth: 1, Index: 1}
+	lookupG.Code = "«" + gName + " 1,1»"
+	lookupG.SetFinalTipe(gTipe)
+
+	lookupArg := &ast.LookupExpr{Name: ast.ArgName, Depth: 0, Index: 0}
+	lookupArg.Code = "«" + ast.ArgName + " 0,0»"
+	lookupArg.SetFinalTipe(gTipe.Domain)
+
+	gAtArg := &ast.BinopExpr{
+		Token: token.AtToken,
+		LExpr: lookupG,
+		RExpr: lookupArg,
+	}
+	gAtArg.Code = "(" + lookupG.Code + " @ " + lookupArg.Code + ")"
+	gAtArg.SetFinalTipe(gTipe.Range)
+
+	fAtGAtArg := &ast.BinopExpr{
+		Token: token.AtToken,
+		LExpr: lookupF,
+		RExpr: gAtArg,
+	}
+	fAtGAtArg.Code = "(" + lookupF.Code + " @ " + gAtArg.Code + ")"
+	fAtGAtArg.SetFinalTipe(fTipe.Range)
+
+	funcPiece := &ast.LetExpr{
 		Env: &ast.ExprEnv{
-			Parent: ast.TopLevelExprEnv,
+			Parent: nil,
 			Bindings: []*ast.ExprBinding{{
 				Name: ast.ArgName,
-				Expr: &ast.ArgExpr{},
+				Expr: arg,
 			}},
 		},
-		Expr: &ast.BinopExpr{
-			Token: token.AtToken,
-			LExpr: &ast.LookupExpr{Name: fName, Depth: 1, Index: 0},
-			RExpr: &ast.BinopExpr{
-				Token: token.AtToken,
-				LExpr: &ast.LookupExpr{Name: gName, Depth: 1, Index: 1},
-				RExpr: &ast.LookupExpr{Name: ast.ArgName, Depth: 0, Index: 0},
-			},
-		},
-		// TODO: create the Tipe
-	}}
+		Expr: fAtGAtArg,
+	}
+	funcPiece.Code = "let {\n" + fAtGAtArg.Code + "\n}"
+	funcPiece.SetFinalTipe(fTipe.Range)
 
-	return &Func{Env: env, FuncPieceExprs: composedFuncPieceExprs}
+	return &Func{Env: env, FuncPieceExprs: []*ast.LetExpr{funcPiece}}
+}
+
+func isNil(i interface{}) bool {
+	return i == nil || reflect.ValueOf(i).IsNil()
 }

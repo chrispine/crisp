@@ -69,7 +69,7 @@ func (t *Record) Inspect() string { return "INSPECTED_RECORD" }
 
 type Cons struct {
 	Head Value
-	Tail *Cons
+	Tail Value
 }
 
 var Nil = &Cons{}
@@ -82,12 +82,13 @@ func (c *Cons) Inspect() string {
 	list := c
 	str := "["
 	for {
-		str += list.Head.Inspect()
+		str += force(list.Head).Inspect()
+		list.Tail = force(list.Tail)
 		if list.Tail == Nil {
 			return str + "]"
 		}
 		str += ", "
-		list = list.Tail
+		list = list.Tail.(*Cons)
 	}
 }
 
@@ -98,17 +99,3 @@ type Func struct {
 
 func (f *Func) Class() Class    { return FuncClass }
 func (f *Func) Inspect() string { return "INSPECTED_FUNC" }
-
-var Identity = &Func{
-	Env: EmptyEnv,
-	FuncPieceExprs: []*ast.LetExpr{{
-		Env: &ast.ExprEnv{
-			Parent: ast.TopLevelExprEnv,
-			Bindings: []*ast.ExprBinding{{
-				Name: ast.ArgName,
-				Expr: &ast.ArgExpr{},
-			}},
-		},
-		Expr: &ast.LookupExpr{Name: ast.ArgName},
-	}},
-}

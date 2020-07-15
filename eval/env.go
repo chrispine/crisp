@@ -19,11 +19,12 @@ type Binding struct {
 var TopLevelEnv = &Env{}
 var EmptyEnv = &Env{}
 
-// bindings will briefly be thunks to allow for
+// bindings will initially be thunks to allow for
 // recursive or out-of-order declarations
 type Thunk struct {
 	Env  *Env
 	Expr ast.Expr
+	Val  Value
 }
 
 func (th *Thunk) Class() Class    { return ThunkClass }
@@ -41,18 +42,14 @@ func (e *Env) Get(depth int, idx int) Value {
 		return e.Parent.Get(depth-1, idx)
 	}
 
-	return e.Bindings[idx].Value
-}
+	binding := e.Bindings[idx]
 
-func (e *Env) GetBinding(depth int, idx int) *Binding {
-	if depth > 0 {
-		return e.Parent.GetBinding(depth-1, idx)
+	// if we have a forced thunk, let's just drop the thunk and use the (forced) value
+	if th, ok := binding.Value.(*Thunk); ok {
+		if !isNil(th.Val) {
+			binding.Value = th.Val
+		}
 	}
 
-	if e != TopLevelEnv {
-		return e.Bindings[idx]
-	}
-
-	panic("[env error] TopLevelEnv has no explicit bindings!")
-	return nil
+	return binding.Value
 }

@@ -6,7 +6,7 @@ import (
 )
 
 // returns array of error messages
-func CheckTipes(expr Expr) []string {
+func CheckTipes(exprs []Expr) []string {
 	tc := &TipeChecker{dict: map[*TipeVar]Tipe{}}
 
 	// We assign tipe variables recursively to all expressions. All tipe variables are
@@ -17,11 +17,15 @@ func CheckTipes(expr Expr) []string {
 	// additional information about the various tipes. It calls `unify()` which attempts
 	// integrates all of that tipe information. Hopefully every expression will have a
 	// known tipe by the end.
-	tc.inferTipes(expr)
+	for _, expr := range exprs {
+		tc.inferTipes(expr)
+	}
 
 	// Now that we have all of this implicit tipe information in `dict`, let's pull
 	// out the final tipes and assign them to the expressions themselves.
-	tc.finalizeTipes(expr)
+	for _, expr := range exprs {
+		tc.finalizeTipes(expr)
+	}
 
 	return tc.tcErrors
 }
@@ -941,7 +945,7 @@ func (tc *TipeChecker) finalizeTipes(someExpr Expr) {
 }
 
 func (tc *TipeChecker) setFinalTipe(expr Expr) {
-	expr.setFinalTipe(tc.determineFinalTipe(expr.TipeVar(tc)))
+	expr.SetFinalTipe(tc.determineFinalTipe(expr.TipeVar(tc)))
 }
 
 func (tc *TipeChecker) determineFinalTipe(someTipe Tipe) Tipe {

@@ -78,6 +78,9 @@ func (e *ExprEnv) LookupIndices(name string) Expr {
 	if name == "!" {
 		return NotExpr
 	}
+	if name == IdentityName {
+		return IdentityExpr
+	}
 	if i, err := strconv.Atoi(name); err == nil {
 		return &IntExpr{Value: i}
 	}
@@ -94,11 +97,26 @@ func topLevelDefined(name string) bool {
 	if name == "false" {
 		return true
 	}
+	if name == "!" {
+		return true
+	}
+	if name == IdentityName {
+		return true
+	}
 	if _, err := strconv.Atoi(name); err == nil {
 		return true
 	}
 
 	return false
+}
+
+func TopLevelExprs() []Expr {
+	return []Expr{
+		TrueExpr,
+		FalseExpr,
+		IdentityExpr,
+		NotExpr,
+	}
 }
 
 // "second verse, same as the first"

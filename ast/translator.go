@@ -28,7 +28,8 @@ func (tr *Translator) Translate(program *parse_tree.Program) Expr {
 	expr := tr.translateLetBlock(TopLevelExprEnv, lb, false) // this let block is not part of a function
 
 	if len(tr.trErrors) == 0 {
-		for _, err := range CheckTipes(expr) {
+		exprs := append(TopLevelExprs(), expr)
+		for _, err := range CheckTipes(exprs) {
 			tr.trErrors = append(tr.trErrors, err)
 		}
 	}
@@ -580,6 +581,9 @@ func (tr *Translator) translateConsBlock(env *ExprEnv, block *parse_tree.ConsBlo
 
 // This is the name that we bind to the argument when a function is called.
 var ArgName = "arg"
+
+// By making this an "invalid" identifier name, we ensure no collisions with user code.
+var IdentityName = "@identity"
 
 func isNil(i interface{}) bool {
 	return i == nil || reflect.ValueOf(i).IsNil()

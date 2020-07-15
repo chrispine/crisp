@@ -11,13 +11,22 @@ import (
 // TODO: add tests to catch every error and panic, to make sure we are generating them correctly.
 
 func TestFirst(t *testing.T) {
-	expected := 121
+	expected := 50
 	program := `
+head[h;_] -> h
+tail[_;t] -> t
 
-f(1|2, n) -> n*n
-f( x , n) -> x+n
+nth(n) -> head * tail^n
 
-f(2, 11)
+zip_plus [h0; t0] [h1; t1] ->
+	[h0 + h1; zip_plus t0 t1]
+
+ones = [1; ones]
+
+nats = [0; zip_plus ones nats]
+
+nth(50) nats
+
 
 #len[   ] -> 0
 #len[_;t] -> 1 + len(t)
@@ -772,6 +781,25 @@ case (12, true)
 
 
 `},
+		{50, `
+
+
+head[h;_] -> h
+tail[_;t] -> t
+
+nth(n) -> head * tail^n
+
+zip_plus [h0; t0] [h1; t1] ->
+	[h0 + h1; zip_plus t0 t1]
+
+ones = [1; ones]
+
+nats = [0; zip_plus ones nats]
+
+nth(50) nats
+
+
+`},
 		{5, `
 
 
@@ -780,6 +808,111 @@ case (12, true)
 #len[_;t] -> 1 + len(t)
 
 #len[1, 2, 3] + len[{x:22, b:true}, {b:false, x:-33}]
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
+
+
+`},
+		{5, `
+
+
+5
 
 
 `},
