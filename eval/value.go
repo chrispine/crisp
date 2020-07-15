@@ -1,4 +1,4 @@
-package value
+package eval
 
 import (
 	"crisp/ast"
@@ -69,13 +69,27 @@ func (t *Record) Inspect() string { return "INSPECTED_RECORD" }
 
 type Cons struct {
 	Head Value
-	Tail Value
+	Tail *Cons
 }
 
 var Nil = &Cons{}
 
-func (c *Cons) Class() Class    { return ConsClass }
-func (c *Cons) Inspect() string { return "INSPECTED_CONS" }
+func (c *Cons) Class() Class { return ConsClass }
+func (c *Cons) Inspect() string {
+	if c == Nil {
+		return "[]"
+	}
+	list := c
+	str := "["
+	for {
+		str += list.Head.Inspect()
+		if list.Tail == Nil {
+			return str + "]"
+		}
+		str += ", "
+		list = list.Tail
+	}
+}
 
 type Func struct {
 	Env            *Env

@@ -6,7 +6,6 @@ import (
 	"crisp/lexer"
 	"crisp/parser"
 	"crisp/repl"
-	"crisp/value"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -56,7 +55,7 @@ func run(code string) (string, bool) {
 		return errStr, false
 	}
 
-	val, err := eval.Eval(value.TopLevelEnv, program)
+	val, err := eval.Eval(eval.TopLevelEnv, program)
 	if err != nil {
 		errStr = fmt.Sprintf("   runtime error: %q\n", err)
 		return errStr, false

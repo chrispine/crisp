@@ -4,7 +4,6 @@ import (
 	"crisp/ast"
 	"crisp/lexer"
 	"crisp/parser"
-	"crisp/value"
 	"fmt"
 	"testing"
 )
@@ -27,7 +26,7 @@ f(2, 11)
 `
 	val := testEval(t, program)
 
-	if intVal, ok := val.(*value.Int); !ok {
+	if intVal, ok := val.(*Int); !ok {
 		t.Fatalf("wow, expected an int, got %v", val.Inspect())
 	} else if intVal.Value != expected {
 		t.Fatalf("wrong int value: expected %d, got %d in program:\n%v", expected, intVal, program)
@@ -803,7 +802,7 @@ case (12, true)
 	for _, tt := range tests {
 		val := testEval(t, tt.program)
 
-		if intVal, ok := val.(*value.Int); !ok {
+		if intVal, ok := val.(*Int); !ok {
 			t.Fatalf("wow, expected an int, got %v", val.Inspect())
 		} else if intVal.Value != tt.expected {
 			t.Fatalf("wrong int value: expected %d, got %d in program:\n%v", tt.expected, intVal, tt.program)
@@ -886,7 +885,7 @@ is_even_len?[1,2,3]
 	for _, tt := range tests {
 		val := testEval(t, tt.program)
 
-		if boolVal, ok := val.(*value.Bool); !ok {
+		if boolVal, ok := val.(*Bool); !ok {
 			t.Fatalf("wow, expected a bool, got %v", val.Inspect())
 		} else if boolVal.Value != tt.expected {
 			t.Fatalf("wrong bool value: expected %v, got %v in program:\n%v", tt.expected, boolVal, tt.program)
@@ -894,7 +893,7 @@ is_even_len?[1,2,3]
 	}
 }
 
-func testEval(t *testing.T, code string) value.Value {
+func testEval(t *testing.T, code string) Value {
 	l := lexer.New(code)
 	p := parser.New(l)
 	pTree, err := p.ParseProgram()
@@ -917,7 +916,7 @@ func testEval(t *testing.T, code string) value.Value {
 		t.FailNow()
 	}
 
-	val, err := Eval(value.TopLevelEnv, program)
+	val, err := Eval(TopLevelEnv, program)
 	if err != nil {
 		errStr = fmt.Sprintf("   runtime error: %v\n", err)
 		t.Errorf(errStr)
