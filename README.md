@@ -147,7 +147,7 @@ With `nth` you can see that multiplication works on functions as well as integer
 functions, it means function composition, so `(f*g)x` means `f(g(x))`. Exponents mean
 repeated multiplication, like you'd expect. (Like I'd expect, anyway.)
 
-Because Crisp is uses lazy evaluation, it can deal with infinite lists, no problem:
+Because Crisp uses lazy evaluation, it can deal with infinite lists, no problem:
 
 ```
 zip_plus [h0; t0] [h1; t1] ->
@@ -170,7 +170,8 @@ nats = [0; ones ++ nats]
 
 I haven't decided if I want to bring that back, or overload the single operators, or what.
 If `a` and `b` are lists, should `a + b` mean concatenation, pair-wise addition, or a
-type error? I'm undecided.
+type error? If concatenation, what happens when you add tuples? Records?? Feels wrong.
+I'm undecided.
 
 For tuples, pattern-matching requires the pattern to have something for each component,
 even if it's only `_`. So a 3-tuple literal and a 3-tuple pattern both require two
