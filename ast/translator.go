@@ -291,7 +291,7 @@ func (tr *Translator) partitionDecl(
 		// `[a, b]` = expr
 		// `[h; t]` = expr
 		// `[    ]` = expr
-		if lhs == parse_tree.InlineNil {
+		if lhs.IsInlineNil() {
 			asserts = append(asserts, toAssert{listIsNil: rhs})
 		} else {
 			asserts = append(asserts, toAssert{listIsCons: rhs})
@@ -559,8 +559,8 @@ func inlineRecordNames(elems map[string]parse_tree.Inline) []string {
 }
 
 func (tr *Translator) translateInlineCons(env *ExprEnv, inline *parse_tree.InlineCons) *ConsExpr {
-	if inline == parse_tree.InlineNil {
-		return NilList
+	if inline.IsInlineNil() {
+		return &ConsExpr{}
 	}
 
 	return &ConsExpr{
@@ -569,8 +569,8 @@ func (tr *Translator) translateInlineCons(env *ExprEnv, inline *parse_tree.Inlin
 	}
 }
 func (tr *Translator) translateConsBlock(env *ExprEnv, block *parse_tree.ConsBlock) *ConsExpr {
-	if block == parse_tree.NilBlock {
-		return NilList
+	if block.IsNilBlock() {
+		return &ConsExpr{}
 	}
 
 	return &ConsExpr{

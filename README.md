@@ -78,7 +78,7 @@ add_2(98)          # evaluates to 100
 For that last example, there's a nice syntax for currying:
 ```
 # almost like a function of two variables
-add_n n m -> m + 2
+add_n n m -> m + n
 
 add_2 = add_n 2    # I said the parens were optional
 

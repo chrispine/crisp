@@ -583,7 +583,7 @@ func (p *Parser) parseListBlock() parse_tree.Block {
 	} else {
 		rVal := p.parseExprBlock()
 		heads = append(heads, rVal)
-		tail = parse_tree.NilBlock
+		tail = &parse_tree.ConsBlock{}
 	}
 
 	p.expectToken(token.Dedent)
@@ -824,7 +824,7 @@ func (p *Parser) parseList() *parse_tree.InlineCons {
 	// check for nil (empty list)
 	if p.curTokenIs(token.RBracket) {
 		p.expectToken(token.RBracket)
-		return parse_tree.InlineNil
+		return lit
 	}
 
 	lit.Head = p.parseExpr()
@@ -839,8 +839,8 @@ func (p *Parser) parseList() *parse_tree.InlineCons {
 
 	// check for end of list
 	if p.curTokenIs(token.RBracket) {
+		lit.Tail = &parse_tree.InlineCons{Token: *p.curToken}
 		p.expectToken(token.RBracket)
-		lit.Tail = parse_tree.InlineNil
 		return lit
 	}
 

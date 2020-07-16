@@ -6,7 +6,7 @@ import (
 )
 
 type Expr interface {
-	TipeVar(tc *TipeChecker) *TipeVar
+	TipeRef(tc *TipeChecker) *TipeRef
 	SetFinalTipe(tipe Tipe)
 	FinalTipe() Tipe
 	String() string
@@ -19,7 +19,7 @@ type Expr interface {
 
 type IntExpr struct {
 	Code      string
-	tipeVar   *TipeVar
+	tipeVar   *TipeRef
 	finalTipe Tipe
 	Value     int
 }
@@ -34,9 +34,9 @@ func (e *IntExpr) finalizeAndGetCode() string {
 	e.Code = strconv.Itoa(e.Value)
 	return e.Code
 }
-func (e *IntExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *IntExpr) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }
@@ -47,7 +47,7 @@ func (e *IntExpr) TipeVar(tc *TipeChecker) *TipeVar {
 
 type BoolExpr struct {
 	Code      string
-	tipeVar   *TipeVar
+	tipeVar   *TipeRef
 	finalTipe Tipe
 	Value     bool
 }
@@ -66,9 +66,9 @@ func (e *BoolExpr) finalizeAndGetCode() string {
 	}
 	return e.Code
 }
-func (e *BoolExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *BoolExpr) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }
@@ -82,7 +82,7 @@ var FalseExpr = &BoolExpr{Value: false}
 
 type LookupExpr struct {
 	Code      string
-	tipeVar   *TipeVar
+	tipeVar   *TipeRef
 	finalTipe Tipe
 	Name      string
 	Depth     int
@@ -100,9 +100,9 @@ func (e *LookupExpr) finalizeAndGetCode() string {
 	e.Code = "«" + e.Name + " " + strconv.Itoa(e.Depth) + "," + strconv.Itoa(e.Index) + "»"
 	return e.Code
 }
-func (e *LookupExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *LookupExpr) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }
@@ -113,7 +113,7 @@ func (e *LookupExpr) TipeVar(tc *TipeChecker) *TipeVar {
 
 type RecordLookupExpr struct {
 	Code      string
-	tipeVar   *TipeVar
+	tipeVar   *TipeRef
 	finalTipe Tipe
 	Name      string
 	Names     []string
@@ -131,9 +131,9 @@ func (e *RecordLookupExpr) finalizeAndGetCode() string {
 	e.Code = "«" + e.Record.finalizeAndGetCode() + ":" + e.Name + "»"
 	return e.Code
 }
-func (e *RecordLookupExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *RecordLookupExpr) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }
@@ -144,7 +144,7 @@ func (e *RecordLookupExpr) TipeVar(tc *TipeChecker) *TipeVar {
 
 type UnopExpr struct {
 	Code      string
-	tipeVar   *TipeVar
+	tipeVar   *TipeRef
 	finalTipe Tipe
 	Token     token.Token // the unop token, e.g. !
 	Expr      Expr
@@ -160,9 +160,9 @@ func (e *UnopExpr) finalizeAndGetCode() string {
 	e.Code = "(" + e.Token.Literal + e.Expr.finalizeAndGetCode() + ")"
 	return e.Code
 }
-func (e *UnopExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *UnopExpr) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }
@@ -173,7 +173,7 @@ func (e *UnopExpr) TipeVar(tc *TipeChecker) *TipeVar {
 
 type BinopExpr struct {
 	Code      string
-	tipeVar   *TipeVar
+	tipeVar   *TipeRef
 	finalTipe Tipe
 	Token     token.Token // the operator token, e.g. +
 	LExpr     Expr
@@ -190,9 +190,9 @@ func (e *BinopExpr) finalizeAndGetCode() string {
 	e.Code = "(" + e.LExpr.finalizeAndGetCode() + " " + e.Token.Literal + " " + e.RExpr.finalizeAndGetCode() + ")"
 	return e.Code
 }
-func (e *BinopExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *BinopExpr) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }
@@ -203,7 +203,7 @@ func (e *BinopExpr) TipeVar(tc *TipeChecker) *TipeVar {
 
 type LetExpr struct {
 	Code      string
-	tipeVar   *TipeVar
+	tipeVar   *TipeRef
 	finalTipe Tipe
 	Env       *ExprEnv
 	Asserts   []Expr
@@ -220,9 +220,9 @@ func (e *LetExpr) finalizeAndGetCode() string {
 	e.Code = "let {\n" + e.Expr.finalizeAndGetCode() + "\n}"
 	return e.Code
 }
-func (e *LetExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *LetExpr) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }
@@ -233,7 +233,7 @@ func (e *LetExpr) TipeVar(tc *TipeChecker) *TipeVar {
 
 type TupleExpr struct {
 	Code      string
-	tipeVar   *TipeVar
+	tipeVar   *TipeRef
 	finalTipe Tipe
 	Exprs     []Expr
 }
@@ -257,9 +257,9 @@ func (e *TupleExpr) finalizeAndGetCode() string {
 	e.Code += ")"
 	return e.Code
 }
-func (e *TupleExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *TupleExpr) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }
@@ -270,7 +270,7 @@ func (e *TupleExpr) TipeVar(tc *TipeChecker) *TipeVar {
 
 type UnitExpr struct { // this is the single 0-tuple: `()`
 	Code      string
-	tipeVar   *TipeVar
+	tipeVar   *TipeRef
 	finalTipe Tipe
 }
 
@@ -284,9 +284,9 @@ func (e *UnitExpr) finalizeAndGetCode() string {
 	e.Code = "()"
 	return e.Code
 }
-func (e *UnitExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *UnitExpr) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }
@@ -304,7 +304,7 @@ type RecordFieldExpr struct {
 
 type RecordExpr struct {
 	Code      string
-	tipeVar   *TipeVar
+	tipeVar   *TipeRef
 	finalTipe Tipe
 	Fields    []RecordFieldExpr
 	Partial   bool
@@ -320,9 +320,9 @@ func (e *RecordExpr) finalizeAndGetCode() string {
 	e.Code = "{TODO: RecordExpr}"
 	return e.Code
 }
-func (e *RecordExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *RecordExpr) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }
@@ -333,13 +333,11 @@ func (e *RecordExpr) TipeVar(tc *TipeChecker) *TipeVar {
 
 type ConsExpr struct {
 	Code      string
-	tipeVar   *TipeVar
+	tipeVar   *TipeRef
 	finalTipe Tipe
 	Head      Expr
 	Tail      Expr
 }
-
-var NilList = &ConsExpr{}
 
 func (e *ConsExpr) FinalTipe() Tipe { return e.finalTipe }
 func (e *ConsExpr) String() string  { return e.Code }
@@ -347,8 +345,9 @@ func (e *ConsExpr) SetFinalTipe(tipe Tipe) {
 	e.finalTipe = tipe
 	e.finalizeAndGetCode()
 }
+func (e *ConsExpr) IsNilList() bool { return isNil(e.Head) && isNil(e.Tail) }
 func (e *ConsExpr) finalizeAndGetCode() string {
-	if e == NilList {
+	if e.IsNilList() {
 		e.Code = "[]"
 		return e.Code
 	}
@@ -357,11 +356,11 @@ func (e *ConsExpr) finalizeAndGetCode() string {
 	e.Code = "["
 	for {
 		e.Code += list.Head.finalizeAndGetCode()
-		if list.Tail == NilList {
-			e.Code += "]"
-			return e.Code
-		}
 		if tail, ok := list.Tail.(*ConsExpr); ok {
+			if tail.IsNilList() {
+				e.Code += "]"
+				return e.Code
+			}
 			e.Code += ", "
 			list = tail
 		} else {
@@ -370,9 +369,9 @@ func (e *ConsExpr) finalizeAndGetCode() string {
 		}
 	}
 }
-func (e *ConsExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *ConsExpr) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }
@@ -383,7 +382,7 @@ func (e *ConsExpr) TipeVar(tc *TipeChecker) *TipeVar {
 
 type FuncExpr struct {
 	Code           string
-	tipeVar        *TipeVar
+	tipeVar        *TipeRef
 	finalTipe      Tipe
 	FuncPieceExprs []*LetExpr
 }
@@ -398,9 +397,9 @@ func (e *FuncExpr) finalizeAndGetCode() string {
 	e.Code = "Func[" + strconv.Itoa(len(e.FuncPieceExprs)) + " pc]"
 	return e.Code
 }
-func (e *FuncExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *FuncExpr) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }
@@ -452,7 +451,7 @@ var IdentityExpr = &FuncExpr{
 // type-checking functions.
 type ArgExpr struct {
 	Code      string
-	tipeVar   *TipeVar
+	tipeVar   *TipeRef
 	finalTipe Tipe
 }
 
@@ -466,9 +465,9 @@ func (e *ArgExpr) finalizeAndGetCode() string {
 	e.Code = "«ArgExpr»"
 	return e.Code
 }
-func (e *ArgExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *ArgExpr) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }
@@ -479,7 +478,7 @@ func (e *ArgExpr) TipeVar(tc *TipeChecker) *TipeVar {
 
 type AssertEqualExpr struct {
 	Code      string
-	tipeVar   *TipeVar
+	tipeVar   *TipeRef
 	finalTipe Tipe
 	LExpr     Expr
 	RExpr     Expr
@@ -495,9 +494,9 @@ func (e *AssertEqualExpr) finalizeAndGetCode() string {
 	e.Code = "«TODO: AssertEqualExpr»"
 	return e.Code
 }
-func (e *AssertEqualExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *AssertEqualExpr) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }
@@ -508,7 +507,7 @@ func (e *AssertEqualExpr) TipeVar(tc *TipeChecker) *TipeVar {
 
 type AssertListIsConsExpr struct {
 	Code      string
-	tipeVar   *TipeVar
+	tipeVar   *TipeRef
 	finalTipe Tipe
 	List      Expr
 }
@@ -523,9 +522,9 @@ func (e *AssertListIsConsExpr) finalizeAndGetCode() string {
 	e.Code = "«TODO: AssertListIsConsExpr»"
 	return e.Code
 }
-func (e *AssertListIsConsExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *AssertListIsConsExpr) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }
@@ -536,7 +535,7 @@ func (e *AssertListIsConsExpr) TipeVar(tc *TipeChecker) *TipeVar {
 
 type AssertListIsNilExpr struct {
 	Code      string
-	tipeVar   *TipeVar
+	tipeVar   *TipeRef
 	finalTipe Tipe
 	List      Expr
 }
@@ -551,9 +550,9 @@ func (e *AssertListIsNilExpr) finalizeAndGetCode() string {
 	e.Code = "«TODO: AssertListIsNilExpr»"
 	return e.Code
 }
-func (e *AssertListIsNilExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *AssertListIsNilExpr) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }
@@ -564,7 +563,7 @@ func (e *AssertListIsNilExpr) TipeVar(tc *TipeChecker) *TipeVar {
 
 type AssertAnyOfTheseSets struct {
 	Code       string
-	tipeVar    *TipeVar
+	tipeVar    *TipeRef
 	finalTipe  Tipe
 	AssertSets [][]Expr
 }
@@ -579,9 +578,9 @@ func (e *AssertAnyOfTheseSets) finalizeAndGetCode() string {
 	e.Code = "«TODO: AssertAnyOfTheseSets»"
 	return e.Code
 }
-func (e *AssertAnyOfTheseSets) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *AssertAnyOfTheseSets) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }
@@ -592,7 +591,7 @@ func (e *AssertAnyOfTheseSets) TipeVar(tc *TipeChecker) *TipeVar {
 
 type TupleDestructureExpr struct {
 	Code      string
-	tipeVar   *TipeVar
+	tipeVar   *TipeRef
 	finalTipe Tipe
 	Index     int
 	Size      int
@@ -609,9 +608,9 @@ func (e *TupleDestructureExpr) finalizeAndGetCode() string {
 	e.Code = "«TODO: TupleDestructureExpr»"
 	return e.Code
 }
-func (e *TupleDestructureExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *TupleDestructureExpr) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }
@@ -622,7 +621,7 @@ func (e *TupleDestructureExpr) TipeVar(tc *TipeChecker) *TipeVar {
 
 type ConsDestructureExpr struct {
 	Code      string
-	tipeVar   *TipeVar
+	tipeVar   *TipeRef
 	finalTipe Tipe
 	IsHead    bool
 	List      Expr
@@ -638,9 +637,9 @@ func (e *ConsDestructureExpr) finalizeAndGetCode() string {
 	e.Code = "«TODO: ConsDestructureExpr»"
 	return e.Code
 }
-func (e *ConsDestructureExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *ConsDestructureExpr) TipeRef(tc *TipeChecker) *TipeRef {
 	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+		e.tipeVar = tc.newTipeRef()
 	}
 	return e.tipeVar
 }

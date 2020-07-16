@@ -114,6 +114,7 @@ func TopLevelExprs() []Expr {
 	return []Expr{
 		TrueExpr,
 		FalseExpr,
+		Unit,
 		IdentityExpr,
 		NotExpr,
 	}

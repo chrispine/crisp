@@ -3,11 +3,12 @@ package ast
 import (
 	"crisp/token"
 	"fmt"
+	"strconv"
 )
 
 // returns array of error messages
 func CheckTipes(exprs []Expr) []string {
-	tc := &TipeChecker{dict: map[*TipeVar]Tipe{}}
+	tc := &TipeChecker{}
 
 	// We assign tipe variables recursively to all expressions. All tipe variables are
 	// tracked in `dict`, initially pointing to `nil`, which means "we have no information
@@ -31,7 +32,7 @@ func CheckTipes(exprs []Expr) []string {
 }
 
 type TipeChecker struct {
-	dict     map[*TipeVar]Tipe
+	refs     []*TipeRef
 	tcErrors []string
 }
 
@@ -42,27 +43,52 @@ func (tc *TipeChecker) error(err string, a ...interface{}) {
 // the Tipe interface
 
 type Tipe interface {
-	tipe()
+	TipeString() string
 }
 
 // the actual Tipes
+
+type OmegaTipe struct {
+	String string
+}
+
+func (t *OmegaTipe) TipeString() string {
+	return t.String
+}
+
+var Omega = &OmegaTipe{String: "Ω"}
 
 type SimpleTipe struct {
 	Name string
 }
 
-func (t *SimpleTipe) tipe() {}
+func (t *SimpleTipe) TipeString() string {
+	return t.Name
+}
 
 var UnitTipe = &SimpleTipe{"Unit"}
 var IntTipe = &SimpleTipe{"Int"}
 var BoolTipe = &SimpleTipe{"Bool"}
-var NilTipe = &SimpleTipe{"Nil"}
 
 type TupleTipe struct {
 	Tipes []Tipe
 }
 
-func (t *TupleTipe) tipe() {}
+func (t *TupleTipe) TipeString() string {
+	str := ""
+
+	for i, elem := range t.Tipes {
+		if i < 1 {
+			str += "("
+		} else {
+			str += ", "
+		}
+		str += elem.TipeString()
+	}
+	str += ")"
+
+	return str
+}
 
 type RecordFieldTipe struct {
 	Name string
@@ -73,21 +99,42 @@ type RecordTipe struct {
 	Partial bool // l-values might have partial types, as will record lookups (which only know about one field)
 }
 
-func (t *RecordTipe) tipe() {}
+func (t *RecordTipe) TipeString() string {
+	str := ""
 
-// Note that Nil has its own tipe
-type ConsTipe struct {
+	for i, field := range t.Fields {
+		if i < 1 {
+			str += "{"
+		} else {
+			str += ", "
+		}
+		str += field.Name + ": " + field.Tipe.TipeString()
+	}
+	str += "}"
+
+	return str
+
+}
+
+type ListTipe struct {
 	Tipe Tipe
 }
 
-func (t *ConsTipe) tipe() {}
+func (t *ListTipe) TipeString() string {
+	if isNil(t.Tipe) {
+		return "[]"
+	}
+	return "[" + t.Tipe.TipeString() + "…]"
+}
 
 type FuncTipe struct {
 	Domain Tipe
 	Range  Tipe
 }
 
-func (t *FuncTipe) tipe() {}
+func (t *FuncTipe) TipeString() string {
+	return "(" + t.Domain.TipeString() + " -> " + t.Range.TipeString() + ")"
+}
 
 // in an ambiguous tipe, the assumption is that exactly one of
 // tipes is correct, but we don't know which one
@@ -95,7 +142,21 @@ type AmbiguousTipe struct {
 	Tipes []Tipe
 }
 
-func (t *AmbiguousTipe) tipe() {}
+func (t *AmbiguousTipe) TipeString() string {
+	str := "Amb"
+
+	for i, elem := range t.Tipes {
+		if i < 1 {
+			str += "«"
+		} else {
+			str += ", "
+		}
+		str += elem.TipeString()
+	}
+	str += "»"
+
+	return str
+}
 
 // sort of like tuple destructuring, but for tipes
 type TupleIndexTipe struct {
@@ -104,28 +165,44 @@ type TupleIndexTipe struct {
 	Tuple Tipe
 }
 
-func (t *TupleIndexTipe) tipe() {}
+func (t *TupleIndexTipe) TipeString() string {
+	return t.Tuple.TipeString() + "@" + strconv.Itoa(t.Index)
+}
 
-// tipe variables
-
-// Note: We use the ID to impose an ordering on TipeVars,
+// Note: We use the ID to impose an ordering on TipeRefs,
 // so we can avoid cycles in the tipe graph.
+type TipeRef struct {
+	ID  int
+	ref Tipe
+}
+
+func (t *TipeRef) TipeString() string { return "*" + t.ref.TipeString() }
+
+var numTipeRefs = 0
+
+func (tc *TipeChecker) newTipeRef() *TipeRef {
+	tr := &TipeRef{ID: numTipeRefs, ref: Omega}
+	numTipeRefs++
+
+	// make sure to keep track of all tipe variables
+	tc.refs = append(tc.refs, tr)
+
+	return tr
+}
+
 type TipeVar struct {
 	ID int
 }
 
-func (t *TipeVar) tipe() {}
+func (t *TipeVar) TipeString() string { return "$" + strconv.Itoa(t.ID) }
 
 var numTipeVars = 0
 
 func (tc *TipeChecker) newTipeVar() *TipeVar {
-	tv := &TipeVar{ID: numTipeVars}
+	tr := &TipeVar{ID: numTipeVars}
 	numTipeVars++
 
-	// make sure to keep track of all tipe variables
-	tc.dict[tv] = nil // nil means "we have no idea yet"
-
-	return tv
+	return tr
 }
 
 // Type Checking
@@ -137,51 +214,53 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 		}
 	}()
 
-	tv := someExpr.TipeVar(tc)
+	tr := someExpr.TipeRef(tc)
 
 	switch expr := someExpr.(type) {
 
 	case *UnitExpr:
 		// we know this tipe
-		tc.unify(tv, UnitTipe)
+		tc.unify(tr, UnitTipe)
 
 	case *IntExpr:
 		// we know this tipe
-		tc.unify(tv, IntTipe)
+		tc.unify(tr, IntTipe)
 
 	case *BoolExpr:
 		// we know this tipe
-		tc.unify(tv, BoolTipe)
+		tc.unify(tr, BoolTipe)
 
 	case *LookupExpr:
 		boundExpr := expr.Env.Get(expr.Depth, expr.Index)
-		tc.unify(tv, boundExpr.TipeVar(tc))
+		tc.unify(tr, boundExpr.TipeRef(tc))
 
 	case *ArgExpr:
 		// nothing to do, as the associated FuncExpr handles it
 
 	case *UnopExpr:
 		// tipe is the same as the sub-tipe
-		tc.unify(tv, expr.Expr.TipeVar(tc))
+		tc.unify(tr, expr.Expr.TipeRef(tc))
 		// let's see if we can learn more from the token
 		if expr.Token.Type == token.Minus {
-			tc.unify(tv, IntTipe)
+			tc.unify(tr, IntTipe)
 		}
 
 		tc.inferTipes(expr.Expr)
 
 	case *BinopExpr:
-		var tipe, lTipe, rTipe Tipe
+		var tipe Tipe = Omega
+		var lTipe Tipe = Omega
+		var rTipe Tipe = Omega
 
 		switch expr.Token.Type {
 		case token.At:
 			lTipe = &FuncTipe{
-				Domain: expr.RExpr.TipeVar(tc),
-				Range:  tv,
+				Domain: expr.RExpr.TipeRef(tc),
+				Range:  tr,
 			}
 		case token.Equal:
 			tipe = BoolTipe
-			lTipe = expr.RExpr.TipeVar(tc)
+			lTipe = expr.RExpr.TipeRef(tc)
 		case token.And, token.Or:
 			tipe = BoolTipe
 			lTipe = BoolTipe
@@ -195,7 +274,7 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 			lTipe = IntTipe
 			rTipe = IntTipe
 		case token.Exp:
-			argTipe := tc.newTipeVar()
+			argTipe := tc.newTipeRef()
 			funcTipe := &FuncTipe{
 				Domain: argTipe,
 				Range:  argTipe,
@@ -210,9 +289,9 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 			// to be integers, *or* all three to be functions (of the appropriate types),
 			// for a total of 2 options. (If we made each one an AmbiguousType, that would be
 			// 8 options.)
-			x := tc.newTipeVar()
-			y := tc.newTipeVar()
-			z := tc.newTipeVar()
+			x := tc.newTipeRef()
+			y := tc.newTipeRef()
+			z := tc.newTipeRef()
 
 			xy := &FuncTipe{Domain: x, Range: y}
 			yz := &FuncTipe{Domain: y, Range: z}
@@ -220,36 +299,36 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 
 			intTuple := &TupleTipe{[]Tipe{IntTipe, IntTipe, IntTipe}}
 			funcTuple := &TupleTipe{[]Tipe{xz, yz, xy}}
-			varTuple := &TupleTipe{[]Tipe{tv, expr.LExpr.TipeVar(tc), expr.RExpr.TipeVar(tc)}}
+			varTuple := &TupleTipe{[]Tipe{tr, expr.LExpr.TipeRef(tc), expr.RExpr.TipeRef(tc)}}
 
 			tc.unify(varTuple, &AmbiguousTipe{[]Tipe{intTuple, funcTuple}})
 		default:
 			tc.error("Whoops, looks like Chris forgot to implement type-checking for a binop expression of type %v", expr.Token)
 		}
 
-		tc.unify(tv, tipe)
-		tc.unify(expr.LExpr.TipeVar(tc), lTipe)
-		tc.unify(expr.RExpr.TipeVar(tc), rTipe)
+		tc.unify(tr, tipe)
+		tc.unify(expr.LExpr.TipeRef(tc), lTipe)
+		tc.unify(expr.RExpr.TipeRef(tc), rTipe)
 
 		tc.inferTipes(expr.LExpr)
 		tc.inferTipes(expr.RExpr)
 
 	case *FuncExpr:
-		fDomain := tc.newTipeVar()
-		fRange := tc.newTipeVar()
+		fDomain := tc.newTipeRef()
+		fRange := tc.newTipeRef()
 		fTipe := &FuncTipe{
 			Domain: fDomain,
 			Range:  fRange,
 		}
-		tc.unify(tv, fTipe)
+		tc.unify(tr, fTipe)
 
 		for _, fp := range expr.FuncPieceExprs {
 			argBinding := fp.Env.Bindings[0]
 			if argBinding.Name != ArgName {
 				panic("[type error] something ain't right with this here function")
 			}
-			tc.unify(fDomain, argBinding.Expr.TipeVar(tc))
-			tc.unify(fRange, fp.TipeVar(tc))
+			tc.unify(fDomain, argBinding.Expr.TipeRef(tc))
+			tc.unify(fRange, fp.TipeRef(tc))
 
 			tc.inferTipes(fp)
 		}
@@ -258,12 +337,12 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 		tTipe := &TupleTipe{}
 
 		for _, e := range expr.Exprs {
-			tipe := tc.newTipeVar()
+			tipe := tc.newTipeRef()
 			tTipe.Tipes = append(tTipe.Tipes, tipe)
-			tc.unify(e.TipeVar(tc), tipe)
+			tc.unify(e.TipeRef(tc), tipe)
 		}
 
-		tc.unify(tv, tTipe)
+		tc.unify(tr, tTipe)
 
 		for _, e := range expr.Exprs {
 			tc.inferTipes(e)
@@ -274,25 +353,23 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 			Partial: expr.Partial,
 		}
 		for _, field := range expr.Fields {
-			tipe := tc.newTipeVar()
+			tipe := tc.newTipeRef()
 			rTipe.Fields = append(rTipe.Fields, RecordFieldTipe{Name: field.Name, Tipe: tipe})
-			tc.unify(field.Expr.TipeVar(tc), tipe)
+			tc.unify(field.Expr.TipeRef(tc), tipe)
 		}
-		tc.unify(tv, rTipe)
+		tc.unify(tr, rTipe)
 
 		for _, field := range expr.Fields {
 			tc.inferTipes(field.Expr)
 		}
 
 	case *ConsExpr:
-		if expr == NilList {
-			tc.unify(tv, NilTipe)
-		} else {
-			nodeTipe := tc.newTipeVar()
-			lTipe := &ConsTipe{Tipe: nodeTipe}
-			tc.unify(tv, lTipe)
-			tc.unify(expr.Head.TipeVar(tc), nodeTipe)
-			tc.unify(expr.Tail.TipeVar(tc), lTipe)
+		nodeTipe := tc.newTipeRef()
+		lTipe := &ListTipe{Tipe: nodeTipe}
+		tc.unify(tr, lTipe)
+		if !expr.IsNilList() {
+			tc.unify(expr.Head.TipeRef(tc), nodeTipe)
+			tc.unify(expr.Tail.TipeRef(tc), lTipe)
 
 			tc.inferTipes(expr.Head)
 			tc.inferTipes(expr.Tail)
@@ -307,42 +384,42 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 			if name == expr.Name {
 				idx = i
 			}
-			rTipe.Fields = append(rTipe.Fields, RecordFieldTipe{Name: name, Tipe: tc.newTipeVar()})
+			rTipe.Fields = append(rTipe.Fields, RecordFieldTipe{Name: name, Tipe: tc.newTipeRef()})
 		}
 		tipe := rTipe.Fields[idx].Tipe
-		tc.unify(tv, tipe)
-		tc.unify(expr.Record.TipeVar(tc), rTipe)
+		tc.unify(tr, tipe)
+		tc.unify(expr.Record.TipeRef(tc), rTipe)
 
 		tc.inferTipes(expr.Record)
 
 	case *TupleDestructureExpr:
 		tTipe := &TupleTipe{}
 		for i := 0; i < expr.Size; i++ {
-			tTipe.Tipes = append(tTipe.Tipes, tc.newTipeVar())
+			tTipe.Tipes = append(tTipe.Tipes, tc.newTipeRef())
 		}
-		tc.unify(tv, tTipe.Tipes[expr.Index])
-		tc.unify(expr.Tuple.TipeVar(tc), tTipe)
+		tc.unify(tr, tTipe.Tipes[expr.Index])
+		tc.unify(expr.Tuple.TipeRef(tc), tTipe)
 
 		tc.inferTipes(expr.Tuple)
 
 	case *ConsDestructureExpr:
-		nodeTipe := tc.newTipeVar()
-		cTipe := &ConsTipe{Tipe: nodeTipe}
+		nodeTipe := tc.newTipeRef()
+		cTipe := &ListTipe{Tipe: nodeTipe}
 
 		if expr.IsHead {
-			tc.unify(tv, nodeTipe)
+			tc.unify(tr, nodeTipe)
 		} else {
-			tc.unify(tv, cTipe)
+			tc.unify(tr, cTipe)
 		}
-		tc.unify(expr.List.TipeVar(tc), cTipe)
+		tc.unify(expr.List.TipeRef(tc), cTipe)
 
 		tc.inferTipes(expr.List)
 
 	case *AssertEqualExpr:
-		tc.unify(tv, BoolTipe)
-		tipe := tc.newTipeVar()
-		tc.unify(expr.LExpr.TipeVar(tc), tipe)
-		tc.unify(expr.RExpr.TipeVar(tc), tipe)
+		tc.unify(tr, BoolTipe)
+		tipe := tc.newTipeRef()
+		tc.unify(expr.LExpr.TipeRef(tc), tipe)
+		tc.unify(expr.RExpr.TipeRef(tc), tipe)
 
 		tc.inferTipes(expr.LExpr)
 		tc.inferTipes(expr.RExpr)
@@ -351,22 +428,22 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 		// Note: this expression asserts that it's a cons cell,
 		// but we accept an assertion failure.
 		// The tipe is List<a> for some tipe a.
-		tc.unify(tv, BoolTipe)
-		tc.unify(expr.List.TipeVar(tc), &ConsTipe{Tipe: tc.newTipeVar()})
+		tc.unify(tr, BoolTipe)
+		tc.unify(expr.List.TipeRef(tc), &ListTipe{Tipe: tc.newTipeRef()})
 
 		tc.inferTipes(expr.List)
 
 	case *AssertListIsNilExpr:
-		// Note: this expression asserts that it's nil,
+		// Note: this expression asserts that it's [],
 		// but we accept an assertion failure.
 		// The tipe is List<a> for some tipe a.
-		tc.unify(tv, BoolTipe)
-		tc.unify(expr.List.TipeVar(tc), &ConsTipe{Tipe: tc.newTipeVar()})
+		tc.unify(tr, BoolTipe)
+		tc.unify(expr.List.TipeRef(tc), &ListTipe{Tipe: tc.newTipeRef()})
 
 		tc.inferTipes(expr.List)
 
 	case *AssertAnyOfTheseSets:
-		tc.unify(tv, BoolTipe)
+		tc.unify(tr, BoolTipe)
 		for _, set := range expr.AssertSets {
 			for _, assert := range set {
 				tc.inferTipes(assert)
@@ -374,10 +451,10 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 		}
 
 	case *LetExpr:
-		tc.unify(tv, expr.Expr.TipeVar(tc))
+		tc.unify(tr, expr.Expr.TipeRef(tc))
 
 		for _, a := range expr.Asserts {
-			tc.unify(a.TipeVar(tc), BoolTipe)
+			tc.unify(a.TipeRef(tc), BoolTipe)
 			tc.inferTipes(a)
 		}
 
@@ -393,7 +470,7 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 }
 
 func (tc *TipeChecker) unify(tipe0 Tipe, tipe1 Tipe) {
-	if isNil(tipe0) || isNil(tipe1) || tipe0 == tipe1 {
+	if tipe0 == Omega || tipe1 == Omega || tipe0 == tipe1 {
 		// no new information to assimilate, so just return
 		return
 	}
@@ -412,51 +489,51 @@ func (tc *TipeChecker) unify(tipe0 Tipe, tipe1 Tipe) {
 		}
 	}
 
-	if tv0, ok := tipe0.(*TipeVar); ok {
-		deref0 := tc.dict[tv0]
+	if tr0, ok := tipe0.(*TipeRef); ok {
+		deref0 := tr0.ref
 
-		if tv1, ok := tipe1.(*TipeVar); ok {
-			// we have two TipeVars
-			if tv1.ID > tv0.ID {
-				// if TipeVars point to other TipeVars, it must always be
+		if tr1, ok := tipe1.(*TipeRef); ok {
+			// we have two TipeRefs
+			if tr1.ID > tr0.ID {
+				// if TipeRefs point to other TipeRefs, it must always be
 				// to one with a lower ID (to avoid cycles)
 				tc.unify(tipe1, tipe0)
 				return
 			}
-			// both are TipeVars, and tv0 is allowed to point to tv1
-			if isNil(deref0) {
-				// this holds whether or not tv1 points to nil
-				tc.dict[tv0] = tv1
+			// both are TipeRefs, and tr0 is allowed to point to tr1
+			if deref0 == Omega {
+				// this holds whether or not tr1 points to Omega
+				tr0.ref = tr1
 				return
 			}
-			// tv0 points to something
-			deref1 := tc.dict[tv1]
-			if isNil(deref1) {
+			// tr0 points to something
+			deref1 := tr1.ref
+			if deref1 == Omega {
 				tc.unify(tipe1, deref0)
 				return
 			}
-			// tv0 and tv1 both point to something
+			// tr0 and tr1 both point to something
 			tc.unify(deref0, deref1)
 			return
 		}
-		// tv0 is a TipeVar, tipe1 is not
-		if isNil(deref0) {
-			tc.dict[tv0] = tipe1
+		// tr0 is a TipeRef, tipe1 is not
+		if deref0 == Omega {
+			tr0.ref = tipe1
 			return
 		}
-		// tv0 is a TipeVar pointing to oldTipe, which is not a TipeVar
-		// tipe1 is not a TipeVar
+		// tr0 is a TipeRef pointing to oldTipe, which is not a TipeRef
+		// tipe1 is not a TipeRef
 		tc.unify(deref0, tipe1)
 		return
 	}
-	// tipe0 is not a TipeVar
-	if _, ok := tipe1.(*TipeVar); ok {
-		// tipe1 is a TipeVar, so swap them and try again
+	// tipe0 is not a TipeRef
+	if _, ok := tipe1.(*TipeRef); ok {
+		// tipe1 is a TipeRef, so swap them and try again
 		tc.unify(tipe1, tipe0)
 		return
 	}
 
-	// neither tipe0 nor tipe1 are: TipeVar
+	// neither tipe0 nor tipe1 are: TipeRef
 	if tt0, ok := tipe0.(*TupleTipe); ok {
 		if tt1, ok := tipe1.(*TupleTipe); ok {
 			if len(tt0.Tipes) != len(tt1.Tipes) {
@@ -487,7 +564,7 @@ func (tc *TipeChecker) unify(tipe0 Tipe, tipe1 Tipe) {
 		return
 	}
 
-	// neither tipe0 nor tipe1 are: TipeVar, TupleTipe
+	// neither tipe0 nor tipe1 are: TipeRef, TupleTipe
 	if ti0, ok := tipe0.(*TupleIndexTipe); ok {
 		allegedTuple := ti0.Tuple
 		if tuple, ok := allegedTuple.(*TupleTipe); ok {
@@ -535,7 +612,7 @@ func (tc *TipeChecker) unify(tipe0 Tipe, tipe1 Tipe) {
 		return
 	}
 
-	// neither tipe0 nor tipe1 are: TipeVar, TupleTipe, TupleIndexTipe
+	// neither tipe0 nor tipe1 are: TipeRef, TupleTipe, TupleIndexTipe
 	if rt0, ok := tipe0.(*RecordTipe); ok {
 		if rt1, ok := tipe1.(*RecordTipe); ok {
 			if rt0.Partial {
@@ -606,14 +683,10 @@ func (tc *TipeChecker) unify(tipe0 Tipe, tipe1 Tipe) {
 		return
 	}
 
-	// neither tipe0 nor tipe1 are: TipeVar, TupleTipe, TupleIndexTipe, RecordTipe
-	if ct0, ok := tipe0.(*ConsTipe); ok {
-		if ct1, ok := tipe1.(*ConsTipe); ok {
-			tc.unify(ct0.Tipe, ct1.Tipe)
-			return
-		}
-		if tipe1 == NilTipe {
-			// nil matches all ConsTipes; nothing more to do
+	// neither tipe0 nor tipe1 are: TipeRef, TupleTipe, TupleIndexTipe, RecordTipe
+	if lt0, ok := tipe0.(*ListTipe); ok {
+		if lt1, ok := tipe1.(*ListTipe); ok {
+			tc.unify(lt0.Tipe, lt1.Tipe)
 			return
 		}
 		if _, ok := tipe1.(*SimpleTipe); ok {
@@ -623,13 +696,13 @@ func (tc *TipeChecker) unify(tipe0 Tipe, tipe1 Tipe) {
 		panic("TODO")
 		return
 	}
-	if _, ok := tipe1.(*ConsTipe); ok {
-		// tipe1 is a ConsTipe, so swap them and try again
+	if _, ok := tipe1.(*ListTipe); ok {
+		// tipe1 is a ListTipe, so swap them and try again
 		tc.unify(tipe1, tipe0)
 		return
 	}
 
-	// neither tipe0 nor tipe1 are: TipeVar, TupleTipe, TupleIndexTipe, RecordTipe, ConsTipe
+	// neither tipe0 nor tipe1 are: TipeRef, TupleTipe, TupleIndexTipe, RecordTipe, ListTipe
 	if ft0, ok := tipe0.(*FuncTipe); ok {
 		if ft1, ok := tipe1.(*FuncTipe); ok {
 			tc.unify(ft0.Domain, ft1.Domain)
@@ -658,7 +731,27 @@ func (tc *TipeChecker) unify(tipe0 Tipe, tipe1 Tipe) {
 		return
 	}
 
-	// neither tipe0 nor tipe1 are: TipeVar, TupleTipe, TupleIndexTipe, RecordTipe, ConsTipe, FuncTipe
+	// neither tipe0 nor tipe1 are: TipeRef, TupleTipe, TupleIndexTipe, RecordTipe, ListTipe, FuncTipe
+	if _, ok := tipe0.(*TipeVar); ok {
+		if _, ok := tipe1.(*TipeVar); ok {
+			// I guess there's nothing to do here?
+			return
+		}
+		if _, ok := tipe1.(*SimpleTipe); ok {
+			// I guess there's nothing to do here?
+			return
+		}
+		// don't know how to unify a TipeVar and whatever tipe1 is
+		panic("TODO")
+		return
+	}
+	if _, ok := tipe1.(*TipeVar); ok {
+		// tipe1 is a TipeVar, so swap them and try again
+		tc.unify(tipe1, tipe0)
+		return
+	}
+
+	// neither tipe0 nor tipe1 are: TipeRef, TupleTipe, TupleIndexTipe, RecordTipe, ListTipe, FuncTipe, TipeVar
 	if t0, ok := tipe0.(*AmbiguousTipe); ok {
 		tc.resolveAmbiTipe(t0, func(t Tipe) bool {
 			m := tc.match(t, tipe1)
@@ -677,7 +770,7 @@ func (tc *TipeChecker) unify(tipe0 Tipe, tipe1 Tipe) {
 		return
 	}
 
-	// neither tipe0 nor tipe1 are: TipeVar, TupleTipe, TupleIndexTipe, RecordTipe, ConsTipe, FuncTipe, AmbiguousTipe
+	// neither tipe0 nor tipe1 are: TipeRef, TupleTipe, TupleIndexTipe, RecordTipe, ListTipe, FuncTipe, AmbiguousTipe, TipeVar
 	panic("TODO")
 	return
 }
@@ -691,7 +784,7 @@ const (
 )
 
 func (tc *TipeChecker) match(tipe0 Tipe, tipe1 Tipe) Match {
-	if isNil(tipe0) || isNil(tipe1) {
+	if tipe0 == Omega || tipe1 == Omega {
 		return Maybe
 	}
 
@@ -699,11 +792,11 @@ func (tc *TipeChecker) match(tipe0 Tipe, tipe1 Tipe) Match {
 		return Yes
 	}
 
-	if t0, ok := tipe0.(*TipeVar); ok {
-		return tc.match(tc.dict[t0], tipe1)
+	if t0, ok := tipe0.(*TipeRef); ok {
+		return tc.match(t0.ref, tipe1)
 	}
-	if t1, ok := tipe1.(*TipeVar); ok {
-		return tc.match(tipe0, tc.dict[t1])
+	if t1, ok := tipe1.(*TipeRef); ok {
+		return tc.match(tipe0, t1.ref)
 	}
 
 	if ambiTipe, ok := tipe0.(*AmbiguousTipe); ok {
@@ -784,7 +877,7 @@ func (tc *TipeChecker) match(tipe0 Tipe, tipe1 Tipe) Match {
 
 	if t0, ok := tipe0.(*FuncTipe); ok {
 		switch t1 := tipe1.(type) {
-		case *SimpleTipe, *TupleTipe, *RecordTipe, *ConsTipe:
+		case *SimpleTipe, *TupleTipe, *RecordTipe, *ListTipe:
 			return No
 		case *FuncTipe:
 			dMatch := tc.match(t0.Domain, t1.Domain)
@@ -808,7 +901,7 @@ func (tc *TipeChecker) match(tipe0 Tipe, tipe1 Tipe) Match {
 
 	if t0, ok := tipe0.(*TupleTipe); ok {
 		switch t1 := tipe1.(type) {
-		case *SimpleTipe, *RecordTipe, *ConsTipe, *FuncTipe:
+		case *SimpleTipe, *RecordTipe, *ListTipe, *FuncTipe:
 			return No
 		case *TupleTipe:
 			if len(t0.Tipes) != len(t1.Tipes) {
@@ -833,14 +926,14 @@ func (tc *TipeChecker) match(tipe0 Tipe, tipe1 Tipe) Match {
 		}
 	}
 
-	if t0, ok := tipe0.(*ConsTipe); ok {
+	if t0, ok := tipe0.(*ListTipe); ok {
 		switch t1 := tipe1.(type) {
 		case *SimpleTipe, *RecordTipe, *TupleTipe, *FuncTipe:
 			return No
-		case *ConsTipe:
+		case *ListTipe:
 			return tc.match(t0.Tipe, t1.Tipe)
 		default:
-			tc.error("Chris missed a type in tc.match(Cons): %T", t1)
+			tc.error("Chris missed a type in tc.match(List): %T", t1)
 			return No
 		}
 	}
@@ -903,7 +996,7 @@ func (tc *TipeChecker) finalizeTipes(someExpr Expr) {
 		}
 
 	case *ConsExpr:
-		if expr != NilList {
+		if !expr.IsNilList() {
 			tc.finalizeTipes(expr.Head)
 			tc.finalizeTipes(expr.Tail)
 		}
@@ -945,14 +1038,14 @@ func (tc *TipeChecker) finalizeTipes(someExpr Expr) {
 }
 
 func (tc *TipeChecker) setFinalTipe(expr Expr) {
-	expr.SetFinalTipe(tc.determineFinalTipe(expr.TipeVar(tc)))
+	expr.SetFinalTipe(tc.determineFinalTipe(expr.TipeRef(tc)))
 }
 
 func (tc *TipeChecker) determineFinalTipe(someTipe Tipe) Tipe {
-	if isNil(someTipe) {
+	if someTipe == Omega {
 		// We never did get any information about this tipe,
-		// so just return nil.
-		return nil
+		// so just return Omega.
+		return Omega
 	}
 
 	switch tipe := someTipe.(type) {
@@ -961,7 +1054,10 @@ func (tc *TipeChecker) determineFinalTipe(someTipe Tipe) Tipe {
 		return tipe
 
 	case *TipeVar:
-		return tc.determineFinalTipe(tc.dict[tipe])
+		return tipe
+
+	case *TipeRef:
+		return tc.determineFinalTipe(tipe.ref)
 
 	case *AmbiguousTipe:
 		if len(tipe.Tipes) != 1 {
@@ -990,8 +1086,10 @@ func (tc *TipeChecker) determineFinalTipe(someTipe Tipe) Tipe {
 		tipe.Fields = finalFields
 		return tipe
 
-	case *ConsTipe:
-		tipe.Tipe = tc.determineFinalTipe(tipe.Tipe)
+	case *ListTipe:
+		if !isNil(tipe.Tipe) {
+			tipe.Tipe = tc.determineFinalTipe(tipe.Tipe)
+		}
 		return tipe
 
 	case *FuncTipe:

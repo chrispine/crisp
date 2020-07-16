@@ -153,7 +153,7 @@ func evalRecordExpr(env *Env, expr *ast.RecordExpr) *Record {
 }
 
 func evalConsExpr(env *Env, expr *ast.ConsExpr) *Cons {
-	if expr == ast.NilList {
+	if expr.IsNilList() {
 		return Nil
 	}
 
@@ -275,17 +275,6 @@ func evalBinopExpr(env *Env, expr *ast.BinopExpr) Value {
 					// this has to be true.
 					// TODO: generate a warning during type-checking?
 					return True
-				}
-			case ast.NilTipe:
-				switch binopType {
-				case token.Equal:
-					// Note: type checker already determined these lists are the same tipe
-					leftVal := eval(env, expr.LExpr)
-					rightVal := eval(env, expr.RExpr)
-					if equal(leftVal, rightVal) {
-						return True
-					}
-					return False
 				}
 			case ast.BoolTipe:
 				l := force(eval(env, expr.LExpr)).(*Bool).Value
@@ -433,7 +422,7 @@ func evalBinopExpr(env *Env, expr *ast.BinopExpr) Value {
 			}
 			return False
 		}
-	case *ast.ConsTipe:
+	case *ast.ListTipe:
 		switch binopType {
 		case token.Equal:
 			// Note: type checker already determined these lists are the same tipe

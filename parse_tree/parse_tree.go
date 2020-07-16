@@ -3,6 +3,7 @@ package parse_tree
 import (
 	"bytes"
 	"crisp/token"
+	"reflect"
 )
 
 /*
@@ -320,8 +321,6 @@ type ConsBlock struct {
 	Tail  Block
 }
 
-var NilBlock = &ConsBlock{Token: token.Token{Type: token.LBracket, Literal: "[]"}}
-
 func (cb *ConsBlock) BlockNode()           {}
 func (cb *ConsBlock) TokenLiteral() string { return cb.Token.Literal }
 func (cb *ConsBlock) String() string {
@@ -331,13 +330,20 @@ func (cb *ConsBlock) String() string {
 
 	out.WriteString(cb.Head.String())
 
-	if cb.Tail != NilBlock {
+	if tail, ok := cb.Tail.(*ConsBlock); ok {
+		if !tail.IsNilBlock() {
+			out.WriteString("; " + cb.Tail.String())
+		}
+	} else {
 		out.WriteString("; " + cb.Tail.String())
 	}
 
 	out.WriteString("}\n")
 
 	return out.String()
+}
+func (cb *ConsBlock) IsNilBlock() bool {
+	return isNil(cb.Head) && isNil(cb.Tail)
 }
 
 type ModuleBlock struct {
@@ -515,16 +521,17 @@ type InlineCons struct {
 	Tail  Inline
 }
 
-var InlineNil = &InlineCons{Token: token.Token{Type: token.LBracket, Literal: "[]"}}
-
+func (ic *InlineCons) IsInlineNil() bool {
+	return isNil(ic.Head) && isNil(ic.Tail)
+}
 func (ic *InlineCons) IsLVal() bool {
-	if ic == InlineNil {
+	if ic.IsInlineNil() {
 		return true
 	}
 	return ic.Head.IsLVal() && ic.Tail.IsLVal()
 }
 func (ic *InlineCons) IsRVal() bool {
-	if ic == InlineNil {
+	if ic.IsInlineNil() {
 		return true
 	}
 	return ic.Head.IsRVal() && ic.Tail.IsRVal()
@@ -533,13 +540,17 @@ func (ic *InlineCons) TokenLiteral() string { return ic.Token.Literal }
 func (ic *InlineCons) String() string {
 	var out bytes.Buffer
 
-	if ic == InlineNil {
+	if ic.IsInlineNil() {
 		out.WriteString("[]")
 	} else {
 		out.WriteString("[")
 		out.WriteString(ic.Head.String())
 
-		if ic.Tail != InlineNil {
+		if tail, ok := ic.Tail.(*InlineCons); ok {
+			if !tail.IsInlineNil() {
+				out.WriteString("; " + ic.Tail.String())
+			}
+		} else {
 			out.WriteString("; " + ic.Tail.String())
 		}
 		out.WriteString("]")
@@ -595,4 +606,8 @@ func (ibe *InlineBinopExpr) String() string {
 	out.WriteString(")")
 
 	return out.String()
+}
+
+func isNil(i interface{}) bool {
+	return i == nil || reflect.ValueOf(i).IsNil()
 }
