@@ -10,8 +10,9 @@ import (
 
 func Start(in io.Reader, out io.Writer, run func(string) (string, bool)) {
 	_, _ = fmt.Fprintf(out, "Welcome to the Crisp REPL!\n")
-	_, _ = fmt.Fprintf(out, "Enter lines of code, then a blank line to begin evaluation.\n")
-	_, _ = fmt.Fprintf(out, "(Remember to use tabs for indentation.)\n")
+	_, _ = fmt.Fprintf(out, "Type a few lines of code, then \"run\" to start it up.\n")
+	_, _ = fmt.Fprintf(out, "Type \"exit\" to exit the REPL.\n")
+	_, _ = fmt.Fprintf(out, "(Remember to use tabs for indentation!)\n")
 
 	scanner := bufio.NewScanner(in)
 

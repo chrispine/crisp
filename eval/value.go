@@ -53,8 +53,22 @@ type Tuple struct {
 	Values []Value
 }
 
-func (t *Tuple) Class() Class    { return TupleClass }
-func (t *Tuple) Inspect() string { return "INSPECTED_TUPLE" }
+func (t *Tuple) Class() Class { return TupleClass }
+func (t *Tuple) Inspect() string {
+	str := ""
+
+	for i, elem := range t.Values {
+		if i < 1 {
+			str += "("
+		} else {
+			str += ", "
+		}
+		str += elem.Inspect()
+	}
+	str += ")"
+
+	return str
+}
 
 type RecordField struct {
 	Name  string
@@ -64,8 +78,23 @@ type Record struct {
 	Fields []RecordField
 }
 
-func (t *Record) Class() Class    { return RecordClass }
-func (t *Record) Inspect() string { return "INSPECTED_RECORD" }
+func (t *Record) Class() Class { return RecordClass }
+func (t *Record) Inspect() string {
+	str := ""
+
+	for i, field := range t.Fields {
+		if i < 1 {
+			str += "{"
+		} else {
+			str += ", "
+		}
+		str += field.Name + ": " + field.Value.Inspect()
+	}
+	str += "}"
+
+	return str
+
+}
 
 type Cons struct {
 	Head Value
@@ -97,5 +126,7 @@ type Func struct {
 	FuncPieceExprs []*ast.LetExpr
 }
 
-func (f *Func) Class() Class    { return FuncClass }
-func (f *Func) Inspect() string { return "INSPECTED_FUNC" }
+func (f *Func) Class() Class { return FuncClass }
+func (f *Func) Inspect() string {
+	return "«Function»"
+}
