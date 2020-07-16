@@ -94,6 +94,9 @@ add pair ->
 	a + b
 ```
 
+(Wow, GitHub renders those tabs as width 8, and it looks terrible. Doesn't look like
+you can change it in the README.md, though. Sorry.)
+
 In that last example, if `pair` were not a 2-tuple of type (Int, Int), the type-checker
 would complain (probably with a totally incomprehensible error message).
 
