@@ -607,20 +607,6 @@ func (tr *Translator) translateConsBlock(env *ExprEnv, block *parse_tree.ConsBlo
 	}
 }
 
-// This is the name that we bind to the argument when a function is called.
-var ArgName = "arg"
-
-// By making these "invalid" identifiers, we ensure no collisions with user code.
-var IdentityName = "‡identity"
-var UnitName = "‡unit"
-
-// Names of other built-ins
-var TrueName = "true"
-var FalseName = "false"
-var NotName = "!"
-var IToFName = "i_to_f"
-var FToIName = "f_to_i"
-
 func isNil(i interface{}) bool {
 	return i == nil || reflect.ValueOf(i).IsNil()
 }

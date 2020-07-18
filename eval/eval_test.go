@@ -14,7 +14,7 @@ func TestFirst(t *testing.T) {
 	expected := "2.5"
 	program := `
 
-5.i_to_f /. 2.i_to_f
+5.i2f /. 2.i2f
 
 `
 	val := testEval(t, program)
@@ -925,6 +925,29 @@ len[1, 2, 3] + len[{x:22, b:true}, {b:false, x:-33}]
 	}
 }
 
+func TestEvalFloatExpr(t *testing.T) {
+	tests := []struct {
+		expected float64
+		program  string
+	}{
+		{2.5, `
+
+5.i2f /. 2.i2f
+
+`},
+	}
+
+	for _, tt := range tests {
+		val := testEval(t, tt.program)
+
+		if floatVal, ok := val.(*Float); !ok {
+			t.Errorf("wow, expected a float, got %v", val.Inspect())
+		} else if floatVal.Value != tt.expected {
+			t.Errorf("wrong float value: expected %v, got %v in program:\n%v", tt.expected, floatVal, tt.program)
+		}
+	}
+}
+
 func TestEvalBoolExpr(t *testing.T) {
 	tests := []struct {
 		program  string
@@ -957,6 +980,7 @@ func TestEvalBoolExpr(t *testing.T) {
 		{"3 > 2", true},
 		{"3 > 3", false},
 		{"3 > 4", false},
+		{"3.i2f >. 4.i2f", false},
 		{"() == ()", true},
 		{"(1,2,3) == (1,2,3)", true},
 		{"(1,2,3) == (1,3,2)", false},
