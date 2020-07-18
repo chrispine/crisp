@@ -88,7 +88,8 @@ func eval(env *Env, someExpr ast.Expr) Value {
 			panic("Runtime Error: failed assertion in `let` expression")
 		}
 	default:
-		panic(errors.New(fmt.Sprintf("Runtime Error: unhandled expression %v of type %T", someExpr, someExpr)))
+		panic(errors.New(fmt.Sprintf(
+			"Runtime Error: unhandled expression %v of type %T", someExpr, someExpr)))
 	}
 
 	return val
@@ -369,13 +370,13 @@ func evalBinopExpr(env *Env, expr *ast.BinopExpr) Value {
 	case *ast.FuncTipe:
 		switch binopType {
 		case token.Equal:
-			panic("not allowed to see if two functions are equal (no notion of function equality)")
+			panic("functions equality is undefined")
 			return nil
 		case token.At:
 			leftVal := force(eval(env, expr.LExpr)).(*Func)
 			rightVal := &Thunk{Env: env, Expr: expr.RExpr}
 			return apply(leftVal, rightVal)
-		case token.Mult:
+		case token.DblMult:
 			// we don't need to force these
 			leftVal := &Thunk{Env: env, Expr: expr.LExpr}
 			rightVal := &Thunk{Env: env, Expr: expr.RExpr}
@@ -383,7 +384,7 @@ func evalBinopExpr(env *Env, expr *ast.BinopExpr) Value {
 				expr.LExpr.FinalTipe().(*ast.FuncTipe),
 				rightVal,
 				expr.RExpr.FinalTipe().(*ast.FuncTipe))
-		case token.Exp:
+		case token.DblExp:
 			// we don't need to force the function
 			leftVal := &Thunk{Env: env, Expr: expr.LExpr}
 			rightVal := force(eval(env, expr.RExpr)).(*Int)

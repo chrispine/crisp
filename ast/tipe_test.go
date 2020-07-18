@@ -12,22 +12,89 @@ func TestTipes(t *testing.T) {
 		expected string
 		program  string
 	}{
-		{"([$0…] -> (($0 -> $1) -> [$1…]))", `
-
-
-map[   ] _ -> [               ]
-map[h;t] f -> [f(h) ; t.map(f)]
-
-map
-
-
-`},
 		{"Int", "5"},
 		{"Bool", "true"},
 		{"(Int -> Int)", "x -> x+1"},
 		{"[Int…]", "[1,2,3]"},
-		{"[Ω…]", "[]"},
-		{"([$0…] -> (($0 -> $1) -> [$1…]))", `
+		{"[$A…]", "[]"}, // TODO: should all Omegas be type errors?
+		{"[Int…]", `
+
+
+nil = []
+
+nums = [1, 2, 3; nil]
+
+nil
+
+
+`},
+		{"(Int -> Int)", `
+
+
+dbl(x) -> x + x
+
+dbl
+
+
+`},
+		{"(Int -> Int)", `
+
+
+sqr(x) -> x * x
+
+sqr
+
+
+`},
+		{"(Int -> Int)", `
+
+
+sqr_inc(x) -> x * x + 1
+
+sqr_inc
+
+
+`},
+		{"(($A, $B) -> $B)", `
+
+
+(_, v) -> v
+
+
+`},
+		{"([$A…] -> Int)", `
+
+
+len[   ] -> 0
+len[_;t] -> 1 + t.len
+
+len
+
+
+`},
+		{"(Int, ([$A…] -> Int))", `
+
+
+len[   ] -> 0
+len[_;t] -> 1 + t.len
+
+(len[1, 2, 3] + len[{x:22, b:true}, {b:false, x:-33}], len)
+
+
+`},
+		{"([Int…], ((Int -> $A) -> [$A…]))", `
+
+
+map[   ] _ -> [               ]
+map[h;t] f -> [f(h) ; t.map(f)]
+
+nums = [1,2,3]
+
+(nums, map nums)
+
+
+`},
+		{"([$A…] -> (($A -> $B) -> [$B…]))", `
 
 
 map[   ] _ -> [               ]
@@ -37,15 +104,15 @@ map
 
 
 `},
-		{"([$0…] -> (($0 -> $1) -> [$1…]))", `
+		{"([Int…], ([$A…] -> (($A -> $B) -> [$B…])))", `
 
 
 map[   ] _ -> [               ]
 map[h;t] f -> [f(h) ; t.map(f)]
 
-num = [1].map(x -> x+1)
+nums = [1,2,3].map(x -> x+1)
 
-map
+(nums, map)
 
 
 `},
@@ -54,10 +121,11 @@ map
 	for _, tt := range tests {
 		expr := testExpr(t, tt.program)
 		tipe := expr.FinalTipe()
-		tipeStr := tipe.TipeString()
+		tipeStr, _ := tipe.TipeString('A')
 
 		if tipeStr != tt.expected {
-			t.Fatalf("wrong type: expected %s, got %s in program:\n%s", tt.expected, tipeStr, tt.program)
+			t.Errorf("wrong type:\n  expected:  %s\n  got:       %s\n  in program:\n%s",
+				tt.expected, tipeStr, tt.program)
 		}
 	}
 }
