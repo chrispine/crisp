@@ -12,6 +12,14 @@ func TestTipes(t *testing.T) {
 		expected string
 		program  string
 	}{
+		{"(([$A…], ($A -> $B)) -> [$B…])", `
+
+
+map([h;t], f) -> [f(h) ; map(t,f)]
+
+map
+
+`},
 		{"Int", "5"},
 		{"Bool", "true"},
 		{"(Int -> Int)", "x -> x+1"},
@@ -62,6 +70,16 @@ sqr_inc
 
 
 `},
+		{"([Int…] -> ([Int…] -> [Int…]))", `
+
+
+zip_plus [h0; t0] [h1; t1] ->
+	[h0 + h1; zip_plus t0 t1]
+
+zip_plus
+
+
+`},
 		{"([$A…] -> Int)", `
 
 
@@ -82,6 +100,20 @@ len[_;t] -> 1 + t.len
 
 
 `},
+		{"(([$A…] -> $A), ([$B…] -> [$B…]), ([Bool…] -> Bool))", `
+
+
+head[h;_] -> h
+tail[_;t] -> t
+
+
+any?[   ] -> false
+any?[h;t] -> h | t.any?
+
+(head, tail, any?)
+
+
+`},
 		{"([Int…], ((Int -> $A) -> [$A…]))", `
 
 
@@ -94,28 +126,43 @@ nums = [1,2,3]
 
 
 `},
-		{"([$A…] -> (($A -> $B) -> [$B…]))", `
+		/*
+			{"([$A…] -> (($A -> $B) -> [$B…]))", `
 
 
-map[   ] _ -> [               ]
-map[h;t] f -> [f(h) ; t.map(f)]
+			map[   ] _ -> [               ]
+			map[h;t] f -> [f(h) ; t.map(f)]
 
-map
-
-
-`},
-		{"([Int…], ([$A…] -> (($A -> $B) -> [$B…])))", `
+			map
 
 
-map[   ] _ -> [               ]
-map[h;t] f -> [f(h) ; t.map(f)]
-
-nums = [1,2,3].map(x -> x+1)
-
-(nums, map)
+			`},
+				{"([Int…], ([$A…] -> (($A -> $B) -> [$B…])))", `
 
 
-`},
+			map[   ] _ -> [               ]
+			map[h;t] f -> [f(h) ; t.map(f)]
+
+			nums = [1,2,3].map(x -> x+1)
+
+			(nums, map)
+
+
+			`},
+			{"([$A…] -> (($A -> Bool) -> [$A…]))", `
+
+
+			filter[   ] _ -> []
+			filter[h;t] f ->
+				case f(h)
+					true  -> [h ; t.filter(f)]
+					false ->      t.filter(f)
+
+			filter
+
+
+			`},
+		*/
 	}
 
 	for _, tt := range tests {

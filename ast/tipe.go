@@ -9,11 +9,9 @@ import (
 func CheckTipes(exprs []Expr) []string {
 	tc := &TipeChecker{}
 
-	// TODO: Document the hell out of this file!!
-
 	// We assign tipe variables recursively to all expressions.
 
-	// `inferTipes()` traverses the AST, assigning the tipe variables and gathering
+	// `inferTipes()` traverses the AST, assigning tipe variables and gathering
 	// additional information about the various tipes. It calls `unify()` which attempts
 	// integrates all of that tipe information. Hopefully every expression will have a
 	// known tipe by the end.
@@ -21,13 +19,12 @@ func CheckTipes(exprs []Expr) []string {
 		tc.inferTipes(expr)
 	}
 
-	// Now that we have all of this implicit tipe information in `dict`, let's pull
-	// out the final tipes and assign them to the expressions themselves.
-	for _, expr := range exprs {
-		tc.finalizeTipes(expr)
-	}
-
-	// now handle polymorphic functions
+	// Now we try to handle polymorphic functions. Every function call expression
+	// has a type, and a function expression in that call might have a different
+	// type than the function on its own. For example, the type of `len` is ([$A…] -> Int)
+	// but in a particular call, it might have type ([$Int…] -> Int) or ([$Bool…] -> Int).
+	// So what we do here is copy the function type with fresh type variables and
+	// unify it with the types we know to be the domain and range for this call.
 	for _, funcApplication := range tc.funcApplications {
 		polyTipe := derefTipeVar(funcApplication.LExpr.TipeVar(tc))
 		domainTV := funcApplication.RExpr.TipeVar(tc)
@@ -38,13 +35,14 @@ func CheckTipes(exprs []Expr) []string {
 		tc.unify(copyTipe.Range, rangeTV)
 	}
 
-	// Now that we have all of this implicit tipe information in `dict`, let's pull
-	// out the final tipes and assign them to the expressions themselves.
+	// Now that we have all of the type information, we remove the levels of indirection
+	// we racked up (all the type vars pointing to type vars) and record the final types
+	// in each expression.
 	for _, expr := range exprs {
 		tc.finalizeTipes(expr)
 	}
 
-	// None of these had better be Empty
+	// None of these had better be Empty, because that would mean we failed to find a type.
 	for _, expr := range exprs {
 		if expr.FinalTipe() == Empty {
 			tc.error("type checking failed: resolved to empty type")
@@ -54,6 +52,8 @@ func CheckTipes(exprs []Expr) []string {
 	return tc.tcErrors
 }
 
+// Store function call expressions so we can copy them later when we
+// infer the types of polymorphic functions.
 func (tc *TipeChecker) deferUnifyPoly(funcApplication *BinopExpr) {
 	tc.funcApplications = append(tc.funcApplications, funcApplication)
 }
@@ -67,13 +67,15 @@ func (tc *TipeChecker) error(err string, a ...interface{}) {
 	tc.tcErrors = append(tc.tcErrors, fmt.Sprintf("Crisp type error: "+err+"\n", a...))
 }
 
-// the TipeVar interface
+// the Tipe interface
 
 type Tipe interface {
-	TipeString(r rune) (string, rune) // TODO: what if we use more than 26 runes?
+	// TODO: If we have a type expression with more than 26 type variables,
+	// we will run out of letters. Need to fix this.
+	TipeString(r rune) (string, rune)
 }
 
-// the actual TipeVars
+// the actual Tipes
 
 type OmegaTipe struct { // the tipe of all values (or zero information)
 	String string
@@ -103,11 +105,11 @@ func (t *SimpleTipe) TipeString(r rune) (string, rune) {
 	return t.Name, r
 }
 
-var UnitTipe = &SimpleTipe{"Unit"}
-var IntTipe = &SimpleTipe{"Int"}
-var BoolTipe = &SimpleTipe{"Bool"}
+var UnitTipe = &SimpleTipe{"Unit"} // the tipe of the zero-tuple: ()
+var IntTipe = &SimpleTipe{"Int"}   // the tipe of ints
+var BoolTipe = &SimpleTipe{"Bool"} // the tipe of bools
 
-type TupleTipe struct {
+type TupleTipe struct { // the tipe of n-tuples for n >= 2 (there is no 1-tuple)
 	TipeVars []*TipeVar
 }
 
@@ -159,7 +161,7 @@ func (t *RecordTipe) TipeString(r rune) (string, rune) {
 }
 
 type ListTipe struct {
-	TipeVar *TipeVar
+	TipeVar *TipeVar // Lists are so nice to tipe check <3
 }
 
 func (t *ListTipe) TipeString(r rune) (string, rune) {
@@ -219,6 +221,7 @@ func (tc *TipeChecker) newTipeVar() *TipeVar {
 	return tv
 }
 
+// Takes what might be a chain of TipeVars and returns the last one.
 func derefTipeVar(tv *TipeVar) *TipeVar {
 	if tv2, ok := tv.ref.(*TipeVar); ok {
 		return derefTipeVar(tv2)
@@ -488,6 +491,11 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 	}
 }
 
+// Here we declare that two tipes should be the same, which means merging
+// what information we have for them. The graph looks like TipeVars from
+// every expression pointing to other TipeVars which point to still others,
+// many-to-one, until a chain terminates in an actual Tipe. If the two Tipes
+// are compatible, we take the union of them to get the resultant Tipe.
 func (tc *TipeChecker) unify(tipe0 Tipe, tipe1 Tipe) {
 	if tvv0, ok := tipe0.(*TipeVar); ok {
 		tv0 := derefTipeVar(tvv0)
@@ -541,6 +549,8 @@ func (tc *TipeChecker) unify(tipe0 Tipe, tipe1 Tipe) {
 	}
 }
 
+// Here we take the union of two Tipes and return it. Fairly straightforward
+// except for partial RecordTipes, which are a bit of a pain to merge.
 func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
 	if _, ok := tipe0.(*TipeVar); ok {
 		panic("no type variables allowed in tc.union()")
@@ -767,6 +777,7 @@ func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
  *  TipeVar Finalization
  */
 
+// Finalize the tipes of this and all sub-expressions.
 func (tc *TipeChecker) finalizeTipes(someExpr Expr) {
 	tc.setFinalTipe(someExpr)
 
@@ -851,6 +862,7 @@ func (tc *TipeChecker) setFinalTipe(expr Expr) {
 	expr.SetFinalTipe(tv.ref)
 }
 
+// Reduce chains of TipeVars to a single TipeVar.
 func (tc *TipeChecker) derefAllTipeVars(someTipe Tipe) {
 	switch tipe := someTipe.(type) {
 
@@ -890,6 +902,8 @@ func (tc *TipeChecker) derefAllTipeVars(someTipe Tipe) {
 	}
 }
 
+// Get a copy of this Tipe with all new TipeVars, preserving the
+// connection topology of the TipeVars involved.
 func (tc *TipeChecker) deepCopyTipe(someTipe Tipe) Tipe {
 	return tc.deepCopyTipeRec(someTipe, map[int]*TipeVar{})
 }
