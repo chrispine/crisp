@@ -11,10 +11,38 @@ import (
 // translates parse trees into ASTs
 
 type Translator struct {
-	trErrors []string
+	trErrors        []string
+	topLevelExprEnv *ExprEnv
 }
 
-func NewTranslator() *Translator { return &Translator{} }
+func NewTranslator(nativeFuncs []*NativeFuncExpr) *Translator {
+	bindings := []*ExprBinding{
+		{TrueName, TrueExpr},
+		{FalseName, FalseExpr},
+		{NotName, NotExpr},
+		{IdentityName, IdentityExpr},
+		{UnitName, TheUnitExpr},
+	}
+
+	for _, nf := range nativeFuncs {
+		bindings = append(bindings, &ExprBinding{
+			Name: nf.Name,
+			Expr: nf,
+		})
+	}
+
+	return &Translator{topLevelExprEnv: &ExprEnv{Bindings: bindings}}
+}
+
+func (tr *Translator) topLevelExprs() []Expr {
+	var exprs []Expr
+
+	for _, b := range tr.topLevelExprEnv.Bindings {
+		exprs = append(exprs, b.Expr)
+	}
+
+	return exprs
+}
 
 // A Crisp program is treated as if it is the interior of a `let` expression.
 func (tr *Translator) Translate(program *parse_tree.Program) Expr {
@@ -25,10 +53,10 @@ func (tr *Translator) Translate(program *parse_tree.Program) Expr {
 		Expr:  program.Expr,
 	}
 
-	expr := tr.translateLetBlock(TopLevelExprEnv, lb, false) // this let block is not part of a function
+	expr := tr.translateLetBlock(tr.topLevelExprEnv, lb, false) // this let block is not part of a function
 
 	if len(tr.trErrors) == 0 {
-		exprs := append(TopLevelExprs(), expr)
+		exprs := append(tr.topLevelExprs(), expr)
 		for _, err := range CheckTipes(exprs) {
 			tr.trErrors = append(tr.trErrors, err)
 		}
@@ -408,10 +436,10 @@ func (tr *Translator) translateModuleBlock(env *ExprEnv, block *parse_tree.Modul
 	return tr.translateLetBlock(env, lit, false) // this let block is not part of a function
 }
 
-func (tr *Translator) translateFuncBlock(env *ExprEnv, block *parse_tree.FuncBlock) *FuncExpr {
+func (tr *Translator) translateFuncBlock(env *ExprEnv, block *parse_tree.FuncBlock) *UserFuncExpr {
 	return tr.translateFunc(env, block.FuncBlockPieces)
 }
-func (tr *Translator) translateInlineFunc(env *ExprEnv, inline *parse_tree.InlineFunc) *FuncExpr {
+func (tr *Translator) translateInlineFunc(env *ExprEnv, inline *parse_tree.InlineFunc) *UserFuncExpr {
 	funcBlockPieces := []*parse_tree.FuncBlockPiece{{
 		LVal: inline.LVal,
 		Expr: &parse_tree.JustExprBlock{Expr: inline.Expr},
@@ -419,7 +447,7 @@ func (tr *Translator) translateInlineFunc(env *ExprEnv, inline *parse_tree.Inlin
 	return tr.translateFunc(env, funcBlockPieces)
 }
 
-func (tr *Translator) translateFunc(env *ExprEnv, funcBlockPieces []*parse_tree.FuncBlockPiece) *FuncExpr {
+func (tr *Translator) translateFunc(env *ExprEnv, funcBlockPieces []*parse_tree.FuncBlockPiece) *UserFuncExpr {
 	var letExprs []*LetExpr
 
 	for _, piece := range funcBlockPieces {
@@ -437,7 +465,7 @@ func (tr *Translator) translateFunc(env *ExprEnv, funcBlockPieces []*parse_tree.
 		letExprs = append(letExprs, letExpr)
 	}
 
-	return &FuncExpr{FuncPieceExprs: letExprs}
+	return &UserFuncExpr{FuncPieceExprs: letExprs}
 }
 
 func (tr *Translator) translateTupleDestructureBlock(env *ExprEnv, block *TupleDestructureBlock) *TupleDestructureExpr {
@@ -466,7 +494,7 @@ func (tr *Translator) translateConsDestructureBlock(env *ExprEnv, block *ConsDes
 
 func (tr *Translator) translateInlineTuple(env *ExprEnv, inline *parse_tree.InlineTuple) Expr {
 	if len(inline.Exprs) < 1 {
-		return Unit
+		return TheUnitExpr
 	}
 	if len(inline.Exprs) == 1 {
 		tr.error("shouldn't be possible to have an inline tuple with one element")
@@ -484,7 +512,7 @@ func (tr *Translator) translateInlineTuple(env *ExprEnv, inline *parse_tree.Inli
 func (tr *Translator) translateTupleBlock(env *ExprEnv, block *parse_tree.TupleBlock) Expr {
 	if len(block.Exprs) < 1 {
 		tr.error("shouldn't be possible to have a tuple block with no elements")
-		return Unit
+		return TheUnitExpr
 	}
 	if len(block.Exprs) == 1 {
 		tr.error("shouldn't be possible to have a tuple block with one element")
@@ -582,8 +610,16 @@ func (tr *Translator) translateConsBlock(env *ExprEnv, block *parse_tree.ConsBlo
 // This is the name that we bind to the argument when a function is called.
 var ArgName = "arg"
 
-// By making this an "invalid" identifier name, we ensure no collisions with user code.
-var IdentityName = "@identity"
+// By making these "invalid" identifiers, we ensure no collisions with user code.
+var IdentityName = "‡identity"
+var UnitName = "‡unit"
+
+// Names of other built-ins
+var TrueName = "true"
+var FalseName = "false"
+var NotName = "!"
+var IToFName = "i_to_f"
+var FToIName = "f_to_i"
 
 func isNil(i interface{}) bool {
 	return i == nil || reflect.ValueOf(i).IsNil()

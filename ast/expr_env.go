@@ -25,8 +25,6 @@ type ExprBinding struct {
 	Expr Expr
 }
 
-var TopLevelExprEnv = &ExprEnv{}
-
 func (e *ExprEnv) isDefined(name string) bool {
 	// check local bindings
 	for _, b := range e.Bindings {
@@ -40,11 +38,11 @@ func (e *ExprEnv) isDefined(name string) bool {
 		return e.Parent.isDefined(name)
 	}
 
-	if e == TopLevelExprEnv {
-		return topLevelDefined(name)
-	}
+	// we're at the top level environment,
+	// so check for implicit top-level bindings (integers)
+	_, err := strconv.Atoi(name)
 
-	return false
+	return err == nil
 }
 
 func (e *ExprEnv) Get(depth int, idx int) Expr {
@@ -59,7 +57,8 @@ func (e *ExprEnv) LookupIndices(name string) Expr {
 	var depth int
 	env := e
 
-	for ; env != TopLevelExprEnv; depth++ {
+	// check non-top-level environments
+	for ; env.Parent != nil; depth++ {
 		// check local bindings
 		for idx, b := range env.Bindings {
 			if b.Name == name {
@@ -68,19 +67,17 @@ func (e *ExprEnv) LookupIndices(name string) Expr {
 		}
 		env = env.Parent
 	}
-	// implicit top level bindings
-	if name == "true" {
-		return TrueExpr
+
+	// if we got here, `env` is the top-level environment
+
+	// check explicit top-level bindings
+	for _, b := range env.Bindings {
+		if b.Name == name {
+			return b.Expr
+		}
 	}
-	if name == "false" {
-		return FalseExpr
-	}
-	if name == "!" {
-		return NotExpr
-	}
-	if name == IdentityName {
-		return IdentityExpr
-	}
+
+	// check implicit top level bindings (integers)
 	if i, err := strconv.Atoi(name); err == nil {
 		return &IntExpr{Value: i}
 	}
@@ -88,36 +85,6 @@ func (e *ExprEnv) LookupIndices(name string) Expr {
 	// nothing was found
 	// TODO: as this is an error, convert this to a more explicit error
 	return nil
-}
-
-func topLevelDefined(name string) bool {
-	if name == "true" {
-		return true
-	}
-	if name == "false" {
-		return true
-	}
-	if name == "!" {
-		return true
-	}
-	if name == IdentityName {
-		return true
-	}
-	if _, err := strconv.Atoi(name); err == nil {
-		return true
-	}
-
-	return false
-}
-
-func TopLevelExprs() []Expr {
-	return []Expr{
-		TrueExpr,
-		FalseExpr,
-		Unit,
-		IdentityExpr,
-		NotExpr,
-	}
 }
 
 // "second verse, same as the first"
@@ -130,26 +97,4 @@ type ParseEnv struct {
 type ParseBinding struct {
 	Name string
 	Expr parse_tree.Block
-}
-
-var TopLevelParseEnv = &ParseEnv{}
-
-func (e *ParseEnv) isDefined(name string) bool {
-	// check local bindings
-	for _, b := range e.Bindings {
-		if b.Name == name {
-			return true
-		}
-	}
-
-	// nope, let's see if a parent has it
-	if e.parent != nil {
-		return e.parent.isDefined(name)
-	}
-
-	if e == TopLevelParseEnv {
-		return topLevelDefined(name)
-	}
-
-	return false
 }

@@ -50,26 +50,32 @@ var binopPrecs = []BinopPrecList{
 		token.GT,
 		token.GTE,
 	}},
-	{lAssoc: true, ops: []token.TokType{ //  +  ++  -  --
+	{lAssoc: true, ops: []token.TokType{ //  +  +.  ++  -  -.  --
 		token.Plus,
+		token.FPlus,
 		token.DblPlus,
 		token.Minus,
+		token.FMinus,
 		token.DblMinus,
 	}},
-	{lAssoc: true, ops: []token.TokType{ //  *  **  /  //  %  %%
+	{lAssoc: true, ops: []token.TokType{ //  *  *.  **  /  /.  //  %  %.  %%
 		token.Mult,
+		token.FMult,
 		token.DblMult,
 		token.Div,
+		token.FDiv,
 		token.DblDiv,
 		token.Mod,
+		token.FMod,
 		token.DblMod,
 	}},
 	{lAssoc: true, ops: []token.TokType{ //  .  @
 		token.Dot,
 		token.At,
 	}},
-	{lAssoc: false, ops: []token.TokType{ //  ^  ^^
+	{lAssoc: false, ops: []token.TokType{ //  ^  ^.  ^^
 		token.Exp,
+		token.FExp,
 		token.DblExp,
 	}},
 	{lAssoc: true, ops: []token.TokType{ //  :
