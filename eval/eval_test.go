@@ -11,21 +11,15 @@ import (
 // TODO: add tests to catch every error and panic, to make sure we are generating them correctly.
 
 func TestFirst(t *testing.T) {
-	expected := 50
+	expected := 5
 	program := `
-head[h;_] -> h
-tail[_;t] -> t
+make_adder(n) ->
+	x -> x+n
 
-nth(n) -> head * tail^n
+add2 = make_adder(2)
 
-zip_plus [h0; t0] [h1; t1] ->
-	[h0 + h1; zip_plus t0 t1]
+add2(3)
 
-ones = [1; ones]
-
-nats = [0; zip_plus ones nats]
-
-nth(50) nats
 
 
 #len[   ] -> 0
@@ -36,9 +30,9 @@ nth(50) nats
 	val := testEval(t, program)
 
 	if intVal, ok := val.(*Int); !ok {
-		t.Fatalf("wow, expected an int, got %v", val.Inspect())
+		t.Errorf("wow, expected an int, got %v", val.Inspect())
 	} else if intVal.Value != expected {
-		t.Fatalf("wrong int value: expected %d, got %d in program:\n%v", expected, intVal, program)
+		t.Errorf("wrong int value: expected %d, got %d in program:\n%v", expected, intVal, program)
 	}
 }
 
@@ -465,7 +459,7 @@ a.tailhead
 		{123, `
 
 
-id = (x -> 2*x)^0
+id = (x -> 2*x)^^0
 
 id(123)
 
@@ -476,7 +470,7 @@ id(123)
 
 double(x) -> 2*x
 
-id = double^0
+id = double^^0
 
 id(11)
 
@@ -487,7 +481,7 @@ id(11)
 
 double(x) -> 2*x
 
-dbl = double^1
+dbl = double^^1
 
 dbl(11)
 
@@ -498,7 +492,7 @@ dbl(11)
 
 double(x) -> 2*x
 
-quad = double^2
+quad = double^^2
 
 quad(11)
 
@@ -511,7 +505,7 @@ double(x) -> 2*x
 
 sqr(x) -> x^2
 
-(double*sqr)@5
+(double**sqr)@5
 
 
 `},
@@ -524,7 +518,7 @@ tail[h;t] -> t
 a = [22 ; b]
 b = [88, 99, 111]
 
-tailhead = head * tail
+tailhead = head ** tail
 
 a.tailhead
 
@@ -539,7 +533,7 @@ tail[h;t] -> t
 a = [22 ; b]
 b = [88, 99, 111]
 
-(head * tail) a
+(head ** tail) a
 
 
 `},
@@ -549,7 +543,7 @@ b = [88, 99, 111]
 head[h;t] -> h
 tail[h;t] -> t
 
-t4 = tail ^ 4
+t4 = tail ^^ 4
 
 [91, 11, 21, 31, 41, 51, 61].t4.head
 
@@ -564,7 +558,7 @@ tail[h;t] -> t
 a = [22 ; b]
 b = [88, 99, 111]
 
-(head * tail^2) a
+(head ** tail^^2) a
 
 
 `},
@@ -624,7 +618,7 @@ ones.tail.head
 head[h;t] -> h
 tail[h;t] -> t
 
-nth(n) -> head * tail^n
+nth(n) -> head ** tail^^n
 
 ones = [1;ones]
 
@@ -787,7 +781,7 @@ case (12, true)
 head[h;_] -> h
 tail[_;t] -> t
 
-nth(n) -> head * tail^n
+nth(n) -> head ** tail^^n
 
 zip_plus [h0; t0] [h1; t1] ->
 	[h0 + h1; zip_plus t0 t1]
@@ -803,11 +797,10 @@ nth(50) nats
 		{5, `
 
 
-5
-#len[   ] -> 0
-#len[_;t] -> 1 + len(t)
+len[   ] -> 0
+len[_;t] -> 1 + len(t)
 
-#len[1, 2, 3] + len[{x:22, b:true}, {b:false, x:-33}]
+len[1, 2, 3] + len[{x:22, b:true}, {b:false, x:-33}]
 
 
 `},
@@ -936,9 +929,9 @@ nth(50) nats
 		val := testEval(t, tt.program)
 
 		if intVal, ok := val.(*Int); !ok {
-			t.Fatalf("wow, expected an int, got %v", val.Inspect())
+			t.Errorf("wow, expected an int, got %v", val.Inspect())
 		} else if intVal.Value != tt.expected {
-			t.Fatalf("wrong int value: expected %d, got %d in program:\n%v", tt.expected, intVal, tt.program)
+			t.Errorf("wrong int value: expected %d, got %d in program:\n%v", tt.expected, intVal, tt.program)
 		}
 	}
 }
@@ -1008,7 +1001,7 @@ len[_;t] -> 1 + len(t)
 
 is_even?(x) -> x%2 == 0
 
-is_even_len? = is_even? * len
+is_even_len? = is_even? ** len
 
 is_even_len?[1,2,3]
 
@@ -1019,9 +1012,9 @@ is_even_len?[1,2,3]
 		val := testEval(t, tt.program)
 
 		if boolVal, ok := val.(*Bool); !ok {
-			t.Fatalf("wow, expected a bool, got %v", val.Inspect())
+			t.Errorf("wow, expected a bool, got %v", val.Inspect())
 		} else if boolVal.Value != tt.expected {
-			t.Fatalf("wrong bool value: expected %v, got %v in program:\n%v", tt.expected, boolVal, tt.program)
+			t.Errorf("wrong bool value: expected %v, got %v in program:\n%v", tt.expected, boolVal, tt.program)
 		}
 	}
 }

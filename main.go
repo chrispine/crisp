@@ -61,7 +61,11 @@ func run(code string) (string, bool) {
 		return errStr, false
 	}
 
-	tipe := program.FinalTipe()
+	output := val.Inspect()
 
-	return val.Inspect() + "\nType: " + tipe.TipeString(), true
+	//tipe := program.FinalTipe()
+	//tipeStr, _ := tipe.TipeString('A')
+	//output += "\nType: " + tipeStr
+
+	return output, true
 }

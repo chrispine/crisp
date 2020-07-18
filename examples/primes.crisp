@@ -1,0 +1,49 @@
+
+
+head[h;_] -> h
+tail[_;t] -> t
+
+
+any?[   ] -> false
+any?[h;t] -> h | t.any?
+
+
+map[   ] _ -> [               ]
+map[h;t] f -> [f(h) ; t.map(f)]
+
+
+filter[   ] _ -> []
+filter[h;t] f ->
+	case f(h)
+		true  -> [h ; t.filter(f)]
+		false ->      t.filter(f)
+
+
+take_while[   ] _ -> []
+take_while[h;t] f ->
+	case f(h)
+		true  -> [h ; t.take_while(f)]
+		false -> [                   ]
+
+# component-wise sum of two infinite lists
+zip_plus [h0; t0] [h1; t1] ->
+	[h0 + h1; zip_plus t0 t1]
+
+# infinite list of ones
+ones = [1; ones]
+
+# all of the natural numbers: 0, 1, 2...
+nats = [0; zip_plus ones nats]
+
+# all of the prime numbers
+primes = [2 ; nats.tail^^3.filter(prime?)]
+
+prime?(n) ->
+	primes_lte_root_n = primes.take_while p -> p^2 <= n
+	divides_n(m) -> n % m == 0
+	primes_lte_root_n.map(divides_n).any?.!
+
+# And here we go...
+
+primes.take_while(p -> p < 1000)
+
