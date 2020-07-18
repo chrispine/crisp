@@ -687,3 +687,21 @@ func (e *ConsDestructureExpr) TipeVar(tc *TipeChecker) *TipeVar {
 	}
 	return e.tipeVar
 }
+
+/*
+ *   names
+ */
+
+// This is the name that we bind to the argument when a function is called.
+var ArgName = "arg"
+
+// By making these "invalid" identifiers, we ensure no collisions with user code.
+var IdentityName = "‡identity"
+var UnitName = "‡unit"
+
+// Names of other built-ins
+var TrueName = "true"
+var FalseName = "false"
+var NotName = "!"
+var IToFName = "i2f"
+var FToIName = "f2i"

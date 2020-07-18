@@ -44,11 +44,15 @@ var binopPrecs = []BinopPrecList{
 		token.Equal,
 		token.NEq,
 	}},
-	{lAssoc: true, ops: []token.TokType{ //  <  <=  >  >=
+	{lAssoc: true, ops: []token.TokType{ //  <  <=  >  >=  <.  <=.  >.  >=.
 		token.LT,
 		token.LTE,
 		token.GT,
 		token.GTE,
+		token.FExp,
+		token.FLTE,
+		token.FGT,
+		token.FGTE,
 	}},
 	{lAssoc: true, ops: []token.TokType{ //  +  +.  ++  -  -.  --
 		token.Plus,
