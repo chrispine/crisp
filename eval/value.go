@@ -12,6 +12,7 @@ type Class int
 const (
 	UnitClass = iota
 	IntClass
+	FloatClass
 	BoolClass
 	FuncClass
 	ThunkClass
@@ -31,6 +32,13 @@ type Int struct {
 
 func (i *Int) Class() Class    { return IntClass }
 func (i *Int) Inspect() string { return fmt.Sprintf("%v", i.Value) }
+
+type Float struct {
+	Value float64
+}
+
+func (f *Float) Class() Class    { return FloatClass }
+func (f *Float) Inspect() string { return fmt.Sprintf("%v", f.Value) }
 
 type Bool struct {
 	Value bool
@@ -121,12 +129,45 @@ func (c *Cons) Inspect() string {
 	}
 }
 
-type Func struct {
+type UserFunc struct {
 	Env            *Env
 	FuncPieceExprs []*ast.LetExpr
 }
 
-func (f *Func) Class() Class { return FuncClass }
-func (f *Func) Inspect() string {
+func (f *UserFunc) Class() Class { return FuncClass }
+func (f *UserFunc) Inspect() string {
 	return "«Function»"
+}
+
+type NativeFunc struct {
+	f func(Value) Value
+}
+
+func (f *NativeFunc) NativeCode()  {} // for ast.NativeCode interface
+func (f *NativeFunc) Class() Class { return FuncClass }
+func (f *NativeFunc) Inspect() string {
+	return "«Function»"
+}
+
+func CreateNativeFuncs() []*ast.NativeFuncExpr {
+	funcExprs := []*ast.NativeFuncExpr{
+		{
+			Name:       ast.IToFName,
+			DomainTipe: ast.IntTipe,
+			RangeTipe:  ast.FloatTipe,
+			Func: &NativeFunc{f: func(v Value) Value {
+				return &Float{Value: float64(v.(*Int).Value)}
+			}},
+		},
+		{
+			Name:       ast.FToIName,
+			DomainTipe: ast.FloatTipe,
+			RangeTipe:  ast.IntTipe,
+			Func: &NativeFunc{f: func(v Value) Value {
+				return &Int{Value: int(v.(*Float).Value)}
+			}},
+		},
+	}
+
+	return funcExprs
 }

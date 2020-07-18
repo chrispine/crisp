@@ -11,28 +11,17 @@ import (
 // TODO: add tests to catch every error and panic, to make sure we are generating them correctly.
 
 func TestFirst(t *testing.T) {
-	expected := 5
+	expected := "2.5"
 	program := `
-make_adder(n) ->
-	x -> x+n
 
-add2 = make_adder(2)
+5.i_to_f /. 2.i_to_f
 
-add2(3)
-
-
-
-#len[   ] -> 0
-#len[_;t] -> 1 + len(t)
-
-#len[1, 2, 3] + len[{x:22, b:true}, {b:false, x:-33}]
 `
 	val := testEval(t, program)
+	inspected := val.Inspect()
 
-	if intVal, ok := val.(*Int); !ok {
-		t.Errorf("wow, expected an int, got %v", val.Inspect())
-	} else if intVal.Value != expected {
-		t.Errorf("wrong int value: expected %d, got %d in program:\n%v", expected, intVal, program)
+	if inspected != expected {
+		t.Errorf("wrong value: expected %s, got %s in program:\n%s", expected, inspected, program)
 	}
 }
 
@@ -1028,7 +1017,7 @@ func testEval(t *testing.T, code string) Value {
 		t.FailNow()
 	}
 
-	tr := ast.NewTranslator()
+	tr := ast.NewTranslator(CreateNativeFuncs())
 	program := tr.Translate(pTree)
 
 	// check for translation errors

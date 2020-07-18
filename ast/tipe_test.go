@@ -7,6 +7,11 @@ import (
 	"testing"
 )
 
+/*
+ * NOTE: Native (built-in) functions are not created
+ * for any of these tests, and thus do not exist!
+ */
+
 func TestTipes(t *testing.T) {
 	tests := []struct {
 		expected string
@@ -186,7 +191,7 @@ func testExpr(t *testing.T, code string) Expr {
 		t.FailNow()
 	}
 
-	tr := NewTranslator()
+	tr := NewTranslator(nil)
 	program := tr.Translate(pTree)
 
 	// check for translation errors

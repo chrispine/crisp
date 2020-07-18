@@ -69,20 +69,30 @@ const (
 	DblAnd   // &&
 	DblOr    // ||
 
-	Plus  // +
-	Minus // -
-	Mult  // *
-	Div   // /
-	Mod   // %
-	Exp   // ^
-	And   // &
-	Or    // |
-	Not   // !
+	FPlus  // +.
+	FMinus // -.
+	FMult  // *.
+	FDiv   // /.
+	FMod   // %.
+	FExp   // ^.
+	Plus   // +
+	Minus  // -
+	Mult   // *
+	Div    // /
+	Mod    // %
+	Exp    // ^
+	And    // &
+	Or     // |
+	Not    // !
 
 	LT    // <
 	GT    // >
 	LTE   // <=
 	GTE   // >=
+	FLT   // <.
+	FGT   // >.
+	FLTE  // <=.
+	FGTE  // >=.
 	Equal // ==
 	NEq   // !=
 
@@ -112,6 +122,10 @@ const (
 // Note that the order of these is significant:
 // e.g. "->" must come before "-"
 var Operators = []Token{
+	{0, FLTE, strings.TrimSpace("         <=.   ")},
+	{0, FGTE, strings.TrimSpace("         >=.   ")},
+	{0, FLT, strings.TrimSpace("          <.    ")},
+	{0, FGT, strings.TrimSpace("          >.    ")},
 	{0, LTE, strings.TrimSpace("          <=    ")},
 	{0, GTE, strings.TrimSpace("          >=    ")},
 	{0, Equal, strings.TrimSpace("        ==    ")},
@@ -132,6 +146,13 @@ var Operators = []Token{
 	{0, DblExp, strings.TrimSpace("       ^^    ")},
 	{0, DblAnd, strings.TrimSpace("       &&    ")},
 	{0, DblOr, strings.TrimSpace("        ||    ")},
+
+	{0, FPlus, strings.TrimSpace("        +.    ")},
+	{0, FMinus, strings.TrimSpace("       -.    ")},
+	{0, FMult, strings.TrimSpace("        *.    ")},
+	{0, FDiv, strings.TrimSpace("         /.    ")},
+	{0, FMod, strings.TrimSpace("         %.    ")},
+	{0, FExp, strings.TrimSpace("         ^.    ")},
 
 	{0, Plus, strings.TrimSpace("         +     ")},
 	{0, Minus, strings.TrimSpace("        -     ")},

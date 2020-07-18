@@ -5,6 +5,7 @@ import (
 	"crisp/token"
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 )
 
@@ -54,8 +55,10 @@ func eval(env *Env, someExpr ast.Expr) Value {
 		val = evalUnopExpr(env, expr)
 	case *ast.BinopExpr:
 		val = evalBinopExpr(env, expr)
-	case *ast.FuncExpr:
-		val = evalFuncExpr(env, expr)
+	case *ast.UserFuncExpr:
+		val = evalUserFuncExpr(env, expr)
+	case *ast.NativeFuncExpr:
+		val = evalNativeFuncExpr(expr) // doesn't need the env
 	case *ast.TupleExpr:
 		val = evalTupleExpr(env, expr)
 	case *ast.RecordExpr:
@@ -95,7 +98,7 @@ func eval(env *Env, someExpr ast.Expr) Value {
 	return val
 }
 
-func apply(fn *Func, arg Value) Value {
+func applyUser(fn *UserFunc, arg Value) Value {
 	// For each function-piece (each of which is a `let` expression)...
 	for _, letExpr := range fn.FuncPieceExprs {
 		// ...we evaluate the let expression to see if the assertions hold...
@@ -109,6 +112,10 @@ func apply(fn *Func, arg Value) Value {
 	}
 
 	panic("Runtime Error: no matching function piece for function call")
+}
+
+func applyNative(fn *NativeFunc, arg Value) Value {
+	return fn.f(force(arg))
 }
 
 func evalIntExpr(_ *Env, expr *ast.IntExpr) *Int {
@@ -365,6 +372,57 @@ func evalBinopExpr(env *Env, expr *ast.BinopExpr) Value {
 						return &Int{Value: val}
 					}
 				}
+			case ast.FloatTipe:
+				l := force(eval(env, expr.LExpr)).(*Float).Value
+				r := force(eval(env, expr.RExpr)).(*Float).Value
+
+				switch binopType {
+				case token.Equal:
+					if l == r {
+						return True
+					}
+					return False
+				case token.FLT:
+					if l < r {
+						return True
+					} else {
+						return False
+					}
+				case token.FLTE:
+					if l <= r {
+						return True
+					} else {
+						return False
+					}
+				case token.FGT:
+					if l > r {
+						return True
+					} else {
+						return False
+					}
+				case token.FGTE:
+					if l >= r {
+						return True
+					} else {
+						return False
+					}
+				case token.FPlus:
+					return &Float{Value: l + r}
+				case token.FMinus:
+					return &Float{Value: l - r}
+				case token.FMult:
+					return &Float{Value: l * r}
+				case token.FDiv:
+					return &Float{Value: l / r}
+				case token.FMod:
+					m := math.Mod(l, r)
+					if m < 0 { // awesomeMod! <3
+						m += r
+					}
+					return &Float{Value: m}
+				case token.FExp:
+					return &Float{Value: math.Pow(l, r)}
+				}
 			}
 		}
 	case *ast.FuncTipe:
@@ -373,9 +431,12 @@ func evalBinopExpr(env *Env, expr *ast.BinopExpr) Value {
 			panic("functions equality is undefined")
 			return nil
 		case token.At:
-			leftVal := force(eval(env, expr.LExpr)).(*Func)
+			leftVal := force(eval(env, expr.LExpr))
 			rightVal := &Thunk{Env: env, Expr: expr.RExpr}
-			return apply(leftVal, rightVal)
+			if nativeFunc, ok := leftVal.(*NativeFunc); ok {
+				return applyNative(nativeFunc, rightVal)
+			}
+			return applyUser(leftVal.(*UserFunc), rightVal)
 		case token.DblMult:
 			// we don't need to force these
 			leftVal := &Thunk{Env: env, Expr: expr.LExpr}
@@ -490,11 +551,15 @@ func evalLetExpr(env *Env, expr *ast.LetExpr, maybeArg Value) (Value, bool) {
 	return &Thunk{Env: newEnv, Expr: expr.Expr}, true
 }
 
-func evalFuncExpr(env *Env, expr *ast.FuncExpr) *Func {
-	return &Func{
+func evalUserFuncExpr(env *Env, expr *ast.UserFuncExpr) *UserFunc {
+	return &UserFunc{
 		Env:            env,
 		FuncPieceExprs: expr.FuncPieceExprs,
 	}
+}
+
+func evalNativeFuncExpr(expr *ast.NativeFuncExpr) *NativeFunc {
+	return expr.Func.(*NativeFunc)
 }
 
 func equal(aVal Value, bVal Value) bool {
@@ -564,8 +629,8 @@ func equal(aVal Value, bVal Value) bool {
 var fName = "@f"
 var gName = "@g"
 
-func composeFuncs(f Value, fTipe *ast.FuncTipe, g Value, gTipe *ast.FuncTipe) *Func {
-	env := NewEnv(EmptyEnv, []*Binding{
+func composeFuncs(f Value, fTipe *ast.FuncTipe, g Value, gTipe *ast.FuncTipe) *UserFunc {
+	env := NewEnv(TopLevelEnv, []*Binding{
 		{Name: fName, Value: f},
 		{Name: gName, Value: g},
 	})
@@ -615,7 +680,7 @@ func composeFuncs(f Value, fTipe *ast.FuncTipe, g Value, gTipe *ast.FuncTipe) *F
 	funcPiece.Code = "let {\n" + fAtGAtArg.Code + "\n}"
 	funcPiece.SetFinalTipe(fTipe.Range)
 
-	return &Func{Env: env, FuncPieceExprs: []*ast.LetExpr{funcPiece}}
+	return &UserFunc{Env: env, FuncPieceExprs: []*ast.LetExpr{funcPiece}}
 }
 
 func isNil(i interface{}) bool {

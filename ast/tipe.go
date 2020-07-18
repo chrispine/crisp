@@ -105,9 +105,10 @@ func (t *SimpleTipe) TipeString(r rune) (string, rune) {
 	return t.Name, r
 }
 
-var UnitTipe = &SimpleTipe{"Unit"} // the tipe of the zero-tuple: ()
-var IntTipe = &SimpleTipe{"Int"}   // the tipe of ints
-var BoolTipe = &SimpleTipe{"Bool"} // the tipe of bools
+var UnitTipe = &SimpleTipe{"Unit"}   // the tipe of the zero-tuple: ()
+var IntTipe = &SimpleTipe{"Int"}     // the tipe of ints
+var FloatTipe = &SimpleTipe{"Float"} // the tipe of floats
+var BoolTipe = &SimpleTipe{"Bool"}   // the tipe of bools
 
 type TupleTipe struct { // the tipe of n-tuples for n >= 2 (there is no 1-tuple)
 	TipeVars []*TipeVar
@@ -296,10 +297,18 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 			tc.unify(tv, BoolTipe)
 			tc.unify(ltv, IntTipe)
 			tc.unify(rtv, IntTipe)
+		case token.FLT, token.FLTE, token.FGT, token.FGTE:
+			tc.unify(tv, BoolTipe)
+			tc.unify(ltv, FloatTipe)
+			tc.unify(rtv, FloatTipe)
 		case token.Plus, token.Minus, token.Div, token.Mod:
 			tc.unify(tv, IntTipe)
 			tc.unify(ltv, IntTipe)
 			tc.unify(rtv, IntTipe)
+		case token.FPlus, token.FMinus, token.FMult, token.FDiv, token.FMod, token.FExp:
+			tc.unify(tv, FloatTipe)
+			tc.unify(ltv, FloatTipe)
+			tc.unify(rtv, FloatTipe)
 		case token.Exp:
 			// TODO: operator overloading!
 			tc.unify(tv, IntTipe)
@@ -336,7 +345,7 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 		tc.inferTipes(expr.LExpr)
 		tc.inferTipes(expr.RExpr)
 
-	case *FuncExpr:
+	case *UserFuncExpr:
 		fDomain := tc.newTipeVar()
 		fRange := tc.newTipeVar()
 		fTipe := &FuncTipe{
@@ -355,6 +364,17 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 
 			tc.inferTipes(fp)
 		}
+
+	case *NativeFuncExpr:
+		fDomain := tc.newTipeVar()
+		fRange := tc.newTipeVar()
+		fTipe := &FuncTipe{
+			Domain: fDomain,
+			Range:  fRange,
+		}
+		tc.unify(tv, fTipe)
+		tc.unify(fDomain, expr.DomainTipe)
+		tc.unify(fRange, expr.RangeTipe)
 
 	case *TupleExpr:
 		tTipe := &TupleTipe{}
@@ -783,7 +803,7 @@ func (tc *TipeChecker) finalizeTipes(someExpr Expr) {
 
 	switch expr := someExpr.(type) {
 
-	case *UnitExpr, *IntExpr, *BoolExpr, *LookupExpr, *ArgExpr:
+	case *UnitExpr, *IntExpr, *BoolExpr, *LookupExpr, *ArgExpr, *NativeFuncExpr:
 		// nothing more to do
 
 	case *LetExpr:
@@ -820,7 +840,7 @@ func (tc *TipeChecker) finalizeTipes(someExpr Expr) {
 			tc.finalizeTipes(expr.Tail)
 		}
 
-	case *FuncExpr:
+	case *UserFuncExpr:
 		for _, fp := range expr.FuncPieceExprs {
 			tc.finalizeTipes(fp)
 		}

@@ -13,6 +13,10 @@ type Expr interface {
 	finalizeAndGetCode() string
 }
 
+type NativeCode interface {
+	NativeCode()
+}
+
 /*
  *   IntExpr
  */
@@ -60,9 +64,9 @@ func (e *BoolExpr) SetFinalTipe(tipe Tipe) {
 }
 func (e *BoolExpr) finalizeAndGetCode() string {
 	if e.Value {
-		e.Code = "true"
+		e.Code = TrueName
 	} else {
-		e.Code = "false"
+		e.Code = FalseName
 	}
 	return e.Code
 }
@@ -291,7 +295,7 @@ func (e *UnitExpr) TipeVar(tc *TipeChecker) *TipeVar {
 	return e.tipeVar
 }
 
-var Unit = &UnitExpr{}
+var TheUnitExpr = &UnitExpr{}
 
 /*
  *   RecordExpr
@@ -377,38 +381,44 @@ func (e *ConsExpr) TipeVar(tc *TipeChecker) *TipeVar {
 }
 
 /*
- *   FuncExpr
+ *   UserFuncExpr
  */
 
-type FuncExpr struct {
+type UserFuncExpr struct {
 	Code           string
 	tipeVar        *TipeVar
 	finalTipe      Tipe
 	FuncPieceExprs []*LetExpr
 }
 
-func (e *FuncExpr) FinalTipe() Tipe { return e.finalTipe }
-func (e *FuncExpr) String() string  { return e.Code }
-func (e *FuncExpr) SetFinalTipe(tipe Tipe) {
+func (e *UserFuncExpr) FinalTipe() Tipe { return e.finalTipe }
+func (e *UserFuncExpr) String() string  { return e.Code }
+func (e *UserFuncExpr) SetFinalTipe(tipe Tipe) {
 	e.finalTipe = tipe
 	e.finalizeAndGetCode()
 }
-func (e *FuncExpr) finalizeAndGetCode() string {
+func (e *UserFuncExpr) finalizeAndGetCode() string {
 	e.Code = "Func[" + strconv.Itoa(len(e.FuncPieceExprs)) + " pc]"
 	return e.Code
 }
-func (e *FuncExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *UserFuncExpr) TipeVar(tc *TipeChecker) *TipeVar {
 	if e.tipeVar == nil {
 		e.tipeVar = tc.newTipeVar()
 	}
 	return e.tipeVar
 }
 
+// While the user did not define these, they certainly could have:
+//   not(true ) -> false
+//   not(false) -> true
+//
+//   identity(_) -> arg
+// The resulting expressions would like basically like these:
 var NotExprEnv = &ExprEnv{
 	Parent:   nil,
 	Bindings: []*ExprBinding{{Name: ArgName, Expr: &ArgExpr{}}},
 }
-var NotExpr = &FuncExpr{
+var NotExpr = &UserFuncExpr{
 	FuncPieceExprs: []*LetExpr{
 		{
 			Env: NotExprEnv,
@@ -433,13 +443,47 @@ var IdentityExprEnv = &ExprEnv{
 	Parent:   nil,
 	Bindings: []*ExprBinding{{Name: ArgName, Expr: &ArgExpr{}}},
 }
-var IdentityExpr = &FuncExpr{
+var IdentityExpr = &UserFuncExpr{
 	FuncPieceExprs: []*LetExpr{
 		{
 			Env:  IdentityExprEnv,
 			Expr: &LookupExpr{Name: ArgName, Env: IdentityExprEnv},
 		},
 	},
+}
+
+/*
+ *   NativeFuncExpr
+ */
+
+// This is a placeholder node that, during runtime, is replaced
+// by the actual arg passed into the function. We need it for
+// type-checking functions.
+type NativeFuncExpr struct {
+	Code       string
+	tipeVar    *TipeVar
+	finalTipe  Tipe
+	Name       string
+	DomainTipe Tipe
+	RangeTipe  Tipe
+	Func       NativeCode
+}
+
+func (e *NativeFuncExpr) FinalTipe() Tipe { return e.finalTipe }
+func (e *NativeFuncExpr) String() string  { return e.Code }
+func (e *NativeFuncExpr) SetFinalTipe(tipe Tipe) {
+	e.finalTipe = tipe
+	e.finalizeAndGetCode()
+}
+func (e *NativeFuncExpr) finalizeAndGetCode() string {
+	e.Code = "«Native: " + e.Name + "»"
+	return e.Code
+}
+func (e *NativeFuncExpr) TipeVar(tc *TipeChecker) *TipeVar {
+	if e.tipeVar == nil {
+		e.tipeVar = tc.newTipeVar()
+	}
+	return e.tipeVar
 }
 
 /*
