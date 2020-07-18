@@ -1,0 +1,12 @@
+
+
+math = let
+	two = 2
+	pi = 3
+	sqr = x -> x^2
+
+	{pi:pi, sqr:sqr}
+
+
+math:sqr(math:pi)   # still 9
+

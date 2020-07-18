@@ -138,7 +138,7 @@ head[h; _] -> h
 tail[_; t] -> t
 
 # grab the nth item in a list
-nth(n) -> head * tail^n
+nth(n) -> head ** tail^^n
 
 # infinite list of ones
 ones = [1; ones]
@@ -146,8 +146,11 @@ ones = [1; ones]
 nth(50) ones      # evaluates to 1, of course
 ```
 
-With `nth` you can see that multiplication works on functions as well as integers. On
-functions, it means function composition, so `(f*g)x` means `f(g(x))`. Exponents mean
+With `nth` you can see that "multiplication" works on functions as well as integers.
+(We don't have operator overloading yet, so it's `**` instead of `*`. I need to
+fix type inference of polymorphic functions before I mess with operator overloading,
+but it's hard and I don't know what I'm doing. Type experts, please help me!) On
+functions, it means function composition, so `(f**g)x` means `f(g(x))`. Exponents mean
 repeated multiplication, like you'd expect. (Like I'd expect, anyway.)
 
 Because Crisp uses lazy evaluation, it can deal with infinite lists, no problem:
@@ -161,20 +164,6 @@ ones = [1; ones]
 # all of the natural numbers: [0, 1, 2, 3...]
 nats = [0; zip_plus ones nats]
 ```
-
-A previous incarnation of Crisp had double-operators (`++`, `--`, `&&`, etc) meaning
-component-wise operation over lists, tuples, and records. So nats would have been
-defined:
-
-```
-# no need for zip_plus
-nats = [0; ones ++ nats]
-```
-
-I haven't decided if I want to bring that back, or overload the single operators, or what.
-If `a` and `b` are lists, should `a + b` mean concatenation, pair-wise addition, or a
-type error? If concatenation, what happens when you add tuples? Records?? Feels wrong.
-I'm undecided.
 
 For tuples, pattern-matching requires the pattern to have something for each component,
 even if it's only `_`. So a 3-tuple literal and a 3-tuple pattern both require two
@@ -406,7 +395,14 @@ of left out and named this one after me: Chris P.
 
 ### Running Crisp
 
-- TODO: build/install instructions
+To get Crisp on your system, assuming you have Go installed and GOPATH set properly:
+- clone this repo
+- `$ cd crisp`
+- `$ go build`
+- `$ go install`
+
+To run Crisp code, you have two options:
+
 - `$ crisp path/to/foo.crisp` runs the program `foo.crisp`
 - `$ crisp` starts the [REPL](https://en.wikipedia.org/wiki/Read%E2%80%93eval%E2%80%93print_loop)
 
