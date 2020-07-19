@@ -49,8 +49,9 @@ const (
 
 	// Identifiers (including ints and bools)
 	ID
-	NoMatch
-	Shadow // $
+	NoMatch // _
+	Shadow  // $
+	Float
 
 	// Operators
 	TBlock // (*)

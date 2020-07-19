@@ -47,6 +47,8 @@ func eval(env *Env, someExpr ast.Expr) Value {
 		val = Unit
 	case *ast.IntExpr:
 		val = evalIntExpr(env, expr)
+	case *ast.FloatExpr:
+		val = evalFloatExpr(env, expr)
 	case *ast.BoolExpr:
 		val = evalBoolExpr(env, expr)
 	case *ast.LookupExpr:
@@ -58,7 +60,7 @@ func eval(env *Env, someExpr ast.Expr) Value {
 	case *ast.UserFuncExpr:
 		val = evalUserFuncExpr(env, expr)
 	case *ast.NativeFuncExpr:
-		val = evalNativeFuncExpr(expr) // doesn't need the env
+		val = evalNativeFuncExpr(env, expr)
 	case *ast.TupleExpr:
 		val = evalTupleExpr(env, expr)
 	case *ast.RecordExpr:
@@ -120,6 +122,10 @@ func applyNative(fn *NativeFunc, arg Value) Value {
 
 func evalIntExpr(_ *Env, expr *ast.IntExpr) *Int {
 	return &Int{Value: expr.Value}
+}
+
+func evalFloatExpr(_ *Env, expr *ast.FloatExpr) *Float {
+	return &Float{Value: expr.Value}
 }
 
 func evalBoolExpr(_ *Env, expr *ast.BoolExpr) *Bool {
@@ -254,12 +260,16 @@ func evalAssertAnyOfTheseSets(env *Env, expr *ast.AssertAnyOfTheseSets) *Bool {
 }
 
 func evalUnopExpr(env *Env, expr *ast.UnopExpr) Value {
-	val := eval(env, expr.Expr)
+	val := force(eval(env, expr.Expr))
 
 	switch expr.FinalTipe() {
 	case ast.IntTipe:
 		if expr.Token.Type == token.Minus {
 			return &Int{Value: -val.(*Int).Value}
+		}
+	case ast.FloatTipe:
+		if expr.Token.Type == token.Minus {
+			return &Float{Value: -val.(*Float).Value}
 		}
 	}
 
@@ -558,7 +568,7 @@ func evalUserFuncExpr(env *Env, expr *ast.UserFuncExpr) *UserFunc {
 	}
 }
 
-func evalNativeFuncExpr(expr *ast.NativeFuncExpr) *NativeFunc {
+func evalNativeFuncExpr(_ *Env, expr *ast.NativeFuncExpr) *NativeFunc {
 	return expr.Func.(*NativeFunc)
 }
 

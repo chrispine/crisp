@@ -6,6 +6,7 @@ import (
 	"crisp/token"
 	"errors"
 	"fmt"
+	"strconv"
 )
 
 var unops = []token.TokType{
@@ -687,6 +688,8 @@ func (p *Parser) parseAtom() parse_tree.Inline {
 	switch p.curToken.Type {
 	case token.ID:
 		return p.parseID()
+	case token.Float:
+		return p.parseFloat()
 	case token.NoMatch:
 		return p.parseNoMatch()
 	case token.LParen:
@@ -704,6 +707,23 @@ func (p *Parser) parseID() *parse_tree.InlineID {
 	lit := &parse_tree.InlineID{Token: *p.curToken, Name: p.curToken.Literal}
 
 	p.expectToken(token.ID)
+
+	return lit
+}
+
+func (p *Parser) parseFloat() *parse_tree.InlineFloat {
+	fl, err := strconv.ParseFloat(p.curToken.Literal, 64)
+	if err != nil {
+		p.error("malformed float literal: " + p.curToken.Literal)
+		return nil
+	}
+	lit := &parse_tree.InlineFloat{
+		Token: *p.curToken,
+		Name:  p.curToken.Literal,
+		Value: fl,
+	}
+
+	p.expectToken(token.Float)
 
 	return lit
 }

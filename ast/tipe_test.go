@@ -17,12 +17,9 @@ func TestTipes(t *testing.T) {
 		expected string
 		program  string
 	}{
-		{"(([$A…], ($A -> $B)) -> [$B…])", `
+		{"((($A -> $B), $A) -> $B)", `
 
-
-map([h;t], f) -> [f(h) ; map(t,f)]
-
-map
+(f,x) -> f(x)
 
 `},
 		{"Int", "5"},
@@ -117,6 +114,21 @@ any?[h;t] -> h | t.any?
 
 (head, tail, any?)
 
+
+`},
+		{"((($A -> $B), $A) -> $B)", `
+
+apply(f,x) -> f(x)
+
+apply
+
+`},
+		{"(([$A…], ($A -> $B)) -> [$B…])", `
+
+
+map([h;t], f) -> [f(h) ; map(t,f)]
+
+map
 
 `},
 		{"([Int…], ((Int -> $A) -> [$A…]))", `
