@@ -1,12 +1,12 @@
 
+module math
+	export pi
+	export sqr
 
-math = let
-	two = 2
-	pi = 3
-	sqr = x -> x^2
+	two = 2.0
 
-	{pi:pi, sqr:sqr}
+	pi = 3.14159
 
+	sqr(x) -> x ^. two
 
-math:sqr(math:pi)   # still 9
-
+math:sqr(math:pi)

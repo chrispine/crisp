@@ -181,9 +181,16 @@ func (l *Lexer) nextToken() *token.Token {
 		}
 	}
 
-	maybeNilTok := l.consumeOperatorOrRewind()
-	if maybeNilTok != nil {
-		return maybeNilTok
+	opTokOrNil := l.consumeOperatorOrRewind()
+	if opTokOrNil != nil {
+		return opTokOrNil
+	}
+
+	// see if it's a float
+	if floatStr, ok := l.consumeFloatOrRewind(); ok {
+		tok.Literal = floatStr
+		tok.Type = token.Float
+		return tok
 	}
 
 	if isLetter(l.ch) {
@@ -218,6 +225,45 @@ func (l *Lexer) readIdentifier() string {
 	}
 
 	return l.input[position:l.position]
+}
+
+func (l *Lexer) consumeFloatOrRewind() (string, bool) {
+	var str string
+
+	if !isDigit(rune(l.input[l.position])) {
+		return str, false
+	}
+
+	position := l.position + 1
+
+	// We know there's at least one digit, so let's see how many more
+	for position < len(l.input) && isDigit(rune(l.input[position])) {
+		position++
+	}
+	if position >= len(l.input) || l.input[position] != '.' {
+		return str, false
+	}
+	// We have digits followed by a dot
+	position++
+	if !isDigit(rune(l.input[position])) {
+		return str, false
+	}
+	position++
+	// We have digits, a dot, and at least one more digit, so let's see how many more
+	for position < len(l.input) && isDigit(rune(l.input[position])) {
+		position++
+	}
+	// Ok, we found what looks like a float, but it could be "Int . ID" if
+	// the next char is a letter.
+	if isLetter(rune(l.input[position])) {
+		return str, false
+	}
+	// We found a float!
+	str = l.input[l.position:position]
+	for l.position < position {
+		l.readRune()
+	}
+	return str, true
 }
 
 func (l *Lexer) consumeOperatorOrRewind() *token.Token {

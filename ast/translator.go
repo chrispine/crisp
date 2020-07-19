@@ -111,6 +111,8 @@ func (tr *Translator) translateInline(env *ExprEnv, inlineTree parse_tree.Inline
 			tr.error("unknown identifier: " + inline.Name)
 		}
 		return lookup
+	case *parse_tree.InlineFloat:
+		return &FloatExpr{Value: inline.Value}
 	case *parse_tree.InlineUnopExpr:
 		return &UnopExpr{
 			Token: inline.Token,

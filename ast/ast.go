@@ -46,6 +46,34 @@ func (e *IntExpr) TipeVar(tc *TipeChecker) *TipeVar {
 }
 
 /*
+ *   FloatExpr
+ */
+
+type FloatExpr struct {
+	Code      string
+	tipeVar   *TipeVar
+	finalTipe Tipe
+	Value     float64
+}
+
+func (e *FloatExpr) FinalTipe() Tipe { return e.finalTipe }
+func (e *FloatExpr) String() string  { return e.Code }
+func (e *FloatExpr) SetFinalTipe(tipe Tipe) {
+	e.finalTipe = tipe
+	e.finalizeAndGetCode()
+}
+func (e *FloatExpr) finalizeAndGetCode() string {
+	e.Code = strconv.FormatFloat(e.Value, 'f', -1, 64)
+	return e.Code
+}
+func (e *FloatExpr) TipeVar(tc *TipeChecker) *TipeVar {
+	if e.tipeVar == nil {
+		e.tipeVar = tc.newTipeVar()
+	}
+	return e.tipeVar
+}
+
+/*
  *   BoolExpr
  */
 

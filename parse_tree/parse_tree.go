@@ -392,6 +392,17 @@ func (ii *InlineID) IsRVal() bool         { return true }
 func (ii *InlineID) TokenLiteral() string { return ii.Token.Literal }
 func (ii *InlineID) String() string       { return ii.Name }
 
+type InlineFloat struct {
+	Token token.Token // the token.ID token
+	Name  string
+	Value float64
+}
+
+func (ii *InlineFloat) IsLVal() bool         { return true }
+func (ii *InlineFloat) IsRVal() bool         { return true }
+func (ii *InlineFloat) TokenLiteral() string { return ii.Token.Literal }
+func (ii *InlineFloat) String() string       { return ii.Name }
+
 type InlineNoMatch struct {
 	Token token.Token // the token.ID token
 	Name  string

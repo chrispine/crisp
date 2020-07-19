@@ -251,6 +251,10 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 		// we know this tipe
 		tc.unify(tv, IntTipe)
 
+	case *FloatExpr:
+		// we know this tipe
+		tc.unify(tv, FloatTipe)
+
 	case *BoolExpr:
 		// we know this tipe
 		tc.unify(tv, BoolTipe)
@@ -267,7 +271,8 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 		tc.unify(tv, expr.Expr.TipeVar(tc))
 		// let's see if we can learn more from the token
 		if expr.Token.Type == token.Minus {
-			tc.unify(tv, IntTipe)
+			// TODO: operator overloading!
+			//tc.unify(tv, IntTipe) // could be FloatTipe
 		}
 
 		tc.inferTipes(expr.Expr)
@@ -803,7 +808,7 @@ func (tc *TipeChecker) finalizeTipes(someExpr Expr) {
 
 	switch expr := someExpr.(type) {
 
-	case *UnitExpr, *IntExpr, *BoolExpr, *LookupExpr, *ArgExpr, *NativeFuncExpr:
+	case *UnitExpr, *IntExpr, *FloatExpr, *BoolExpr, *LookupExpr, *ArgExpr, *NativeFuncExpr:
 		// nothing more to do
 
 	case *LetExpr:
