@@ -342,9 +342,9 @@ func (tr *Translator) partitionDecl(
 func (tr *Translator) translateAssertion(env *ExprEnv, ta toAssert) Expr {
 	switch {
 	case !isNil(ta.listIsCons):
-		return &AssertListIsConsExpr{List: tr.translateBlock(env, ta.listIsCons)}
+		return &AssertListIsConsOrNilExpr{List: tr.translateBlock(env, ta.listIsCons), IsNil: false}
 	case !isNil(ta.listIsNil):
-		return &AssertListIsNilExpr{List: tr.translateBlock(env, ta.listIsNil)}
+		return &AssertListIsConsOrNilExpr{List: tr.translateBlock(env, ta.listIsNil), IsNil: true}
 	case !isNil(ta.anyOfTheseSets):
 		var assertSets [][]Expr
 

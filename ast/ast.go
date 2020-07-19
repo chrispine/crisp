@@ -577,52 +577,30 @@ func (e *AssertEqualExpr) TipeVar(tc *TipeChecker) *TipeVar {
  *   AssertListIsConsExpr
  */
 
-type AssertListIsConsExpr struct {
+type AssertListIsConsOrNilExpr struct {
 	Code      string
 	tipeVar   *TipeVar
 	finalTipe Tipe
 	List      Expr
+	IsNil     bool
 }
 
-func (e *AssertListIsConsExpr) FinalTipe() Tipe { return e.finalTipe }
-func (e *AssertListIsConsExpr) String() string  { return e.Code }
-func (e *AssertListIsConsExpr) SetFinalTipe(tipe Tipe) {
+func (e *AssertListIsConsOrNilExpr) FinalTipe() Tipe { return e.finalTipe }
+func (e *AssertListIsConsOrNilExpr) String() string  { return e.Code }
+func (e *AssertListIsConsOrNilExpr) SetFinalTipe(tipe Tipe) {
 	e.finalTipe = tipe
 	e.finalizeAndGetCode()
 }
-func (e *AssertListIsConsExpr) finalizeAndGetCode() string {
-	e.Code = "«TODO: AssertListIsConsExpr»"
-	return e.Code
-}
-func (e *AssertListIsConsExpr) TipeVar(tc *TipeChecker) *TipeVar {
-	if e.tipeVar == nil {
-		e.tipeVar = tc.newTipeVar()
+func (e *AssertListIsConsOrNilExpr) finalizeAndGetCode() string {
+	e.Code = "«TODO: AssertListIsConsOrNilExpr ("
+	if e.IsNil {
+		e.Code += "nil)»"
+	} else {
+		e.Code += "cons)»"
 	}
-	return e.tipeVar
-}
-
-/*
- *   AssertListIsNilExpr
- */
-
-type AssertListIsNilExpr struct {
-	Code      string
-	tipeVar   *TipeVar
-	finalTipe Tipe
-	List      Expr
-}
-
-func (e *AssertListIsNilExpr) FinalTipe() Tipe { return e.finalTipe }
-func (e *AssertListIsNilExpr) String() string  { return e.Code }
-func (e *AssertListIsNilExpr) SetFinalTipe(tipe Tipe) {
-	e.finalTipe = tipe
-	e.finalizeAndGetCode()
-}
-func (e *AssertListIsNilExpr) finalizeAndGetCode() string {
-	e.Code = "«TODO: AssertListIsNilExpr»"
 	return e.Code
 }
-func (e *AssertListIsNilExpr) TipeVar(tc *TipeChecker) *TipeVar {
+func (e *AssertListIsConsOrNilExpr) TipeVar(tc *TipeChecker) *TipeVar {
 	if e.tipeVar == nil {
 		e.tipeVar = tc.newTipeVar()
 	}

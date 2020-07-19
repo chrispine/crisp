@@ -385,9 +385,7 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 		tTipe := &TupleTipe{}
 
 		for _, e := range expr.Exprs {
-			tipe := tc.newTipeVar()
-			tTipe.TipeVars = append(tTipe.TipeVars, tipe)
-			tc.unify(e.TipeVar(tc), tipe)
+			tTipe.TipeVars = append(tTipe.TipeVars, e.TipeVar(tc))
 		}
 
 		tc.unify(tv, tTipe)
@@ -401,9 +399,7 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 			Partial: expr.Partial,
 		}
 		for _, field := range expr.Fields {
-			tipe := tc.newTipeVar()
-			rTipe.Fields = append(rTipe.Fields, RecordFieldTipe{Name: field.Name, TipeVar: tipe})
-			tc.unify(field.Expr.TipeVar(tc), tipe)
+			rTipe.Fields = append(rTipe.Fields, RecordFieldTipe{Name: field.Name, TipeVar: field.Expr.TipeVar(tc)})
 		}
 		tc.unify(tv, rTipe)
 
@@ -412,12 +408,14 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 		}
 
 	case *ConsExpr:
-		nodeTipe := tc.newTipeVar()
-		lTipe := &ListTipe{TipeVar: nodeTipe}
-		tc.unify(tv, lTipe)
-		if !expr.IsNilList() {
-			tc.unify(expr.Head.TipeVar(tc), nodeTipe)
-			tc.unify(expr.Tail.TipeVar(tc), tv)
+		if expr.IsNilList() {
+			nodeTipe := tc.newTipeVar()
+			lTipe := &ListTipe{TipeVar: nodeTipe}
+			tc.unify(tv, lTipe)
+		} else {
+			lTipe := &ListTipe{TipeVar: expr.Head.TipeVar(tc)}
+			tc.unify(tv, lTipe)
+			tc.unify(tv, expr.Tail.TipeVar(tc))
 
 			tc.inferTipes(expr.Head)
 			tc.inferTipes(expr.Tail)
@@ -470,18 +468,8 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 		tc.inferTipes(expr.LExpr)
 		tc.inferTipes(expr.RExpr)
 
-	case *AssertListIsConsExpr:
+	case *AssertListIsConsOrNilExpr:
 		// Note: this expression asserts that it's a cons cell,
-		// but we accept an assertion failure.
-		// The tipe is List<a> for some tipe a.
-		tc.unify(tv, BoolTipe)
-		tc.unify(expr.List.TipeVar(tc), &ListTipe{TipeVar: tc.newTipeVar()})
-
-		tc.inferTipes(expr.List)
-
-	// TODO: consider making this the same expression as AssertListIsConsExpr
-	case *AssertListIsNilExpr:
-		// Note: this expression asserts that it's [],
 		// but we accept an assertion failure.
 		// The tipe is List<a> for some tipe a.
 		tc.unify(tv, BoolTipe)
@@ -521,57 +509,41 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 // every expression pointing to other TipeVars which point to still others,
 // many-to-one, until a chain terminates in an actual Tipe. If the two Tipes
 // are compatible, we take the union of them to get the resultant Tipe.
-func (tc *TipeChecker) unify(tipe0 Tipe, tipe1 Tipe) {
-	if tvv0, ok := tipe0.(*TipeVar); ok {
-		tv0 := derefTipeVar(tvv0)
+func (tc *TipeChecker) unify(tvv0 *TipeVar, tipe1 Tipe) {
+	tv0 := derefTipeVar(tvv0)
 
-		if tvv1, ok := tipe1.(*TipeVar); ok {
-			tv1 := derefTipeVar(tvv1)
-
-			// tv0 and tv1 are dereferenced TipeVars
-
-			// don't bother if they are the same tipe already
-			if tv0 == tv1 {
-				return
-			}
-
-			var parent *TipeVar
-			var child *TipeVar
-
-			// always point from higher ID (child) TipeVar to lower ID (parent)
-			if tv0.ID < tv1.ID {
-				parent = tv0
-				child = tv1
-			} else {
-				parent = tv1
-				child = tv0
-			}
-
-			// parent holds the union tipe
-			parent.ref = tc.union(tv0.ref, tv1.ref)
-			// child points to parent
-			child.ref = parent
-			return
-		}
-
-		// tv0 is a dereferenced TipeVar
-
+	tvv1, ok := tipe1.(*TipeVar)
+	if !ok {
 		tv0.ref = tc.union(tv0.ref, tipe1)
 		return
-	} else if _, ok := tipe1.(*TipeVar); ok {
-		// tipe0 is not a TipeVar, but tipe1 is, so swap and retry
-		tc.unify(tipe1, tipe0)
+	}
+
+	tv1 := derefTipeVar(tvv1)
+
+	// tv0 and tv1 are dereferenced TipeVars
+
+	// don't bother if they are the same tipe already
+	if tv0 == tv1 {
 		return
 	}
 
-	// so neither tipe0 nor tipe1 are TipeVars
-	unionTipe := tc.union(tipe0, tipe1)
+	var parent *TipeVar
+	var child *TipeVar
 
-	if unionTipe == Empty {
-		// not really sure what to do here, but I'll have a
-		// better idea once I see it happen
-		panic("TODO")
+	// always point from higher ID (child) TipeVar to lower ID (parent)
+	if tv0.ID < tv1.ID {
+		parent = tv0
+		child = tv1
+	} else {
+		parent = tv1
+		child = tv0
 	}
+
+	// parent holds the union tipe
+	parent.ref = tc.union(tv0.ref, tv1.ref)
+	// child points to parent, NOT TO THE UNION because we
+	// must preserve the topology of parent/child connections
+	child.ref = parent
 }
 
 // Here we take the union of two Tipes and return it. Fairly straightforward
@@ -612,16 +584,11 @@ func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
 				return Empty
 			}
 
-			tupleUnion := &TupleTipe{}
-
 			for i, t := range tt0.TipeVars {
-				unionVar := tc.newTipeVar()
-				tc.unify(unionVar, t)
-				tc.unify(unionVar, tt1.TipeVars[i])
-				tupleUnion.TipeVars = append(tupleUnion.TipeVars, unionVar)
+				tc.unify(t, tt1.TipeVars[i])
 			}
 
-			return tupleUnion
+			return tt0
 		}
 		// tipe0 is a TupleTipe, but tipe1 isn't
 		return Empty
@@ -665,15 +632,9 @@ func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
 							i1++
 							continue
 						}
-						// both rt0 and rt1 have identically named fields, so unify
-						unionVar := tc.newTipeVar()
-						tc.unify(unionVar, rt0.Fields[i0].TipeVar)
-						tc.unify(unionVar, rt1.Fields[i1].TipeVar)
-						unionField := RecordFieldTipe{
-							Name:    rt0.Fields[i0].Name,
-							TipeVar: unionVar,
-						}
-						recordUnion.Fields = append(recordUnion.Fields, unionField)
+						// both rt0 and rt1 have an identically named field, so unify
+						tc.unify(rt0.Fields[i0].TipeVar, rt1.Fields[i1].TipeVar)
+						recordUnion.Fields = append(recordUnion.Fields, rt0.Fields[i0])
 						i0++
 						i1++
 					}
@@ -681,31 +642,21 @@ func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
 					return recordUnion
 				}
 				// rt0 is partial, rt1 is not, therefor rt0 must be a subset
-				recordUnion := &RecordTipe{Partial: true}
 
 				len0 := len(rt0.Fields)
 				i := 0
 				for _, f := range rt1.Fields {
 					if i >= len0 {
-						// just take from rt1
-						recordUnion.Fields = append(recordUnion.Fields, f)
-						continue
+						// nothing more to unify, so break
+						break
 					}
 					if rt0.Fields[i].Name > f.Name {
-						// just take from rt1
-						recordUnion.Fields = append(recordUnion.Fields, f)
+						// this field isn't in rt0 (it's a partial, after all)
 						continue
 					}
 					if rt0.Fields[i].Name == f.Name {
 						// found a matching field
-						unionVar := tc.newTipeVar()
-						tc.unify(unionVar, rt0.Fields[i].TipeVar)
-						tc.unify(unionVar, f.TipeVar)
-						unionField := RecordFieldTipe{
-							Name:    f.Name,
-							TipeVar: unionVar,
-						}
-						recordUnion.Fields = append(recordUnion.Fields, unionField)
+						tc.unify(f.TipeVar, rt0.Fields[i].TipeVar)
 						i++
 						continue
 					}
@@ -714,7 +665,7 @@ func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
 					// which means they cannot be unified
 					return Empty
 				}
-				return recordUnion
+				return rt1
 			}
 			if rt1.Partial {
 				// rt1 is partial, while rt0 is not, so swap them and
@@ -731,20 +682,11 @@ func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
 				}
 			}
 			// ok, they have the same field names
-			recordUnion := &RecordTipe{}
-
 			for i, f := range rt0.Fields {
-				unionVar := tc.newTipeVar()
-				tc.unify(unionVar, f.TipeVar)
-				tc.unify(unionVar, rt1.Fields[i].TipeVar)
-				unionField := RecordFieldTipe{
-					Name:    f.Name,
-					TipeVar: unionVar,
-				}
-				recordUnion.Fields = append(recordUnion.Fields, unionField)
+				tc.unify(f.TipeVar, rt1.Fields[i].TipeVar)
 			}
 
-			return recordUnion
+			return rt0
 		}
 		// tipe0 is a RecordTipe, but tipe1 isn't
 		return Empty
@@ -757,11 +699,9 @@ func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
 	// ListTipe
 	if lt0, ok := tipe0.(*ListTipe); ok {
 		if lt1, ok := tipe1.(*ListTipe); ok {
-			unionVar := tc.newTipeVar()
-			tc.unify(unionVar, lt0.TipeVar)
-			tc.unify(unionVar, lt1.TipeVar)
+			tc.unify(lt0.TipeVar, lt1.TipeVar)
 
-			return &ListTipe{TipeVar: unionVar}
+			return lt0
 		}
 		// tipe0 is a ListTipe, but tipe1 isn't
 		return Empty
@@ -774,17 +714,9 @@ func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
 	// FuncTipe
 	if ft0, ok := tipe0.(*FuncTipe); ok {
 		if ft1, ok := tipe1.(*FuncTipe); ok {
-			unionDomain := tc.newTipeVar()
-			unionRange := tc.newTipeVar()
-			unionFunc := &FuncTipe{
-				Domain: unionDomain,
-				Range:  unionRange,
-			}
-			tc.unify(unionDomain, ft0.Domain)
-			tc.unify(unionDomain, ft1.Domain)
-			tc.unify(unionRange, ft0.Range)
-			tc.unify(unionRange, ft1.Range)
-			return unionFunc
+			tc.unify(ft0.Domain, ft1.Domain)
+			tc.unify(ft0.Range, ft1.Range)
+			return ft0
 		}
 		// tipe0 is a FuncTipe, but tipe1 isn't
 		return Empty
@@ -854,10 +786,7 @@ func (tc *TipeChecker) finalizeTipes(someExpr Expr) {
 		tc.finalizeTipes(expr.LExpr)
 		tc.finalizeTipes(expr.RExpr)
 
-	case *AssertListIsConsExpr:
-		tc.finalizeTipes(expr.List)
-
-	case *AssertListIsNilExpr:
+	case *AssertListIsConsOrNilExpr:
 		tc.finalizeTipes(expr.List)
 
 	case *AssertAnyOfTheseSets:
