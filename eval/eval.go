@@ -75,10 +75,8 @@ func eval(env *Env, someExpr ast.Expr) Value {
 		val = evalConsDestructure(env, expr)
 	case *ast.AssertEqualExpr:
 		val = evalAssertEqual(env, expr)
-	case *ast.AssertListIsConsExpr:
-		val = evalAssertListIsCons(env, expr)
-	case *ast.AssertListIsNilExpr:
-		val = evalAssertListIsNil(env, expr)
+	case *ast.AssertListIsConsOrNilExpr:
+		val = evalAssertListIsConsOrNilExpr(env, expr)
 	case *ast.AssertAnyOfTheseSets:
 		val = evalAssertAnyOfTheseSets(env, expr)
 	case *ast.LetExpr:
@@ -221,22 +219,21 @@ func evalAssertEqual(env *Env, expr *ast.AssertEqualExpr) *Bool {
 	return False
 }
 
-func evalAssertListIsCons(env *Env, expr *ast.AssertListIsConsExpr) *Bool {
+func evalAssertListIsConsOrNilExpr(env *Env, expr *ast.AssertListIsConsOrNilExpr) *Bool {
 	cons := force(eval(env, expr.List)).(*Cons)
 
+	if expr.IsNil {
+		// so we're asserting cons IS nil
+		if cons == Nil {
+			return True
+		}
+		return False
+	}
+	// so we're asserting cons IS NOT nil
 	if cons == Nil {
 		return False
 	}
 	return True
-}
-
-func evalAssertListIsNil(env *Env, expr *ast.AssertListIsNilExpr) *Bool {
-	cons := force(eval(env, expr.List)).(*Cons)
-
-	if cons == Nil {
-		return True
-	}
-	return False
 }
 
 func evalAssertAnyOfTheseSets(env *Env, expr *ast.AssertAnyOfTheseSets) *Bool {

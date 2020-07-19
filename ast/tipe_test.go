@@ -123,6 +123,32 @@ apply(f,x) -> f(x)
 apply
 
 `},
+		{"((($A -> $A), $A) -> $A)", `
+
+apply2(f,x) -> f(f(x))
+
+apply2
+
+`},
+		{"((($A -> Int), $A) -> Int)", `
+
+apply_inc(f,x) -> f(x) + 1
+
+len[   ] -> 0
+len[_;t] -> 1 + t.len
+
+foo = apply_inc(len, [true, true, false])
+
+apply_inc
+
+`},
+		{"((($A -> Int), $A) -> Int)", `
+
+apply_inc(f,x) -> f(x) + 1
+
+apply_inc
+
+`},
 		{"(([$A…], ($A -> $B)) -> [$B…])", `
 
 
