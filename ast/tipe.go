@@ -25,15 +25,7 @@ func CheckTipes(exprs []Expr) []string {
 	// but in a particular call, it might have type ([$Int…] -> Int) or ([$Bool…] -> Int).
 	// So what we do here is copy the function type with fresh type variables and
 	// unify it with the types we know to be the domain and range for this call.
-	for _, funcApplication := range tc.funcApplications {
-		polyTipe := derefTipeVar(funcApplication.LExpr.TipeVar(tc))
-		domainTV := funcApplication.RExpr.TipeVar(tc)
-		rangeTV := funcApplication.TipeVar(tc)
-
-		copyTipe := tc.deepCopyTipe(polyTipe.ref).(*FuncTipe)
-		tc.unify(copyTipe.Domain, domainTV)
-		tc.unify(copyTipe.Range, rangeTV)
-	}
+	// TODO: fix outdated comments! ^^^ talk about `registerConstraint` and one-way flow of type information
 
 	// Now that we have all of the type information, we remove the levels of indirection
 	// we racked up (all the type vars pointing to type vars) and record the final types
@@ -52,15 +44,8 @@ func CheckTipes(exprs []Expr) []string {
 	return tc.tcErrors
 }
 
-// Store function call expressions so we can copy them later when we
-// infer the types of polymorphic functions.
-func (tc *TipeChecker) deferUnifyPoly(funcApplication *BinopExpr) {
-	tc.funcApplications = append(tc.funcApplications, funcApplication)
-}
-
 type TipeChecker struct {
-	tcErrors         []string
-	funcApplications []*BinopExpr
+	tcErrors []string
 }
 
 func (tc *TipeChecker) error(err string, a ...interface{}) {
@@ -189,9 +174,10 @@ func (t *FuncTipe) TipeString(r rune) (string, rune) {
 // Note: We use the ID to impose an ordering on TipeVars,
 // so we can avoid cycles in the tipe graph.
 type TipeVar struct {
-	ID  int
-	ref Tipe
-	r   rune
+	ID         int
+	ref        Tipe
+	constrains []*TipeVar
+	r          rune
 }
 
 func (t *TipeVar) TipeString(r rune) (string, rune) {
@@ -284,13 +270,18 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 		switch expr.Token.Type {
 		case token.At:
 			fTipe := &FuncTipe{
-				Domain: tc.newTipeVar(), // was rtv
-				Range:  tc.newTipeVar(), // was tv
+				Domain: tc.newTipeVar(),
+				Range:  tc.newTipeVar(),
 			}
+			//fInstanceTipe := &FuncTipe{
+			//	Domain: rtv,
+			//	Range:  tv,
+			//}
+			// This function might be polymorphic, and we don't
+			// want to over-constrain it to this particular instance.
+			tc.constrain(fTipe.Domain, rtv)
+			tc.constrain(fTipe.Range, tv)
 			tc.unify(ltv, fTipe)
-			// after tipes are otherwise checked, ensure this function
-			// can take an `rtv` and would return a `tv` in that case
-			tc.deferUnifyPoly(expr)
 		case token.Equal:
 			tc.unify(tv, BoolTipe)
 			tc.unify(ltv, rtv)
@@ -510,11 +501,23 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 // many-to-one, until a chain terminates in an actual Tipe. If the two Tipes
 // are compatible, we take the union of them to get the resultant Tipe.
 func (tc *TipeChecker) unify(tvv0 *TipeVar, tipe1 Tipe) {
+	// We assume as an invariant that any constraints will be
+	// on the top-level (dereferenced) TipeVars. We must maintain
+	// this invariant throughout this function, including before/after
+	// we call unify(), union(), or constrain().
 	tv0 := derefTipeVar(tvv0)
 
 	tvv1, ok := tipe1.(*TipeVar)
 	if !ok {
+		// so tipe1 IS NOT a TipeVar
 		tv0.ref = tc.union(tv0.ref, tipe1)
+		// We clear out the list, and repopulate it as needed
+		// in tc.constrain().
+		constrainedVars := tv0.constrains
+		tv0.constrains = nil
+		for _, constrained := range constrainedVars {
+			tc.constrain(tv0, constrained)
+		}
 		return
 	}
 
@@ -544,11 +547,148 @@ func (tc *TipeChecker) unify(tvv0 *TipeVar, tipe1 Tipe) {
 	// child points to parent, NOT TO THE UNION because we
 	// must preserve the topology of parent/child connections
 	child.ref = parent
+
+	// We clear out both `constrains` lists, and repopulate it as needed
+	// in tc.constrain().
+	constrainedVars := tv0.constrains
+	tv0.constrains = nil
+	constrainedVars = append(constrainedVars, tv1.constrains...)
+	tv1.constrains = nil
+
+	for _, constrained := range constrainedVars {
+		tc.constrain(parent, constrained)
+	}
+}
+
+// TODO: document this more
+// We are NOT saying these are equal, but we ARE constraining `constrained`
+// by `constrainer`.
+func (tc *TipeChecker) constrain(constrainer *TipeVar, constrained *TipeVar) {
+	if _, ok := constrainer.ref.(*TipeVar); ok {
+		panic("invariant violation: constrainer should always be top-level type variable")
+	}
+
+	tvCr := constrainer
+	tvCd := derefTipeVar(constrained)
+
+	// OmegaTipe
+	if tvCr.ref == Omega {
+		// not much of a constraint, is it? "it's definitely some type"
+		tvCr.constrains = append(tvCr.constrains, tvCd)
+		return
+	}
+
+	// EmptyTipe
+	if tvCr.ref == Empty {
+		// ouch, this is the worst of all constraints
+		tvCd.ref = Empty
+		tc.error("TYPE ERROR")
+		// no need to keep tracking this constraint, and it's already maximally constrained
+		return
+	}
+
+	// tvCd.ref == Empty
+	if tvCd.ref == Empty {
+		// can't get much more constrained than this, so just return
+		return
+	}
+
+	// SimpleTipe
+	if cr, ok := tvCr.ref.(*SimpleTipe); ok {
+		if tvCd.ref == Omega {
+			tvCd.ref = cr
+			// keep constraining
+			tvCr.constrains = append(tvCr.constrains, tvCd)
+			return
+		}
+		if cd, ok := tvCd.ref.(*SimpleTipe); ok {
+			if cr != cd {
+				// fail
+				tvCd.ref = Empty
+				tc.error("TYPE ERROR")
+				// no need to keep tracking this constraint, and it's already maximally constrained
+				return
+			}
+			// keep constraining
+			tvCr.constrains = append(tvCr.constrains, tvCd)
+			return
+		}
+	}
+
+	// TupleTipe
+	if cr, ok := tvCr.ref.(*TupleTipe); ok {
+		if tvCd.ref == Omega {
+			newCd := &TupleTipe{}
+			for _, newTvvCr := range cr.TipeVars {
+				newTvCr := derefTipeVar(newTvvCr)
+				newTvCd := tc.newTipeVar()
+				newCd.TipeVars = append(newCd.TipeVars, newTvCd)
+				tc.constrain(newTvCr, newTvCd)
+			}
+			tvCd.ref = newCd
+			return
+		}
+		if cd, ok := tvCd.ref.(*TupleTipe); ok {
+			for i, newTvvCr := range cr.TipeVars {
+				newTvCr := derefTipeVar(newTvvCr)
+				newTvCd := derefTipeVar(cd.TipeVars[i])
+				tc.constrain(newTvCr, newTvCd)
+			}
+			return
+		}
+	}
+
+	// RecordTipe
+	if cr, ok := tvCr.ref.(*RecordTipe); ok {
+		// TODO
+		cr = cr
+		return
+	}
+
+	// ListTipe
+	if cr, ok := tvCr.ref.(*ListTipe); ok {
+		newTvCr := derefTipeVar(cr.TipeVar)
+		if tvCd.ref == Omega {
+			newTvCd := tc.newTipeVar()
+			tvCd.ref = &ListTipe{TipeVar: newTvCd}
+			tc.constrain(newTvCr, newTvCd)
+			return
+		}
+		if cd, ok := tvCd.ref.(*ListTipe); ok {
+			newTvCd := derefTipeVar(cd.TipeVar)
+			tc.constrain(newTvCr, newTvCd)
+			return
+		}
+	}
+
+	// FuncTipe
+	if cr, ok := tvCr.ref.(*FuncTipe); ok {
+		newTvCrDomain := derefTipeVar(cr.Domain)
+		newTvCrRange := derefTipeVar(cr.Range)
+		if tvCd.ref == Omega {
+			newTvCdDomain := tc.newTipeVar()
+			newTvCdRange := tc.newTipeVar()
+			tvCd.ref = &FuncTipe{Domain: newTvCdDomain, Range: newTvCdRange}
+			tc.constrain(newTvCrDomain, newTvCdDomain)
+			tc.constrain(newTvCrRange, newTvCdRange)
+			return
+		}
+		if cd, ok := tvCd.ref.(*FuncTipe); ok {
+			newTvCdDomain := derefTipeVar(cd.Domain)
+			newTvCdRange := derefTipeVar(cd.Range)
+			tc.constrain(newTvCrDomain, newTvCdDomain)
+			tc.constrain(newTvCrRange, newTvCdRange)
+			return
+		}
+	}
+
+	panic("unhandled constraint")
 }
 
 // Here we take the union of two Tipes and return it. Fairly straightforward
 // except for partial RecordTipes, which are a bit of a pain to merge.
 func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
+	// Invariant: union() never takes TipeVars, and never returns them.
 	if _, ok := tipe0.(*TipeVar); ok {
 		panic("no type variables allowed in tc.union()")
 	}
@@ -574,6 +714,7 @@ func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
 		// Either tipe1 is not a SimpleTipe, or it is, but not equal to tipe0
 		// (because we already checked for equality above).
 		// Either way, the union is empty
+		tc.error("TYPE ERROR")
 		return Empty
 	}
 
@@ -581,6 +722,7 @@ func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
 	if tt0, ok := tipe0.(*TupleTipe); ok {
 		if tt1, ok := tipe1.(*TupleTipe); ok {
 			if len(tt0.TipeVars) != len(tt1.TipeVars) {
+				tc.error("TYPE ERROR")
 				return Empty
 			}
 
@@ -591,10 +733,12 @@ func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
 			return tt0
 		}
 		// tipe0 is a TupleTipe, but tipe1 isn't
+		tc.error("TYPE ERROR")
 		return Empty
 	}
 	if _, ok := tipe1.(*TupleTipe); ok {
 		// tipe1 is a TupleTipe, but tipe0 isn't
+		tc.error("TYPE ERROR")
 		return Empty
 	}
 
@@ -663,6 +807,7 @@ func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
 					// if we got here, then rt0.Fields[i].Name < f.Name,
 					// which means rt0 has a field rt1 lacks,
 					// which means they cannot be unified
+					tc.error("TYPE ERROR")
 					return Empty
 				}
 				return rt1
@@ -674,10 +819,12 @@ func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
 			}
 			// so neither rt0 nor rt1 are partial, which makes this easy
 			if len(rt0.Fields) != len(rt1.Fields) {
+				tc.error("TYPE ERROR")
 				return Empty
 			}
 			for i, f := range rt0.Fields {
 				if f.Name != rt1.Fields[i].Name {
+					tc.error("TYPE ERROR")
 					return Empty
 				}
 			}
@@ -689,10 +836,12 @@ func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
 			return rt0
 		}
 		// tipe0 is a RecordTipe, but tipe1 isn't
+		tc.error("TYPE ERROR")
 		return Empty
 	}
 	if _, ok := tipe1.(*RecordTipe); ok {
 		// tipe1 is a RecordTipe, but tipe0 isn't
+		tc.error("TYPE ERROR")
 		return Empty
 	}
 
@@ -704,10 +853,12 @@ func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
 			return lt0
 		}
 		// tipe0 is a ListTipe, but tipe1 isn't
+		tc.error("TYPE ERROR")
 		return Empty
 	}
 	if _, ok := tipe1.(*ListTipe); ok {
 		// tipe1 is a ListTipe, but tipe0 isn't
+		tc.error("TYPE ERROR")
 		return Empty
 	}
 
@@ -719,14 +870,17 @@ func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
 			return ft0
 		}
 		// tipe0 is a FuncTipe, but tipe1 isn't
+		tc.error("TYPE ERROR")
 		return Empty
 	}
 	if _, ok := tipe1.(*FuncTipe); ok {
 		// tipe1 is a FuncTipe, but tipe0 isn't
+		tc.error("TYPE ERROR")
 		return Empty
 	}
 
 	panic("Unhandled type in tc.union()")
+	tc.error("TYPE ERROR")
 	return Empty
 }
 
@@ -853,107 +1007,5 @@ func (tc *TipeChecker) derefAllTipeVars(someTipe Tipe) {
 
 	default:
 		tc.error("failed to finalize type: %T", tipe)
-	}
-}
-
-// Get a copy of this Tipe with all new TipeVars, preserving the
-// connection topology of the TipeVars involved.
-func (tc *TipeChecker) deepCopyTipe(someTipe Tipe) Tipe {
-	return tc.deepCopyTipeRec(someTipe, map[int]*TipeVar{})
-}
-func (tc *TipeChecker) deepCopyTipeRec(someTipe Tipe, varMap map[int]*TipeVar) Tipe {
-	switch tipe := someTipe.(type) {
-
-	case *SimpleTipe, *OmegaTipe, *EmptyTipe:
-		// nothing to do
-		return tipe
-
-	case *TupleTipe:
-		newTipe := &TupleTipe{}
-		for _, tvv := range tipe.TipeVars {
-			tv := derefTipeVar(tvv)
-			if newTV, ok := varMap[tv.ID]; ok {
-				// use newTV instead of creating another TipeVar
-				newTipe.TipeVars = append(newTipe.TipeVars, newTV)
-			} else {
-				// create new TipeVar and deepCopy its reference
-				newTV = tc.newTipeVar()
-				varMap[tv.ID] = newTV
-				newTV.ref = tc.deepCopyTipeRec(tv.ref, varMap)
-				newTipe.TipeVars = append(newTipe.TipeVars, newTV)
-			}
-		}
-		return newTipe
-
-	case *RecordTipe:
-		newTipe := &RecordTipe{}
-		for _, f := range tipe.Fields {
-			tv := derefTipeVar(f.TipeVar)
-			if newTV, ok := varMap[tv.ID]; ok {
-				// use newTV instead of creating another TipeVar
-				newTipe.Fields = append(newTipe.Fields, RecordFieldTipe{
-					Name:    f.Name,
-					TipeVar: newTV,
-				})
-			} else {
-				// create new TipeVar and deepCopy its reference
-				newTV = tc.newTipeVar()
-				varMap[tv.ID] = newTV
-				newTV.ref = tc.deepCopyTipeRec(tv.ref, varMap)
-				newTipe.Fields = append(newTipe.Fields, RecordFieldTipe{
-					Name:    f.Name,
-					TipeVar: newTV,
-				})
-			}
-		}
-		return newTipe
-
-	case *ListTipe:
-		newTipe := &ListTipe{}
-		tv := derefTipeVar(tipe.TipeVar)
-		if newTV, ok := varMap[tv.ID]; ok {
-			// use newTV instead of creating another TipeVar
-			newTipe.TipeVar = newTV
-		} else {
-			// create new TipeVar and deepCopy its reference
-			newTV = tc.newTipeVar()
-			varMap[tv.ID] = newTV
-			newTV.ref = tc.deepCopyTipeRec(tv.ref, varMap)
-			newTipe.TipeVar = newTV
-		}
-		return newTipe
-
-	case *FuncTipe:
-		newTipe := &FuncTipe{}
-
-		tvd := derefTipeVar(tipe.Domain)
-		if newTV, ok := varMap[tvd.ID]; ok {
-			// use newTV instead of creating another TipeVar
-			newTipe.Domain = newTV
-		} else {
-			// create new TipeVar and deepCopy its reference
-			newTV = tc.newTipeVar()
-			varMap[tvd.ID] = newTV
-			newTV.ref = tc.deepCopyTipeRec(tvd.ref, varMap)
-			newTipe.Domain = newTV
-		}
-
-		tvr := derefTipeVar(tipe.Range)
-		if newTV, ok := varMap[tvr.ID]; ok {
-			// use newTV instead of creating another TipeVar
-			newTipe.Range = newTV
-		} else {
-			// create new TipeVar and deepCopy its reference
-			newTV = tc.newTipeVar()
-			varMap[tvr.ID] = newTV
-			newTV.ref = tc.deepCopyTipeRec(tvr.ref, varMap)
-			newTipe.Range = newTV
-		}
-
-		return newTipe
-
-	default:
-		tc.error("failed to finalize type: %T", tipe)
-		return Empty
 	}
 }
