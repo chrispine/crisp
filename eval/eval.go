@@ -259,14 +259,14 @@ func evalAssertAnyOfTheseSets(env *Env, expr *ast.AssertAnyOfTheseSets) *Bool {
 func evalUnopExpr(env *Env, expr *ast.UnopExpr) Value {
 	val := force(eval(env, expr.Expr))
 
-	switch expr.FinalTipe() {
-	case ast.IntTipe:
+	switch v := val.(type) {
+	case *Int:
 		if expr.Token.Type == token.Minus {
-			return &Int{Value: -val.(*Int).Value}
+			return &Int{Value: -v.Value}
 		}
-	case ast.FloatTipe:
+	case *Float:
 		if expr.Token.Type == token.Minus {
-			return &Float{Value: -val.(*Float).Value}
+			return &Float{Value: -v.Value}
 		}
 	}
 
@@ -276,231 +276,163 @@ func evalUnopExpr(env *Env, expr *ast.UnopExpr) Value {
 
 func evalBinopExpr(env *Env, expr *ast.BinopExpr) Value {
 	binopType := expr.Token.Type
-	lTipe := expr.LExpr.FinalTipe()
+	// TODO: better errors for type errors (instead of just Go crashing)
 
-	switch lTipe.(type) {
+	switch binopType {
+	case token.Equal:
+		leftVal := eval(env, expr.LExpr)
+		rightVal := eval(env, expr.RExpr)
 
-	case *ast.SimpleTipe:
-		{
-			switch lTipe {
-			case ast.UnitTipe:
-				switch binopType {
-				case token.Equal:
-					// Since there's only one value of UnitTipe, and type-checking passed,
-					// this has to be true.
-					// TODO: generate a warning during type-checking?
+		if equal(leftVal, rightVal) {
+			return True
+		}
+		return False
+	case token.And:
+		l := force(eval(env, expr.LExpr)).(*Bool).Value
+		// don't eval `r` if we don't have to
+		if !l {
+			return False
+		}
+		r := force(eval(env, expr.RExpr)).(*Bool).Value
+		if r {
+			return True
+		}
+		return False
+	case token.Or:
+		l := force(eval(env, expr.LExpr)).(*Bool).Value
+		// don't eval `r` if we don't have to
+		if l {
+			return True
+		}
+		r := force(eval(env, expr.RExpr)).(*Bool).Value
+		if r {
+			return True
+		}
+		return False
+	case token.LT, token.LTE, token.GT, token.GTE, token.Plus, token.Minus,
+		token.Mult, token.Div, token.Mod, token.Exp, token.At:
+		leftVal := force(eval(env, expr.LExpr))
+		switch left := leftVal.(type) {
+		case *Int:
+			l := left.Value
+			r := force(eval(env, expr.RExpr)).(*Int).Value
+			switch binopType {
+			case token.LT:
+				if l < r {
 					return True
-				}
-			case ast.BoolTipe:
-				l := force(eval(env, expr.LExpr)).(*Bool).Value
-
-				switch binopType {
-				case token.Equal:
-					r := force(eval(env, expr.RExpr)).(*Bool).Value
-					if l == r {
-						return True
-					}
-					return False
-				case token.And:
-					// don't eval `r` if we don't have to
-					if !l {
-						return False
-					}
-					r := force(eval(env, expr.RExpr)).(*Bool).Value
-					if r {
-						return True
-					}
-					return False
-				case token.Or:
-					// don't eval `r` if we don't have to
-					if l {
-						return True
-					}
-					r := force(eval(env, expr.RExpr)).(*Bool).Value
-					if r {
-						return True
-					}
+				} else {
 					return False
 				}
-			case ast.IntTipe:
-				l := force(eval(env, expr.LExpr)).(*Int).Value
-				r := force(eval(env, expr.RExpr)).(*Int).Value
-
-				switch binopType {
-				case token.Equal:
-					if l == r {
-						return True
-					}
+			case token.LTE:
+				if l <= r {
+					return True
+				} else {
 					return False
-				case token.LT:
-					if l < r {
-						return True
-					} else {
-						return False
-					}
-				case token.LTE:
-					if l <= r {
-						return True
-					} else {
-						return False
-					}
-				case token.GT:
-					if l > r {
-						return True
-					} else {
-						return False
-					}
-				case token.GTE:
-					if l >= r {
-						return True
-					} else {
-						return False
-					}
-				case token.Plus:
-					return &Int{Value: l + r}
-				case token.Minus:
-					return &Int{Value: l - r}
-				case token.Mult:
-					return &Int{Value: l * r}
-				case token.Div:
-					return &Int{Value: l / r}
-				case token.Mod:
-					m := l % r
-					if m < 0 { // awesomeMod! <3
-						m += r
-					}
-					return &Int{Value: m}
-				case token.Exp:
-					if r >= 0 {
-						val := 1
-						for i := 0; i < r; i++ {
-							val *= l
-						}
-						return &Int{Value: val}
-					}
 				}
-			case ast.FloatTipe:
-				l := force(eval(env, expr.LExpr)).(*Float).Value
-				r := force(eval(env, expr.RExpr)).(*Float).Value
-
-				switch binopType {
-				case token.Equal:
-					if l == r {
-						return True
-					}
+			case token.GT:
+				if l > r {
+					return True
+				} else {
 					return False
-				case token.FLT:
-					if l < r {
-						return True
-					} else {
-						return False
+				}
+			case token.GTE:
+				if l >= r {
+					return True
+				} else {
+					return False
+				}
+			case token.Plus:
+				return &Int{Value: l + r}
+			case token.Minus:
+				return &Int{Value: l - r}
+			case token.Mult:
+				return &Int{Value: l * r}
+			case token.Div:
+				return &Int{Value: l / r}
+			case token.Mod:
+				m := l % r
+				if m < 0 { // awesomeMod! <3
+					m += r
+				}
+				return &Int{Value: m}
+			case token.Exp:
+				if r >= 0 {
+					val := 1
+					for i := 0; i < r; i++ {
+						val *= l
 					}
-				case token.FLTE:
-					if l <= r {
-						return True
-					} else {
-						return False
-					}
-				case token.FGT:
-					if l > r {
-						return True
-					} else {
-						return False
-					}
-				case token.FGTE:
-					if l >= r {
-						return True
-					} else {
-						return False
-					}
-				case token.FPlus:
-					return &Float{Value: l + r}
-				case token.FMinus:
-					return &Float{Value: l - r}
-				case token.FMult:
-					return &Float{Value: l * r}
-				case token.FDiv:
-					return &Float{Value: l / r}
-				case token.FMod:
-					m := math.Mod(l, r)
-					if m < 0 { // awesomeMod! <3
-						m += r
-					}
-					return &Float{Value: m}
-				case token.FExp:
-					return &Float{Value: math.Pow(l, r)}
+					return &Int{Value: val}
 				}
 			}
-		}
-	case *ast.FuncTipe:
-		switch binopType {
-		case token.Equal:
-			panic("functions equality is undefined")
-			return nil
-		case token.At:
-			leftVal := force(eval(env, expr.LExpr))
-			rightVal := &Thunk{Env: env, Expr: expr.RExpr}
-			if nativeFunc, ok := leftVal.(*NativeFunc); ok {
-				return applyNative(nativeFunc, rightVal)
-			}
-			return applyUser(leftVal.(*UserFunc), rightVal)
-		case token.DblMult:
-			// we don't need to force these
-			leftVal := &Thunk{Env: env, Expr: expr.LExpr}
-			rightVal := &Thunk{Env: env, Expr: expr.RExpr}
-			return composeFuncs(leftVal,
-				expr.LExpr.FinalTipe().(*ast.FuncTipe),
-				rightVal,
-				expr.RExpr.FinalTipe().(*ast.FuncTipe))
-		case token.DblExp:
-			// we don't need to force the function
-			leftVal := &Thunk{Env: env, Expr: expr.LExpr}
-			rightVal := force(eval(env, expr.RExpr)).(*Int)
-			if rightVal.Value >= 0 {
-				var composition Value = &Thunk{Env: TopLevelEnv, Expr: ast.IdentityExpr}
-
-				// this is the tipe of f and g
-				tipe := expr.LExpr.FinalTipe().(*ast.FuncTipe)
-
-				for i := 0; i < rightVal.Value; i++ {
-					composition = composeFuncs(composition, tipe, leftVal, tipe)
+		case *Float:
+			l := left.Value
+			r := force(eval(env, expr.RExpr)).(*Float).Value
+			switch binopType {
+			case token.LT:
+				if l < r {
+					return True
+				} else {
+					return False
 				}
+			case token.LTE:
+				if l <= r {
+					return True
+				} else {
+					return False
+				}
+			case token.GT:
+				if l > r {
+					return True
+				} else {
+					return False
+				}
+			case token.GTE:
+				if l >= r {
+					return True
+				} else {
+					return False
+				}
+			case token.Plus:
+				return &Float{Value: l + r}
+			case token.Minus:
+				return &Float{Value: l - r}
+			case token.Mult:
+				return &Float{Value: l * r}
+			case token.Div:
+				return &Float{Value: l / r}
+			case token.Mod:
+				m := math.Mod(l, r)
+				if m < 0 { // awesomeMod! <3
+					m += r
+				}
+				return &Float{Value: m}
+			case token.Exp:
+				return &Float{Value: math.Pow(l, r)}
+			}
+		case *UserFunc, *NativeFunc:
+			switch binopType {
+			case token.At:
+				rightVal := &Thunk{Env: env, Expr: expr.RExpr}
+				if nativeFunc, ok := leftVal.(*NativeFunc); ok {
+					return applyNative(nativeFunc, rightVal)
+				}
+				return applyUser(leftVal.(*UserFunc), rightVal)
+			case token.Mult:
+				// we don't need to force this
+				rightVal := &Thunk{Env: env, Expr: expr.RExpr}
+				return composeFuncs(leftVal, rightVal)
+			case token.Exp:
+				rightVal := force(eval(env, expr.RExpr)).(*Int)
+				if rightVal.Value >= 0 {
+					var composition Value = &Thunk{Env: TopLevelEnv, Expr: ast.IdentityExpr}
 
-				return composition
+					for i := 0; i < rightVal.Value; i++ {
+						composition = composeFuncs(composition, leftVal)
+					}
+
+					return composition
+				}
 			}
-		}
-	case *ast.TupleTipe:
-		switch binopType {
-		case token.Equal:
-			// Note: type checker already determined these tuples are the same tipe
-			leftVal := eval(env, expr.LExpr)
-			rightVal := eval(env, expr.RExpr)
-			if equal(leftVal, rightVal) {
-				return True
-			}
-			return False
-		}
-	case *ast.RecordTipe:
-		switch binopType {
-		case token.Equal:
-			// Note: type checker already determined these records are the same tipe
-			leftVal := eval(env, expr.LExpr)
-			rightVal := eval(env, expr.RExpr)
-			if equal(leftVal, rightVal) {
-				return True
-			}
-			return False
-		}
-	case *ast.ListTipe:
-		switch binopType {
-		case token.Equal:
-			// Note: type checker already determined these lists are the same tipe
-			leftVal := eval(env, expr.LExpr)
-			rightVal := eval(env, expr.RExpr)
-			if equal(leftVal, rightVal) {
-				return True
-			}
-			return False
 		}
 	}
 
@@ -570,25 +502,45 @@ func evalNativeFuncExpr(_ *Env, expr *ast.NativeFuncExpr) *NativeFunc {
 }
 
 func equal(aVal Value, bVal Value) bool {
-	switch a := force(aVal).(type) {
+	aVal = force(aVal)
+	bVal = force(bVal)
+
+	if _, ok := bVal.(*UserFunc); ok {
+		panic("runtime error: Crisp has no notion of function equality")
+	}
+	if _, ok := bVal.(*NativeFunc); ok {
+		panic("runtime error: Crisp has no notion of function equality")
+	}
+
+	switch a := aVal.(type) {
+
+	case *UserFunc, *NativeFunc:
+		panic("runtime error: Crisp has no notion of function equality")
 
 	case *Unit_:
-		// if they are both unit types, they must be equal
-		return true
+		if _, ok := bVal.(*Unit_); ok {
+			// if they are both unit types, they must be equal
+			return true
+		}
+		return false
 
 	case *Bool:
-		if b, ok := force(bVal).(*Bool); ok {
+		if b, ok := bVal.(*Bool); ok {
 			return a.Value == b.Value
 		}
+		return false
 
 	case *Int:
-		if b, ok := force(bVal).(*Int); ok {
+		if b, ok := bVal.(*Int); ok {
 			return a.Value == b.Value
 		}
+		return false
 
 	case *Tuple:
-		if b, ok := force(bVal).(*Tuple); ok {
-			// these should be the same tipe, so no need to check tuple sizes
+		if b, ok := bVal.(*Tuple); ok {
+			if len(a.Values) != len(b.Values) {
+				return false
+			}
 			for i, elem := range a.Values {
 				if !equal(elem, b.Values[i]) {
 					return false
@@ -596,20 +548,27 @@ func equal(aVal Value, bVal Value) bool {
 			}
 			return true
 		}
+		return false
 
 	case *Record:
-		if b, ok := force(bVal).(*Record); ok {
-			// these should be the same tipe, so no need to check field names
+		if b, ok := bVal.(*Record); ok {
+			if len(a.Fields) != len(b.Fields) {
+				return false
+			}
 			for i, elem := range a.Fields {
+				if elem.Name != b.Fields[i].Name {
+					return false
+				}
 				if !equal(elem.Value, b.Fields[i].Value) {
 					return false
 				}
 			}
 			return true
 		}
+		return false
 
 	case *Cons:
-		if b, ok := force(bVal).(*Cons); ok {
+		if b, ok := bVal.(*Cons); ok {
 			// first check for Nils
 			if a == Nil {
 				if b == Nil {
@@ -625,10 +584,9 @@ func equal(aVal Value, bVal Value) bool {
 			}
 			return equal(a.Tail, b.Tail)
 		}
+		return false
 	}
-	// It should not be possible to get here. If we did get here,
-	// it means we were trying to compare values of different tipes,
-	// which should have been a type error.
+
 	panic("runtime error: unhandled value in equality check")
 	return false
 }
@@ -636,7 +594,7 @@ func equal(aVal Value, bVal Value) bool {
 var fName = "@f"
 var gName = "@g"
 
-func composeFuncs(f Value, fTipe *ast.FuncTipe, g Value, gTipe *ast.FuncTipe) *UserFunc {
+func composeFuncs(f Value, g Value) *UserFunc {
 	env := NewEnv(TopLevelEnv, []*Binding{
 		{Name: fName, Value: f},
 		{Name: gName, Value: g},
@@ -644,19 +602,15 @@ func composeFuncs(f Value, fTipe *ast.FuncTipe, g Value, gTipe *ast.FuncTipe) *U
 
 	arg := &ast.ArgExpr{}
 	arg.Code = "«ArgExpr»"
-	arg.SetFinalTipe(gTipe.Domain)
 
 	lookupF := &ast.LookupExpr{Name: fName, Depth: 1, Index: 0}
 	lookupF.Code = "«" + fName + " 1,0»"
-	lookupF.SetFinalTipe(fTipe)
 
 	lookupG := &ast.LookupExpr{Name: gName, Depth: 1, Index: 1}
 	lookupG.Code = "«" + gName + " 1,1»"
-	lookupG.SetFinalTipe(gTipe)
 
 	lookupArg := &ast.LookupExpr{Name: ast.ArgName, Depth: 0, Index: 0}
 	lookupArg.Code = "«" + ast.ArgName + " 0,0»"
-	lookupArg.SetFinalTipe(gTipe.Domain)
 
 	gAtArg := &ast.BinopExpr{
 		Token: token.AtToken,
@@ -664,7 +618,6 @@ func composeFuncs(f Value, fTipe *ast.FuncTipe, g Value, gTipe *ast.FuncTipe) *U
 		RExpr: lookupArg,
 	}
 	gAtArg.Code = "(" + lookupG.Code + " @ " + lookupArg.Code + ")"
-	gAtArg.SetFinalTipe(gTipe.Range)
 
 	fAtGAtArg := &ast.BinopExpr{
 		Token: token.AtToken,
@@ -672,7 +625,6 @@ func composeFuncs(f Value, fTipe *ast.FuncTipe, g Value, gTipe *ast.FuncTipe) *U
 		RExpr: gAtArg,
 	}
 	fAtGAtArg.Code = "(" + lookupF.Code + " @ " + gAtArg.Code + ")"
-	fAtGAtArg.SetFinalTipe(fTipe.Range)
 
 	funcPiece := &ast.LetExpr{
 		Env: &ast.ExprEnv{
@@ -685,7 +637,6 @@ func composeFuncs(f Value, fTipe *ast.FuncTipe, g Value, gTipe *ast.FuncTipe) *U
 		Expr: fAtGAtArg,
 	}
 	funcPiece.Code = "let {\n" + fAtGAtArg.Code + "\n}"
-	funcPiece.SetFinalTipe(fTipe.Range)
 
 	return &UserFunc{Env: env, FuncPieceExprs: []*ast.LetExpr{funcPiece}}
 }

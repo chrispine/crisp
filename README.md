@@ -19,8 +19,8 @@ You can't use it for, like, anything.
 ### Features
 - Crisp is a purely functional language. Functions are first-class values, and there
 is no mutation of any data structures.
-- Crisp is a strongly, statically typed language. As there is no syntax yet for declaring
-types, it's all done by type inference.
+- Crisp is a dynamically typed language. Which makes me sad. Check out my branch where I
+tried to get type inference working. (I just couldn't quite get polymorphic functions to work.)
 - Crisp has lazy evaluation semantics.
 - Crisp is an off-side language: indentation is significant, and must be tabs, not spaces.
 - Crisp in an interpreted language (until someone writes a compiler, but it's low priority
@@ -101,9 +101,7 @@ In that last example, if `pair` were not a 2-tuple of type (Int, Int), the type-
 would complain (probably with a totally incomprehensible error message).
 
 A more idiomatic way to write that function: `add(a, b) -> a + b` That's still a
-function of one parameter. If we wanted it to take floats instead, we'd need to change
-the `+` to `+.`, like OCaml does. (Sorry, I know it's ugly, but you're not exactly
-jumping up with PRs for operator overloading, so it's kind of on you.)
+function of one parameter.
 
 Functions can be piece-wise defined:
 
@@ -140,7 +138,7 @@ head[h; _] -> h
 tail[_; t] -> t
 
 # grab the nth item in a list
-nth(n) -> head ** tail^^n
+nth(n) -> head * tail^n
 
 # infinite list of ones
 ones = [1; ones]
@@ -149,10 +147,7 @@ nth(50) ones      # evaluates to 1, of course
 ```
 
 With `nth` you can see that "multiplication" works on functions as well as integers.
-(We don't have operator overloading yet, so it's `**` instead of `*`. I need to
-fix type inference of polymorphic functions before I mess with operator overloading,
-but it's hard and I don't know what I'm doing. Type experts, please help me!) On
-functions, it means function composition, so `(f**g)x` means `f(g(x))`. Exponents mean
+On functions, it means function composition, so `(f*g)x` means `f(g(x))`. Exponents mean
 repeated multiplication, like you'd expect. (Like I'd expect, anyway.)
 
 Because Crisp uses lazy evaluation, it can deal with infinite lists, no problem:
@@ -341,7 +336,7 @@ module math
 
 	pi = 3.14159
 
-	sqr(x) -> x ^. two
+	sqr(x) -> x ^ two
 
 math:sqr(math:pi)
 
@@ -353,7 +348,7 @@ It's just a record:
 math = let
 	two = 2.0
 	pi = 3.14159
-	sqr = x -> x ^. two
+	sqr = x -> x ^ two
 
 	{pi:pi, sqr:sqr}
 
@@ -379,7 +374,8 @@ point = {*}          # {x: 17, y: -2}
 	y: -2
 ```
 
-To convert between ints and floats, use the functions `i2f` and `f2i`.
+To convert between ints and floats, use the functions `i2f` and `f2i`. (Trying to add a
+float and an int is a type error, so get to know your conversion functions!)
 
 One more thing: all declarations in the same scope happen "at the same time":
 
@@ -419,10 +415,9 @@ Packages:
 - `lexer`: turns program text into a stream of tokens
 - `parse_tree`: defines the grammatical structure of Crisp
 - `parser`: turns the stream of tokens into a parse-tree
-- `ast`: maybe this should be more than one package?
+- `ast`:
   * `ast.go`: defines the abstract syntax tree
   * `translator.go`: translates parse tree to AST
-  * `tipe`: type checking and type inference
 - `eval`: the interpreter
 - `repl`: the REPL
 

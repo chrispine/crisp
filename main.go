@@ -63,9 +63,5 @@ func run(code string) (string, bool) {
 
 	output := val.Inspect()
 
-	//tipe := program.FinalTipe()
-	//tipeStr, _ := tipe.TipeString('A')
-	//output += "\nType: " + tipeStr
-
 	return output, true
 }

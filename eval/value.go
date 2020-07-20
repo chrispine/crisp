@@ -152,17 +152,13 @@ func (f *NativeFunc) Inspect() string {
 func CreateNativeFuncs() []*ast.NativeFuncExpr {
 	funcExprs := []*ast.NativeFuncExpr{
 		{
-			Name:       ast.IToFName,
-			DomainTipe: ast.IntTipe,
-			RangeTipe:  ast.FloatTipe,
+			Name: ast.IToFName,
 			Func: &NativeFunc{f: func(v Value) Value {
 				return &Float{Value: float64(v.(*Int).Value)}
 			}},
 		},
 		{
-			Name:       ast.FToIName,
-			DomainTipe: ast.FloatTipe,
-			RangeTipe:  ast.IntTipe,
+			Name: ast.FToIName,
 			Func: &NativeFunc{f: func(v Value) Value {
 				return &Int{Value: int(v.(*Float).Value)}
 			}},

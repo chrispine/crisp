@@ -57,8 +57,9 @@ func (tr *Translator) Translate(program *parse_tree.Program) Expr {
 
 	if len(tr.trErrors) == 0 {
 		exprs := append(tr.topLevelExprs(), expr)
-		for _, err := range CheckTipes(exprs) {
-			tr.trErrors = append(tr.trErrors, err)
+
+		for _, expr := range exprs {
+			finalizeCode(expr)
 		}
 	}
 

@@ -14,7 +14,7 @@ func TestFirst(t *testing.T) {
 	expected := "2.5"
 	program := `
 
-5.i2f /. 2.i2f
+5.i2f / 2.i2f
 
 `
 	val := testEval(t, program)
@@ -448,7 +448,7 @@ a.tailhead
 		{123, `
 
 
-id = (x -> 2*x)^^0
+id = (x -> 2*x)^0
 
 id(123)
 
@@ -459,7 +459,7 @@ id(123)
 
 double(x) -> 2*x
 
-id = double^^0
+id = double^0
 
 id(11)
 
@@ -470,7 +470,7 @@ id(11)
 
 double(x) -> 2*x
 
-dbl = double^^1
+dbl = double^1
 
 dbl(11)
 
@@ -481,7 +481,7 @@ dbl(11)
 
 double(x) -> 2*x
 
-quad = double^^2
+quad = double^2
 
 quad(11)
 
@@ -494,7 +494,7 @@ double(x) -> 2*x
 
 sqr(x) -> x^2
 
-(double**sqr)@5
+(double*sqr)@5
 
 
 `},
@@ -507,7 +507,7 @@ tail[h;t] -> t
 a = [22 ; b]
 b = [88, 99, 111]
 
-tailhead = head ** tail
+tailhead = head * tail
 
 a.tailhead
 
@@ -522,7 +522,7 @@ tail[h;t] -> t
 a = [22 ; b]
 b = [88, 99, 111]
 
-(head ** tail) a
+(head * tail) a
 
 
 `},
@@ -532,7 +532,7 @@ b = [88, 99, 111]
 head[h;t] -> h
 tail[h;t] -> t
 
-t4 = tail ^^ 4
+t4 = tail ^ 4
 
 [91, 11, 21, 31, 41, 51, 61].t4.head
 
@@ -547,7 +547,7 @@ tail[h;t] -> t
 a = [22 ; b]
 b = [88, 99, 111]
 
-(head ** tail^^2) a
+(head * tail^2) a
 
 
 `},
@@ -607,7 +607,7 @@ ones.tail.head
 head[h;t] -> h
 tail[h;t] -> t
 
-nth(n) -> head ** tail^^n
+nth(n) -> head * tail^n
 
 ones = [1;ones]
 
@@ -770,7 +770,7 @@ case (12, true)
 head[h;_] -> h
 tail[_;t] -> t
 
-nth(n) -> head ** tail^^n
+nth(n) -> head * tail^n
 
 zip_plus [h0; t0] [h1; t1] ->
 	[h0 + h1; zip_plus t0 t1]
@@ -932,22 +932,22 @@ func TestEvalFloatExpr(t *testing.T) {
 	}{
 		{2.5, `
 
-5.i2f /. 2.i2f
+5.i2f / 2.i2f
 
 `},
 		{2.5, `
 
-5.0 /. 2.0
+5.0 / 2.0
 
 `},
 		{1.5, `
 
-5.0 %. 1.75
+5.0 % 1.75
 
 `},
 		{0.25, `
 
--5.0 %. 1.75
+-5.0 % 1.75
 
 `},
 	}
@@ -995,7 +995,7 @@ func TestEvalBoolExpr(t *testing.T) {
 		{"3 > 2", true},
 		{"3 > 3", false},
 		{"3 > 4", false},
-		{"3.i2f >. 4.i2f", false},
+		{"3.i2f > 4.i2f", false},
 		{"() == ()", true},
 		{"(1,2,3) == (1,2,3)", true},
 		{"(1,2,3) == (1,3,2)", false},
@@ -1029,7 +1029,7 @@ len[_;t] -> 1 + len(t)
 
 is_even?(x) -> x%2 == 0
 
-is_even_len? = is_even? ** len
+is_even_len? = is_even? * len
 
 is_even_len?[1,2,3]
 

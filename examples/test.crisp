@@ -7,6 +7,6 @@ module math
 
 	pi = 3.14159
 
-	sqr(x) -> x ^. two
+	sqr(x) -> x ^ two
 
 math:sqr(math:pi)
