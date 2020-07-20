@@ -356,12 +356,25 @@ func evalBinopExpr(env *Env, expr *ast.BinopExpr) Value {
 				}
 				return &Int{Value: m}
 			case token.Exp:
-				if r >= 0 {
-					val := 1
-					for i := 0; i < r; i++ {
-						val *= l
+				if r == 0 {
+					return &Int{Value: 1}
+				}
+				if r > 0 {
+					x := l
+					y := 1
+					n := r
+					// faster than multiplying it out `n` times
+					for n > 1 {
+						if n%2 == 0 {
+							x *= x
+							n /= 2
+						} else {
+							y *= x
+							x *= x
+							n = (n - 1) / 2
+						}
 					}
-					return &Int{Value: val}
+					return &Int{Value: x * y}
 				}
 			}
 		case *Float:
@@ -426,6 +439,8 @@ func evalBinopExpr(env *Env, expr *ast.BinopExpr) Value {
 				if rightVal.Value >= 0 {
 					var composition Value = &Thunk{Env: TopLevelEnv, Expr: ast.IdentityExpr}
 
+					// This function is not necessarily associative, so we can't optimize
+					// it like we can with integers.
 					for i := 0; i < rightVal.Value; i++ {
 						composition = composeFuncs(composition, leftVal)
 					}
