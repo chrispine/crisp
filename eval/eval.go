@@ -195,6 +195,9 @@ func evalTupleDestructure(env *Env, expr *ast.TupleDestructureExpr) Value {
 	tuple := force(eval(env, expr.Tuple)).(*Tuple)
 	// TODO: did I just eval the same expression multiple times, one for each element?
 	// TODO: same question with cons destructuring and all assertion types, and record lookup
+	if len(tuple.Values) != expr.Size {
+		panic("type error: wrong size tuple")
+	}
 
 	return tuple.Values[expr.Index]
 }

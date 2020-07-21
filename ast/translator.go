@@ -306,6 +306,7 @@ func (tr *Translator) partitionDecl(
 		// `(a, b) = expr`
 		// Note that we don't need to assert that `rhs` is a tuple, or what size of tuple,
 		// because the type checker will flag that at compile time.
+		// TODO: that ^^^ is not exactly true anymore...
 		for i, elem := range lhs.Exprs {
 			td := &TupleDestructureBlock{index: i, size: len(lhs.Exprs), tuple: rhs}
 			asserts = tr.partitionDecl(preEnv, postEnv, asserts, elem, td, shadowing, bindingsAllowed)

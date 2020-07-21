@@ -97,8 +97,8 @@ add pair ->
 (Wow, GitHub renders those tabs as width 8, and it looks terrible. Doesn't look like
 you can change it in the README.md, though. Sorry.)
 
-In that last example, if `pair` were not a 2-tuple of type (Int, Int), the type-checker
-would complain (probably with a totally incomprehensible error message).
+In that last example, if `pair` were not a 2-tuple of type (Int, Int), it would be a
+runtime error (probably with a totally incomprehensible error message).
 
 A more idiomatic way to write that function: `add(a, b) -> a + b` That's still a
 function of one parameter.
@@ -296,7 +296,7 @@ guessed: it introduces scope (and comes with the semantically-significant indent
 for a number (possibly zero) of declarations, followed by an expression evaluated in
 that scope.
 
-In fact, a Crisp program is effectively a big `let` expression with an implicit `let`:
+In fact, a Crisp program is effectively a big `let` expression with an implicit keyword `let`:
 it's a series of declarations followed by an expression.
 
 Declarations are all some form of pattern matching. This can be either explicitly with the
