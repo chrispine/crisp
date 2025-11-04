@@ -30,6 +30,20 @@ func CheckTipes(exprs []Expr) []string {
 		domainTV := funcApplication.RExpr.TipeVar(tc)
 		rangeTV := funcApplication.TipeVar(tc)
 
+		// If the function type contains Omega (undetermined), unify directly
+		// This handles function parameters that aren't yet fully constrained
+		// Otherwise, copy the type for polymorphic instantiation
+		if funcTipe, ok := polyTipe.ref.(*FuncTipe); ok {
+			if tc.hasOmega(funcTipe.Domain) || tc.hasOmega(funcTipe.Range) {
+				// Function type is not fully determined, unify directly
+				tc.unify(funcTipe.Domain, domainTV)
+				tc.unify(funcTipe.Range, rangeTV)
+				continue
+			}
+		}
+
+		// Function type is fully determined (polymorphic function case)
+		// Copy it to create a fresh instance for this call site
 		copyTipe := tc.deepCopyTipe(polyTipe.ref).(*FuncTipe)
 		tc.unify(copyTipe.Domain, domainTV)
 		tc.unify(copyTipe.Range, rangeTV)
@@ -230,6 +244,38 @@ func derefTipeVar(tv *TipeVar) *TipeVar {
 	return tv
 }
 
+// Helper function to check if a type contains Omega (undetermined type)
+func (tc *TipeChecker) hasOmega(someTipe Tipe) bool {
+	switch tipe := someTipe.(type) {
+	case *OmegaTipe:
+		return true
+	case *EmptyTipe, *SimpleTipe:
+		return false
+	case *TupleTipe:
+		for _, tv := range tipe.TipeVars {
+			if tc.hasOmega(derefTipeVar(tv).ref) {
+				return true
+			}
+		}
+		return false
+	case *ListTipe:
+		return tc.hasOmega(derefTipeVar(tipe.TipeVar).ref)
+	case *RecordTipe:
+		for _, f := range tipe.Fields {
+			if tc.hasOmega(derefTipeVar(f.TipeVar).ref) {
+				return true
+			}
+		}
+		return false
+	case *FuncTipe:
+		return tc.hasOmega(derefTipeVar(tipe.Domain).ref) || tc.hasOmega(derefTipeVar(tipe.Range).ref)
+	case *TipeVar:
+		return tc.hasOmega(derefTipeVar(tipe).ref)
+	default:
+		return false
+	}
+}
+
 // Type Checking
 
 func (tc *TipeChecker) inferTipes(someExpr Expr) {
@@ -284,8 +330,8 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 		switch expr.Token.Type {
 		case token.At:
 			fTipe := &FuncTipe{
-				Domain: tc.newTipeVar(), // was rtv
-				Range:  tc.newTipeVar(), // was tv
+				Domain: tc.newTipeVar(),
+				Range:  tc.newTipeVar(),
 			}
 			tc.unify(ltv, fTipe)
 			// after tipes are otherwise checked, ensure this function
