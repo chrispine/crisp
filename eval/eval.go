@@ -278,6 +278,28 @@ func evalBinopExpr(env *Env, expr *ast.BinopExpr) Value {
 	binopType := expr.Token.Type
 	lTipe := expr.LExpr.FinalTipe()
 
+	// For operators that can work on multiple numeric types (due to operator overloading),
+	// we need to dispatch based on the RUNTIME type, not the compile-time type.
+	// This is because polymorphic functions get their types defaulted to Int during type checking,
+	// but at runtime they might be called with Floats.
+	needsRuntimeDispatch := false
+	switch binopType {
+	case token.Plus, token.Minus, token.Mult, token.Div, token.Mod, token.Exp,
+		token.LT, token.LTE, token.GT, token.GTE:
+		needsRuntimeDispatch = true
+	}
+
+	if needsRuntimeDispatch {
+		// Evaluate the left side to determine runtime type
+		leftVal := force(eval(env, expr.LExpr))
+		switch leftVal.(type) {
+		case *Int:
+			lTipe = ast.IntTipe
+		case *Float:
+			lTipe = ast.FloatTipe
+		}
+	}
+
 	switch lTipe.(type) {
 
 	case *ast.SimpleTipe:
@@ -402,45 +424,45 @@ func evalBinopExpr(env *Env, expr *ast.BinopExpr) Value {
 						return True
 					}
 					return False
-				case token.FLT:
+				case token.LT, token.FLT:
 					if l < r {
 						return True
 					} else {
 						return False
 					}
-				case token.FLTE:
+				case token.LTE, token.FLTE:
 					if l <= r {
 						return True
 					} else {
 						return False
 					}
-				case token.FGT:
+				case token.GT, token.FGT:
 					if l > r {
 						return True
 					} else {
 						return False
 					}
-				case token.FGTE:
+				case token.GTE, token.FGTE:
 					if l >= r {
 						return True
 					} else {
 						return False
 					}
-				case token.FPlus:
+				case token.Plus, token.FPlus:
 					return &Float{Value: l + r}
-				case token.FMinus:
+				case token.Minus, token.FMinus:
 					return &Float{Value: l - r}
-				case token.FMult:
+				case token.Mult, token.FMult:
 					return &Float{Value: l * r}
-				case token.FDiv:
+				case token.Div, token.FDiv:
 					return &Float{Value: l / r}
-				case token.FMod:
+				case token.Mod, token.FMod:
 					m := math.Mod(l, r)
 					if m < 0 { // awesomeMod! <3
 						m += r
 					}
 					return &Float{Value: m}
-				case token.FExp:
+				case token.Exp, token.FExp:
 					return &Float{Value: math.Pow(l, r)}
 				}
 			}

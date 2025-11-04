@@ -7,7 +7,9 @@ import (
 
 // returns array of error messages
 func CheckTipes(exprs []Expr) []string {
-	tc := &TipeChecker{}
+	tc := &TipeChecker{
+		typeSchemes: make(map[*TipeVar]*TypeScheme),
+	}
 
 	// We assign tipe variables recursively to all expressions.
 
@@ -15,6 +17,7 @@ func CheckTipes(exprs []Expr) []string {
 	// additional information about the various tipes. It calls `unify()` which attempts
 	// integrates all of that tipe information. Hopefully every expression will have a
 	// known tipe by the end.
+	// NOTE: Generalization happens DURING inference in the LetExpr case
 	for _, expr := range exprs {
 		tc.inferTipes(expr)
 	}
@@ -26,7 +29,17 @@ func CheckTipes(exprs []Expr) []string {
 	// So what we do here is copy the function type with fresh type variables and
 	// unify it with the types we know to be the domain and range for this call.
 	for _, funcApplication := range tc.funcApplications {
-		polyTipe := derefTipeVar(funcApplication.LExpr.TipeVar(tc))
+		// First check if the function has been generalized (has a TypeScheme)
+		// If so, we should have already handled it via instantiation in LookupExpr
+		// Skip further processing to avoid breaking the polymorphism
+		funcExpr := funcApplication.LExpr
+		funcTV := derefTipeVar(funcExpr.TipeVar(tc))
+		if _, hasScheme := tc.typeSchemes[funcTV]; hasScheme {
+			// This function was generalized, instantiation already happened at lookup
+			continue
+		}
+
+		polyTipe := derefTipeVar(funcExpr.TipeVar(tc))
 		domainTV := funcApplication.RExpr.TipeVar(tc)
 		rangeTV := funcApplication.TipeVar(tc)
 
@@ -47,6 +60,12 @@ func CheckTipes(exprs []Expr) []string {
 		copyTipe := tc.deepCopyTipe(polyTipe.ref).(*FuncTipe)
 		tc.unify(copyTipe.Domain, domainTV)
 		tc.unify(copyTipe.Range, rangeTV)
+	}
+
+	// Default numeric types: if a type variable is still NumericTipe (Int|Float) with no
+	// other constraints, default it to Int. This is similar to Haskell's defaulting rules.
+	for _, expr := range exprs {
+		tc.defaultNumericTypes(expr)
 	}
 
 	// Now that we have all of the type information, we remove the levels of indirection
@@ -75,10 +94,18 @@ func (tc *TipeChecker) deferUnifyPoly(funcApplication *BinopExpr) {
 type TipeChecker struct {
 	tcErrors         []string
 	funcApplications []*BinopExpr
+	typeSchemes      map[*TipeVar]*TypeScheme // Maps type variables to their type schemes
 }
 
 func (tc *TipeChecker) error(err string, a ...interface{}) {
 	tc.tcErrors = append(tc.tcErrors, fmt.Sprintf("Crisp type error: "+err+"\n", a...))
+}
+
+// TypeScheme represents a polymorphic type (∀a.τ)
+// It tracks which type variables should be instantiated with fresh variables
+type TypeScheme struct {
+	BoundVars []*TipeVar // Type variables that are universally quantified
+	Type      *TipeVar   // The type expression
 }
 
 // the Tipe interface
@@ -123,6 +150,31 @@ var UnitTipe = &SimpleTipe{"Unit"}   // the tipe of the zero-tuple: ()
 var IntTipe = &SimpleTipe{"Int"}     // the tipe of ints
 var FloatTipe = &SimpleTipe{"Float"} // the tipe of floats
 var BoolTipe = &SimpleTipe{"Bool"}   // the tipe of bools
+
+// UnionTipe represents a union of types, used for operator overloading
+// For example, + can work on either Int or Float
+type UnionTipe struct {
+	Tipes []Tipe
+}
+
+func (t *UnionTipe) TipeString(r rune) (string, rune) {
+	if len(t.Tipes) == 0 {
+		return "Empty", r
+	}
+	str := ""
+	for i, tipe := range t.Tipes {
+		if i > 0 {
+			str += "|"
+		}
+		tipeStr, newR := tipe.TipeString(r)
+		str += tipeStr
+		r = newR
+	}
+	return str, r
+}
+
+// Helper to create a numeric union (Int | Float)
+var NumericTipe = &UnionTipe{[]Tipe{IntTipe, FloatTipe}}
 
 type TupleTipe struct { // the tipe of n-tuples for n >= 2 (there is no 1-tuple)
 	TipeVars []*TipeVar
@@ -269,10 +321,327 @@ func (tc *TipeChecker) hasOmega(someTipe Tipe) bool {
 		return false
 	case *FuncTipe:
 		return tc.hasOmega(derefTipeVar(tipe.Domain).ref) || tc.hasOmega(derefTipeVar(tipe.Range).ref)
+	case *UnionTipe:
+		// A union has Omega if any of its members has Omega
+		for _, t := range tipe.Tipes {
+			if tc.hasOmega(t) {
+				return true
+			}
+		}
+		return false
 	case *TipeVar:
 		return tc.hasOmega(derefTipeVar(tipe).ref)
 	default:
 		return false
+	}
+}
+
+// Generalize creates a type scheme from a type by finding all free type variables
+// A type variable is "free" if it's still Omega or contains Omega
+func (tc *TipeChecker) generalize(tv *TipeVar) *TypeScheme {
+	freeVars := make(map[int]*TipeVar)
+	tc.collectFreeVars(tv, freeVars)
+
+	boundVars := make([]*TipeVar, 0, len(freeVars))
+	for _, v := range freeVars {
+		boundVars = append(boundVars, v)
+	}
+
+	return &TypeScheme{
+		BoundVars: boundVars,
+		Type:      tv,
+	}
+}
+
+// Collect all type variables that contain Omega (are not fully determined)
+func (tc *TipeChecker) collectFreeVars(tv *TipeVar, freeVars map[int]*TipeVar) {
+	tv = derefTipeVar(tv)
+
+	// If we've already seen this type variable, skip it
+	if _, seen := freeVars[tv.ID]; seen {
+		return
+	}
+
+	switch tipe := tv.ref.(type) {
+	case *OmegaTipe:
+		// This is a free type variable
+		freeVars[tv.ID] = tv
+
+	case *EmptyTipe, *SimpleTipe, *UnionTipe:
+		// Fully determined, no free variables
+		// (UnionTipe contains concrete types, not type variables)
+
+	case *TupleTipe:
+		for _, elemTV := range tipe.TipeVars {
+			tc.collectFreeVars(elemTV, freeVars)
+		}
+
+	case *ListTipe:
+		tc.collectFreeVars(tipe.TipeVar, freeVars)
+
+	case *RecordTipe:
+		for _, field := range tipe.Fields {
+			tc.collectFreeVars(field.TipeVar, freeVars)
+		}
+
+	case *FuncTipe:
+		tc.collectFreeVars(tipe.Domain, freeVars)
+		tc.collectFreeVars(tipe.Range, freeVars)
+	}
+}
+
+// Instantiate creates a fresh instance of a type scheme by replacing bound variables
+func (tc *TipeChecker) instantiate(scheme *TypeScheme) *TipeVar {
+	if len(scheme.BoundVars) == 0 {
+		// No bound variables, return the type as-is
+		return scheme.Type
+	}
+
+	// Create fresh type variables for each bound variable
+	substitution := make(map[int]*TipeVar)
+	for _, boundVar := range scheme.BoundVars {
+		substitution[boundVar.ID] = tc.newTipeVar()
+	}
+
+	// Apply the substitution to create a fresh copy
+	return tc.applySubstitution(scheme.Type, substitution)
+}
+
+// Apply a substitution to a type variable, creating a fresh copy
+func (tc *TipeChecker) applySubstitution(tv *TipeVar, substitution map[int]*TipeVar) *TipeVar {
+	tv = derefTipeVar(tv)
+
+	// If this type variable should be substituted, return the fresh variable
+	if freshTV, found := substitution[tv.ID]; found {
+		return freshTV
+	}
+
+	// Otherwise, create a new type variable and recursively substitute its contents
+	newTV := tc.newTipeVar()
+
+	switch tipe := tv.ref.(type) {
+	case *OmegaTipe, *EmptyTipe, *SimpleTipe, *UnionTipe:
+		// These types don't contain type variables, so just use as-is
+		newTV.ref = tipe
+
+	case *TupleTipe:
+		newTuple := &TupleTipe{}
+		for _, elemTV := range tipe.TipeVars {
+			newTuple.TipeVars = append(newTuple.TipeVars, tc.applySubstitution(elemTV, substitution))
+		}
+		newTV.ref = newTuple
+
+	case *ListTipe:
+		newTV.ref = &ListTipe{
+			TipeVar: tc.applySubstitution(tipe.TipeVar, substitution),
+		}
+
+	case *RecordTipe:
+		newRecord := &RecordTipe{Partial: tipe.Partial}
+		for _, field := range tipe.Fields {
+			newRecord.Fields = append(newRecord.Fields, RecordFieldTipe{
+				Name:    field.Name,
+				TipeVar: tc.applySubstitution(field.TipeVar, substitution),
+			})
+		}
+		newTV.ref = newRecord
+
+	case *FuncTipe:
+		newTV.ref = &FuncTipe{
+			Domain: tc.applySubstitution(tipe.Domain, substitution),
+			Range:  tc.applySubstitution(tipe.Range, substitution),
+		}
+	}
+
+	return newTV
+}
+
+// Default numeric types: if a type is still a NumericTipe (Int|Float union),
+// default it to Int. This provides backward compatibility with existing tests
+// and follows Haskell's defaulting rules for numeric types.
+func (tc *TipeChecker) defaultNumericTypes(someExpr Expr) {
+	switch expr := someExpr.(type) {
+	case *IntExpr, *FloatExpr, *BoolExpr, *UnitExpr:
+		// Literals already have concrete types
+		tc.defaultNumericType(expr.TipeVar(tc))
+
+	case *LookupExpr:
+		tc.defaultNumericType(expr.TipeVar(tc))
+
+	case *ArgExpr:
+		tc.defaultNumericType(expr.TipeVar(tc))
+
+	case *UnopExpr:
+		tc.defaultNumericType(expr.TipeVar(tc))
+		tc.defaultNumericTypes(expr.Expr)
+
+	case *BinopExpr:
+		tc.defaultNumericType(expr.TipeVar(tc))
+		tc.defaultNumericTypes(expr.LExpr)
+		tc.defaultNumericTypes(expr.RExpr)
+
+	case *TupleExpr:
+		tc.defaultNumericType(expr.TipeVar(tc))
+		for _, e := range expr.Exprs {
+			tc.defaultNumericTypes(e)
+		}
+
+	case *RecordExpr:
+		tc.defaultNumericType(expr.TipeVar(tc))
+		for _, f := range expr.Fields {
+			tc.defaultNumericTypes(f.Expr)
+		}
+
+	case *ConsExpr:
+		tc.defaultNumericType(expr.TipeVar(tc))
+		if !expr.IsNilList() {
+			tc.defaultNumericTypes(expr.Head)
+			tc.defaultNumericTypes(expr.Tail)
+		}
+
+	case *UserFuncExpr:
+		tc.defaultNumericType(expr.TipeVar(tc))
+		for _, fp := range expr.FuncPieceExprs {
+			tc.defaultNumericTypes(fp)
+		}
+
+	case *NativeFuncExpr:
+		tc.defaultNumericType(expr.TipeVar(tc))
+
+	case *AssertAnyOfTheseSets:
+		for _, set := range expr.AssertSets {
+			for _, assert := range set {
+				tc.defaultNumericTypes(assert)
+			}
+		}
+
+	case *TupleDestructureExpr:
+		tc.defaultNumericTypes(expr.Tuple)
+
+	case *ConsDestructureExpr:
+		tc.defaultNumericTypes(expr.List)
+
+	case *RecordLookupExpr:
+		tc.defaultNumericType(expr.TipeVar(tc))
+		tc.defaultNumericTypes(expr.Record)
+
+	case *LetExpr:
+		tc.defaultNumericType(expr.TipeVar(tc))
+		for _, a := range expr.Asserts {
+			tc.defaultNumericTypes(a)
+		}
+		for _, b := range expr.Env.Bindings {
+			tc.defaultNumericTypes(b.Expr)
+		}
+		tc.defaultNumericTypes(expr.Expr)
+	}
+}
+
+// Default a single type variable from NumericTipe to IntTipe
+func (tc *TipeChecker) defaultNumericType(tv *TipeVar) {
+	tv = derefTipeVar(tv)
+	if tv.ref == NumericTipe {
+		tv.ref = IntTipe
+	}
+	// Recursively default nested types
+	switch tipe := tv.ref.(type) {
+	case *TupleTipe:
+		for _, elemTV := range tipe.TipeVars {
+			tc.defaultNumericType(elemTV)
+		}
+	case *ListTipe:
+		tc.defaultNumericType(tipe.TipeVar)
+	case *RecordTipe:
+		for _, field := range tipe.Fields {
+			tc.defaultNumericType(field.TipeVar)
+		}
+	case *FuncTipe:
+		tc.defaultNumericType(tipe.Domain)
+		tc.defaultNumericType(tipe.Range)
+	}
+}
+
+// Check if an expression is a syntactic value (safe to generalize)
+// This implements the "value restriction" from ML
+func (tc *TipeChecker) isSyntacticValue(expr Expr) bool {
+	switch expr.(type) {
+	case *UserFuncExpr, *NativeFuncExpr:
+		// Only generalize functions, not other values
+		// This allows functions to be polymorphic while keeping literals
+		// and constructors monomorphic (constrained by their uses)
+		return true
+	default:
+		return false
+	}
+}
+
+// Traverse the AST and generalize top-level let bindings
+func (tc *TipeChecker) generalizeLetBindings(someExpr Expr) {
+	switch expr := someExpr.(type) {
+	case *LetExpr:
+		// Check if this is a function piece (first binding is 'arg')
+		isFunctionPiece := len(expr.Env.Bindings) > 0 && expr.Env.Bindings[0].Name == ArgName
+
+		if !isFunctionPiece {
+			// Generalize top-level bindings
+			for _, b := range expr.Env.Bindings {
+				exprTV := b.Expr.TipeVar(tc)
+				scheme := tc.generalize(exprTV)
+				tc.typeSchemes[exprTV] = scheme
+			}
+		}
+
+		// Recursively generalize nested expressions
+		for _, b := range expr.Env.Bindings {
+			tc.generalizeLetBindings(b.Expr)
+		}
+		tc.generalizeLetBindings(expr.Expr)
+
+	case *UserFuncExpr:
+		for _, fp := range expr.FuncPieceExprs {
+			tc.generalizeLetBindings(fp)
+		}
+
+	case *BinopExpr:
+		tc.generalizeLetBindings(expr.LExpr)
+		tc.generalizeLetBindings(expr.RExpr)
+
+	case *UnopExpr:
+		tc.generalizeLetBindings(expr.Expr)
+
+	case *TupleExpr:
+		for _, e := range expr.Exprs {
+			tc.generalizeLetBindings(e)
+		}
+
+	case *RecordExpr:
+		for _, field := range expr.Fields {
+			tc.generalizeLetBindings(field.Expr)
+		}
+
+	case *ConsExpr:
+		if !expr.IsNilList() {
+			tc.generalizeLetBindings(expr.Head)
+			tc.generalizeLetBindings(expr.Tail)
+		}
+
+	case *RecordLookupExpr:
+		tc.generalizeLetBindings(expr.Record)
+
+	case *AssertAnyOfTheseSets:
+		for _, set := range expr.AssertSets {
+			for _, assert := range set {
+				tc.generalizeLetBindings(assert)
+			}
+		}
+
+	// Base cases - no nested expressions to traverse
+	case *IntExpr, *FloatExpr, *BoolExpr, *UnitExpr, *LookupExpr, *ArgExpr, *NativeFuncExpr:
+		// Nothing to do
+
+	default:
+		// For any other expression types (destructuring patterns, etc.), just skip
+		// This is safer than panicking during generalization
 	}
 }
 
@@ -307,7 +676,20 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 
 	case *LookupExpr:
 		boundExpr := expr.Env.Get(expr.Depth, expr.Index)
-		tc.unify(tv, boundExpr.TipeVar(tc))
+		boundTV := boundExpr.TipeVar(tc)
+
+		// Check if this type variable has a type scheme (polymorphic)
+		// NOTE: We check with the non-dereferenced type variable because that's
+		// how we store it in the type schemes map during generalization
+		if scheme, hasScheme := tc.typeSchemes[boundTV]; hasScheme {
+			// Instantiate with fresh type variables
+			freshTV := tc.instantiate(scheme)
+			tc.unify(tv, freshTV)
+		} else {
+			// Not polymorphic, use the type variable directly (dereferenced)
+			boundTVDeref := derefTipeVar(boundTV)
+			tc.unify(tv, boundTVDeref)
+		}
 
 	case *ArgExpr:
 		// nothing to do, as the associated FuncExpr handles it
@@ -317,8 +699,8 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 		tc.unify(tv, expr.Expr.TipeVar(tc))
 		// let's see if we can learn more from the token
 		if expr.Token.Type == token.Minus {
-			// TODO: operator overloading!
-			//tc.unify(tv, IntTipe) // could be FloatTipe
+			// Unary minus now works for both Int and Float
+			tc.unify(tv, NumericTipe)
 		}
 
 		tc.inferTipes(expr.Expr)
@@ -330,8 +712,8 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 		switch expr.Token.Type {
 		case token.At:
 			fTipe := &FuncTipe{
-				Domain: tc.newTipeVar(),
-				Range:  tc.newTipeVar(),
+				Domain: rtv,
+				Range:  tv,
 			}
 			tc.unify(ltv, fTipe)
 			// after tipes are otherwise checked, ensure this function
@@ -345,26 +727,34 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 			tc.unify(ltv, BoolTipe)
 			tc.unify(rtv, BoolTipe)
 		case token.LT, token.LTE, token.GT, token.GTE:
+			// Comparison operators now work for both Int and Float
 			tc.unify(tv, BoolTipe)
-			tc.unify(ltv, IntTipe)
-			tc.unify(rtv, IntTipe)
+			tc.unify(ltv, NumericTipe)
+			tc.unify(rtv, NumericTipe)
+			tc.unify(ltv, rtv) // Both sides must be the same numeric type
 		case token.FLT, token.FLTE, token.FGT, token.FGTE:
+			// Keep explicit float comparisons for backward compatibility
 			tc.unify(tv, BoolTipe)
 			tc.unify(ltv, FloatTipe)
 			tc.unify(rtv, FloatTipe)
 		case token.Plus, token.Minus, token.Div, token.Mod:
-			tc.unify(tv, IntTipe)
-			tc.unify(ltv, IntTipe)
-			tc.unify(rtv, IntTipe)
+			// Arithmetic operators now work for both Int and Float
+			tc.unify(tv, NumericTipe)
+			tc.unify(ltv, NumericTipe)
+			tc.unify(rtv, NumericTipe)
+			tc.unify(tv, ltv)  // Result is same type as operands
+			tc.unify(tv, rtv)
 		case token.FPlus, token.FMinus, token.FMult, token.FDiv, token.FMod, token.FExp:
 			tc.unify(tv, FloatTipe)
 			tc.unify(ltv, FloatTipe)
 			tc.unify(rtv, FloatTipe)
 		case token.Exp:
-			// TODO: operator overloading!
-			tc.unify(tv, IntTipe)
-			tc.unify(ltv, IntTipe)
-			tc.unify(rtv, IntTipe)
+			// Exponentiation now works for both Int and Float
+			tc.unify(tv, NumericTipe)
+			tc.unify(ltv, NumericTipe)
+			tc.unify(rtv, NumericTipe)
+			tc.unify(tv, ltv)  // Result is same type as base
+			tc.unify(tv, rtv)  // And same type as exponent
 		case token.DblExp:
 			argTipe := tc.newTipeVar()
 			funcTipe := &FuncTipe{
@@ -376,10 +766,12 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 			tc.unify(tv, ltv)
 			tc.unify(rtv, IntTipe)
 		case token.Mult:
-			// TODO: operator overloading!
-			tc.unify(tv, IntTipe)
-			tc.unify(ltv, IntTipe)
-			tc.unify(rtv, IntTipe)
+			// Multiplication now works for both Int and Float
+			tc.unify(tv, NumericTipe)
+			tc.unify(ltv, NumericTipe)
+			tc.unify(rtv, NumericTipe)
+			tc.unify(tv, ltv)  // Result is same type as operands
+			tc.unify(tv, rtv)
 		case token.DblMult:
 			x := tc.newTipeVar()
 			y := tc.newTipeVar()
@@ -537,8 +929,22 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 			tc.inferTipes(a)
 		}
 
+		// Infer and generalize bindings one at a time
+		// This allows later bindings to use polymorphic versions of earlier bindings
+		//
+		// Value Restriction: Only generalize syntactic values (functions),
+		// not computed values (applications, etc). This prevents over-generalization.
+		isFunctionPiece := len(expr.Env.Bindings) > 0 && expr.Env.Bindings[0].Name == ArgName
 		for _, b := range expr.Env.Bindings {
 			tc.inferTipes(b.Expr)
+
+			// Generalize immediately after inference if it's a syntactic value
+			// and not a function parameter
+			if !isFunctionPiece && tc.isSyntacticValue(b.Expr) {
+				exprTV := b.Expr.TipeVar(tc)
+				scheme := tc.generalize(exprTV)
+				tc.typeSchemes[exprTV] = scheme
+			}
 		}
 
 		tc.unify(tv, expr.Expr.TipeVar(tc))
@@ -613,6 +1019,46 @@ func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
 	}
 	if tipe0 == Empty || tipe1 == Omega {
 		return tipe0
+	}
+
+	// UnionTipe - handle this BEFORE SimpleTipe to allow Int to unify with Int|Float
+	if ut0, ok := tipe0.(*UnionTipe); ok {
+		if ut1, ok := tipe1.(*UnionTipe); ok {
+			// Both are unions - find intersection of members
+			var intersection []Tipe
+			for _, t0 := range ut0.Tipes {
+				for _, t1 := range ut1.Tipes {
+					// Try to unify the types - if they're compatible, add to intersection
+					if t0 == t1 {
+						intersection = append(intersection, t0)
+						break
+					}
+				}
+			}
+			if len(intersection) == 0 {
+				return Empty
+			}
+			if len(intersection) == 1 {
+				return intersection[0]
+			}
+			return &UnionTipe{Tipes: intersection}
+		}
+		// tipe0 is union, tipe1 is concrete - check if tipe1 matches any union member
+		for _, t := range ut0.Tipes {
+			if t == tipe1 {
+				return tipe1
+			}
+		}
+		return Empty
+	}
+	if ut1, ok := tipe1.(*UnionTipe); ok {
+		// tipe1 is union, tipe0 is concrete - check if tipe0 matches any union member
+		for _, t := range ut1.Tipes {
+			if t == tipe0 {
+				return tipe0
+			}
+		}
+		return Empty
 	}
 
 	// SimpleTipe: UnitTipe, IntTipe, BoolTipe
@@ -866,8 +1312,8 @@ func (tc *TipeChecker) setFinalTipe(expr Expr) {
 func (tc *TipeChecker) derefAllTipeVars(someTipe Tipe) {
 	switch tipe := someTipe.(type) {
 
-	case *SimpleTipe, *OmegaTipe, *EmptyTipe:
-		// nothing to do
+	case *SimpleTipe, *OmegaTipe, *EmptyTipe, *UnionTipe:
+		// nothing to do (these don't contain type variables)
 
 	case *TupleTipe:
 		for i, tvv := range tipe.TipeVars {
@@ -910,8 +1356,8 @@ func (tc *TipeChecker) deepCopyTipe(someTipe Tipe) Tipe {
 func (tc *TipeChecker) deepCopyTipeRec(someTipe Tipe, varMap map[int]*TipeVar) Tipe {
 	switch tipe := someTipe.(type) {
 
-	case *SimpleTipe, *OmegaTipe, *EmptyTipe:
-		// nothing to do
+	case *SimpleTipe, *OmegaTipe, *EmptyTipe, *UnionTipe:
+		// These don't contain type variables, so just return as-is
 		return tipe
 
 	case *TupleTipe:
