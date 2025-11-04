@@ -7,17 +7,19 @@ import (
 	"testing"
 )
 
+/*
+ * NOTE: Native (built-in) functions are not created
+ * for any of these tests, and thus do not exist!
+ */
+
 func TestTipes(t *testing.T) {
 	tests := []struct {
 		expected string
 		program  string
 	}{
-		{"(([$A…], ($A -> $B)) -> [$B…])", `
+		{"((($A -> $B), $A) -> $B)", `
 
-
-map([h;t], f) -> [f(h) ; map(t,f)]
-
-map
+(f,x) -> f(x)
 
 `},
 		{"Int", "5"},
@@ -114,6 +116,47 @@ any?[h;t] -> h | t.any?
 
 
 `},
+		{"((($A -> $B), $A) -> $B)", `
+
+apply(f,x) -> f(x)
+
+apply
+
+`},
+		{"((($A -> $A), $A) -> $A)", `
+
+apply2(f,x) -> f(f(x))
+
+apply2
+
+`},
+		{"((($A -> Int), $A) -> Int)", `
+
+apply_inc(f,x) -> f(x) + 1
+
+len[   ] -> 0
+len[_;t] -> 1 + t.len
+
+foo = apply_inc(len, [true, true, false])
+
+apply_inc
+
+`},
+		{"((($A -> Int), $A) -> Int)", `
+
+apply_inc(f,x) -> f(x) + 1
+
+apply_inc
+
+`},
+		{"(([$A…], ($A -> $B)) -> [$B…])", `
+
+
+map([h;t], f) -> [f(h) ; map(t,f)]
+
+map
+
+`},
 		{"([Int…], ((Int -> $A) -> [$A…]))", `
 
 
@@ -186,7 +229,7 @@ func testExpr(t *testing.T, code string) Expr {
 		t.FailNow()
 	}
 
-	tr := NewTranslator()
+	tr := NewTranslator(nil)
 	program := tr.Translate(pTree)
 
 	// check for translation errors

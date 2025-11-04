@@ -13,7 +13,7 @@ great on expressiveness and beauty, but terrible for static reasoning: the expre
 ### DISCLAIMER: This language is bad.
 
 Don't use Crisp for anything. The terrible error messages *alone* are reason enough to
-stay away. It doesn't have any kind of IO. It doesn't have strings. It doesn't have floats.
+stay away. It doesn't have any kind of IO. It doesn't have strings.
 You can't use it for, like, anything.
 
 ### Features
@@ -32,17 +32,17 @@ for me).
 Crisp source code is UTF-8. Indentation is semantically significant, and must be tabs,
 not spaces (until I get a PR supporting spaces). 
 
-The basic datatypes of Crisp are ints, bools, functions, lists, tuples, and records.
+The basic datatypes of Crisp are ints, floats, bools, functions, lists, tuples, and records.
 
 ```
 # a List of Ints
-my_ints = [5 + 0, -2 ^ 3, 225 % 10]
+my_ints = [5 + 0, -2^3, 225 % 10]
 
 # a 3-tuple of type (Bool, Bool, List of Int)
 a_tuple = (2 < 3, true & false, [2, 3; my_ints])
 
-# a record of type {f: Function(Int -> Bool), num: Int}
-bob_the_record = {num: 35^2, f: x -> x%2 == 0}
+# a record of type {f: Function(Int -> Bool), num: Float}
+bob_the_record = {num: 2.5, f: x -> x%2 == 0}
 ```
 
 A (linked) list type denotes a variable length collection of ordered, homogeneous data.
@@ -101,7 +101,9 @@ In that last example, if `pair` were not a 2-tuple of type (Int, Int), the type-
 would complain (probably with a totally incomprehensible error message).
 
 A more idiomatic way to write that function: `add(a, b) -> a + b` That's still a
-function of one parameter.
+function of one parameter. If we wanted it to take floats instead, we'd need to change
+the `+` to `+.`, like OCaml does. (Sorry, I know it's ugly, but you're not exactly
+jumping up with PRs for operator overloading, so it's kind of on you.)
 
 Functions can be piece-wise defined:
 
@@ -335,13 +337,13 @@ module math
 	export pi
 	export sqr
 
-	two = 2
+	two = 2.0
 
-	pi = 3            # lol, floats
+	pi = 3.14159
 
-	sqr(x) -> x^two
+	sqr(x) -> x ^. two
 
-math:sqr(math:pi)     # 9, obviously
+math:sqr(math:pi)
 
 ```
 
@@ -349,16 +351,14 @@ It's just a record:
 
 ```
 math = let
-	two = 2
-	pi = 3
-	sqr = x -> x^2
+	two = 2.0
+	pi = 3.14159
+	sqr = x -> x ^. two
 
 	{pi:pi, sqr:sqr}
 
-math:sqr(math:pi)    # still 9
+math:sqr(math:pi)
 ```
-
-I really need to implement floats.
 
 There are also block (multi-line) forms for list, tuple, and record literals:
 
@@ -379,6 +379,8 @@ point = {*}          # {x: 17, y: -2}
 	y: -2
 ```
 
+To convert between ints and floats, use the functions `i2f` and `f2i`.
+
 One more thing: all declarations in the same scope happen "at the same time":
 
 ```
@@ -387,6 +389,8 @@ x = 4
 
 y       # y is 5
 ```
+
+Cool, huh?
 
 *Q: Why did you call it Crisp?*
 

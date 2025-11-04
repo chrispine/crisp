@@ -6,6 +6,7 @@ import (
 	"crisp/token"
 	"errors"
 	"fmt"
+	"strconv"
 )
 
 var unops = []token.TokType{
@@ -44,32 +45,42 @@ var binopPrecs = []BinopPrecList{
 		token.Equal,
 		token.NEq,
 	}},
-	{lAssoc: true, ops: []token.TokType{ //  <  <=  >  >=
+	{lAssoc: true, ops: []token.TokType{ //  <  <=  >  >=  <.  <=.  >.  >=.
 		token.LT,
 		token.LTE,
 		token.GT,
 		token.GTE,
+		token.FExp,
+		token.FLTE,
+		token.FGT,
+		token.FGTE,
 	}},
-	{lAssoc: true, ops: []token.TokType{ //  +  ++  -  --
+	{lAssoc: true, ops: []token.TokType{ //  +  +.  ++  -  -.  --
 		token.Plus,
+		token.FPlus,
 		token.DblPlus,
 		token.Minus,
+		token.FMinus,
 		token.DblMinus,
 	}},
-	{lAssoc: true, ops: []token.TokType{ //  *  **  /  //  %  %%
+	{lAssoc: true, ops: []token.TokType{ //  *  *.  **  /  /.  //  %  %.  %%
 		token.Mult,
+		token.FMult,
 		token.DblMult,
 		token.Div,
+		token.FDiv,
 		token.DblDiv,
 		token.Mod,
+		token.FMod,
 		token.DblMod,
 	}},
 	{lAssoc: true, ops: []token.TokType{ //  .  @
 		token.Dot,
 		token.At,
 	}},
-	{lAssoc: false, ops: []token.TokType{ //  ^  ^^
+	{lAssoc: false, ops: []token.TokType{ //  ^  ^.  ^^
 		token.Exp,
+		token.FExp,
 		token.DblExp,
 	}},
 	{lAssoc: true, ops: []token.TokType{ //  :
@@ -677,6 +688,8 @@ func (p *Parser) parseAtom() parse_tree.Inline {
 	switch p.curToken.Type {
 	case token.ID:
 		return p.parseID()
+	case token.Float:
+		return p.parseFloat()
 	case token.NoMatch:
 		return p.parseNoMatch()
 	case token.LParen:
@@ -694,6 +707,23 @@ func (p *Parser) parseID() *parse_tree.InlineID {
 	lit := &parse_tree.InlineID{Token: *p.curToken, Name: p.curToken.Literal}
 
 	p.expectToken(token.ID)
+
+	return lit
+}
+
+func (p *Parser) parseFloat() *parse_tree.InlineFloat {
+	fl, err := strconv.ParseFloat(p.curToken.Literal, 64)
+	if err != nil {
+		p.error("malformed float literal: " + p.curToken.Literal)
+		return nil
+	}
+	lit := &parse_tree.InlineFloat{
+		Token: *p.curToken,
+		Name:  p.curToken.Literal,
+		Value: fl,
+	}
+
+	p.expectToken(token.Float)
 
 	return lit
 }

@@ -11,7 +11,7 @@ func TestVariousTokens(t *testing.T) {
 fooBar = x ->
 	x + 1
 
-(3+3-2*1/1^2%999).foo_bar
+(3+3-2*1/1.44^2%999).foo_bar
 
 module export let case [{}]
 
@@ -43,7 +43,7 @@ a|日本語&c<=!d<>=> !=== ,:;`
 		{0, token.Mult, "*"},
 		{0, token.ID, "1"},
 		{0, token.Div, "/"},
-		{0, token.ID, "1"},
+		{0, token.Float, "1.44"},
 		{0, token.Exp, "^"},
 		{0, token.ID, "2"},
 		{0, token.Mod, "%"},
@@ -102,7 +102,7 @@ func TestTokenizingWhitespaceAtStart(t *testing.T) {
 
 func TestTokenizingBlocks1(t *testing.T) {
 	input := `(*)
-	1
+	1.2
 	2`
 
 	expectedTokens := []token.Token{
@@ -110,7 +110,7 @@ func TestTokenizingBlocks1(t *testing.T) {
 		{0, token.TBlock, "(*)"},
 		{0, token.Indent, "« -> »"},
 		{2, token.BlockLen, "«BlockLen»"},
-		{0, token.ID, "1"},
+		{0, token.Float, "1.2"},
 		{0, token.NewLine, "\n"},
 		{0, token.ID, "2"},
 		{0, token.NewLine, "\n"},

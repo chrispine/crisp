@@ -15,9 +15,11 @@ type Binding struct {
 	Value Value
 }
 
-// TopLevelEnv has special handling to bind ints and bools
+// TopLevelEnv is empty because top-level bindings
+// are all resolved during translation to AST to be
+// something other than look-up expressions. (Only
+// look-up expressions need the environment.)
 var TopLevelEnv = &Env{}
-var EmptyEnv = &Env{}
 
 // bindings will initially be thunks to allow for
 // recursive or out-of-order declarations

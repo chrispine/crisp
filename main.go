@@ -42,7 +42,7 @@ func run(code string) (string, bool) {
 		return err.Error(), false
 	}
 
-	tr := ast.NewTranslator()
+	tr := ast.NewTranslator(eval.CreateNativeFuncs())
 	program := tr.Translate(pTree)
 
 	// check for translation errors

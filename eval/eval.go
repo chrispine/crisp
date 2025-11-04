@@ -5,6 +5,7 @@ import (
 	"crisp/token"
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 )
 
@@ -46,6 +47,8 @@ func eval(env *Env, someExpr ast.Expr) Value {
 		val = Unit
 	case *ast.IntExpr:
 		val = evalIntExpr(env, expr)
+	case *ast.FloatExpr:
+		val = evalFloatExpr(env, expr)
 	case *ast.BoolExpr:
 		val = evalBoolExpr(env, expr)
 	case *ast.LookupExpr:
@@ -54,8 +57,10 @@ func eval(env *Env, someExpr ast.Expr) Value {
 		val = evalUnopExpr(env, expr)
 	case *ast.BinopExpr:
 		val = evalBinopExpr(env, expr)
-	case *ast.FuncExpr:
-		val = evalFuncExpr(env, expr)
+	case *ast.UserFuncExpr:
+		val = evalUserFuncExpr(env, expr)
+	case *ast.NativeFuncExpr:
+		val = evalNativeFuncExpr(env, expr)
 	case *ast.TupleExpr:
 		val = evalTupleExpr(env, expr)
 	case *ast.RecordExpr:
@@ -70,10 +75,8 @@ func eval(env *Env, someExpr ast.Expr) Value {
 		val = evalConsDestructure(env, expr)
 	case *ast.AssertEqualExpr:
 		val = evalAssertEqual(env, expr)
-	case *ast.AssertListIsConsExpr:
-		val = evalAssertListIsCons(env, expr)
-	case *ast.AssertListIsNilExpr:
-		val = evalAssertListIsNil(env, expr)
+	case *ast.AssertListIsConsOrNilExpr:
+		val = evalAssertListIsConsOrNilExpr(env, expr)
 	case *ast.AssertAnyOfTheseSets:
 		val = evalAssertAnyOfTheseSets(env, expr)
 	case *ast.LetExpr:
@@ -95,7 +98,7 @@ func eval(env *Env, someExpr ast.Expr) Value {
 	return val
 }
 
-func apply(fn *Func, arg Value) Value {
+func applyUser(fn *UserFunc, arg Value) Value {
 	// For each function-piece (each of which is a `let` expression)...
 	for _, letExpr := range fn.FuncPieceExprs {
 		// ...we evaluate the let expression to see if the assertions hold...
@@ -111,8 +114,16 @@ func apply(fn *Func, arg Value) Value {
 	panic("Runtime Error: no matching function piece for function call")
 }
 
+func applyNative(fn *NativeFunc, arg Value) Value {
+	return fn.f(force(arg))
+}
+
 func evalIntExpr(_ *Env, expr *ast.IntExpr) *Int {
 	return &Int{Value: expr.Value}
+}
+
+func evalFloatExpr(_ *Env, expr *ast.FloatExpr) *Float {
+	return &Float{Value: expr.Value}
 }
 
 func evalBoolExpr(_ *Env, expr *ast.BoolExpr) *Bool {
@@ -208,22 +219,21 @@ func evalAssertEqual(env *Env, expr *ast.AssertEqualExpr) *Bool {
 	return False
 }
 
-func evalAssertListIsCons(env *Env, expr *ast.AssertListIsConsExpr) *Bool {
+func evalAssertListIsConsOrNilExpr(env *Env, expr *ast.AssertListIsConsOrNilExpr) *Bool {
 	cons := force(eval(env, expr.List)).(*Cons)
 
+	if expr.IsNil {
+		// so we're asserting cons IS nil
+		if cons == Nil {
+			return True
+		}
+		return False
+	}
+	// so we're asserting cons IS NOT nil
 	if cons == Nil {
 		return False
 	}
 	return True
-}
-
-func evalAssertListIsNil(env *Env, expr *ast.AssertListIsNilExpr) *Bool {
-	cons := force(eval(env, expr.List)).(*Cons)
-
-	if cons == Nil {
-		return True
-	}
-	return False
 }
 
 func evalAssertAnyOfTheseSets(env *Env, expr *ast.AssertAnyOfTheseSets) *Bool {
@@ -247,12 +257,16 @@ func evalAssertAnyOfTheseSets(env *Env, expr *ast.AssertAnyOfTheseSets) *Bool {
 }
 
 func evalUnopExpr(env *Env, expr *ast.UnopExpr) Value {
-	val := eval(env, expr.Expr)
+	val := force(eval(env, expr.Expr))
 
 	switch expr.FinalTipe() {
 	case ast.IntTipe:
 		if expr.Token.Type == token.Minus {
 			return &Int{Value: -val.(*Int).Value}
+		}
+	case ast.FloatTipe:
+		if expr.Token.Type == token.Minus {
+			return &Float{Value: -val.(*Float).Value}
 		}
 	}
 
@@ -357,13 +371,77 @@ func evalBinopExpr(env *Env, expr *ast.BinopExpr) Value {
 					}
 					return &Int{Value: m}
 				case token.Exp:
-					if r >= 0 {
-						val := 1
-						for i := 0; i < r; i++ {
-							val *= l
-						}
-						return &Int{Value: val}
+					if r == 0 {
+						return &Int{Value: 1}
 					}
+					if r > 0 {
+						x := l
+						y := 1
+						n := r
+						// faster than multiplying it out `n` times
+						for n > 1 {
+							if n%2 == 0 {
+								x *= x
+								n /= 2
+							} else {
+								y *= x
+								x *= x
+								n = (n - 1) / 2
+							}
+						}
+						return &Int{Value: x * y}
+					}
+				}
+			case ast.FloatTipe:
+				l := force(eval(env, expr.LExpr)).(*Float).Value
+				r := force(eval(env, expr.RExpr)).(*Float).Value
+
+				switch binopType {
+				case token.Equal:
+					if l == r {
+						return True
+					}
+					return False
+				case token.FLT:
+					if l < r {
+						return True
+					} else {
+						return False
+					}
+				case token.FLTE:
+					if l <= r {
+						return True
+					} else {
+						return False
+					}
+				case token.FGT:
+					if l > r {
+						return True
+					} else {
+						return False
+					}
+				case token.FGTE:
+					if l >= r {
+						return True
+					} else {
+						return False
+					}
+				case token.FPlus:
+					return &Float{Value: l + r}
+				case token.FMinus:
+					return &Float{Value: l - r}
+				case token.FMult:
+					return &Float{Value: l * r}
+				case token.FDiv:
+					return &Float{Value: l / r}
+				case token.FMod:
+					m := math.Mod(l, r)
+					if m < 0 { // awesomeMod! <3
+						m += r
+					}
+					return &Float{Value: m}
+				case token.FExp:
+					return &Float{Value: math.Pow(l, r)}
 				}
 			}
 		}
@@ -373,9 +451,12 @@ func evalBinopExpr(env *Env, expr *ast.BinopExpr) Value {
 			panic("functions equality is undefined")
 			return nil
 		case token.At:
-			leftVal := force(eval(env, expr.LExpr)).(*Func)
+			leftVal := force(eval(env, expr.LExpr))
 			rightVal := &Thunk{Env: env, Expr: expr.RExpr}
-			return apply(leftVal, rightVal)
+			if nativeFunc, ok := leftVal.(*NativeFunc); ok {
+				return applyNative(nativeFunc, rightVal)
+			}
+			return applyUser(leftVal.(*UserFunc), rightVal)
 		case token.DblMult:
 			// we don't need to force these
 			leftVal := &Thunk{Env: env, Expr: expr.LExpr}
@@ -394,6 +475,8 @@ func evalBinopExpr(env *Env, expr *ast.BinopExpr) Value {
 				// this is the tipe of f and g
 				tipe := expr.LExpr.FinalTipe().(*ast.FuncTipe)
 
+				// This function is not necessarily associative, so we can't optimize
+				// it like we can with integers.
 				for i := 0; i < rightVal.Value; i++ {
 					composition = composeFuncs(composition, tipe, leftVal, tipe)
 				}
@@ -490,11 +573,15 @@ func evalLetExpr(env *Env, expr *ast.LetExpr, maybeArg Value) (Value, bool) {
 	return &Thunk{Env: newEnv, Expr: expr.Expr}, true
 }
 
-func evalFuncExpr(env *Env, expr *ast.FuncExpr) *Func {
-	return &Func{
+func evalUserFuncExpr(env *Env, expr *ast.UserFuncExpr) *UserFunc {
+	return &UserFunc{
 		Env:            env,
 		FuncPieceExprs: expr.FuncPieceExprs,
 	}
+}
+
+func evalNativeFuncExpr(_ *Env, expr *ast.NativeFuncExpr) *NativeFunc {
+	return expr.Func.(*NativeFunc)
 }
 
 func equal(aVal Value, bVal Value) bool {
@@ -564,8 +651,8 @@ func equal(aVal Value, bVal Value) bool {
 var fName = "@f"
 var gName = "@g"
 
-func composeFuncs(f Value, fTipe *ast.FuncTipe, g Value, gTipe *ast.FuncTipe) *Func {
-	env := NewEnv(EmptyEnv, []*Binding{
+func composeFuncs(f Value, fTipe *ast.FuncTipe, g Value, gTipe *ast.FuncTipe) *UserFunc {
+	env := NewEnv(TopLevelEnv, []*Binding{
 		{Name: fName, Value: f},
 		{Name: gName, Value: g},
 	})
@@ -615,7 +702,7 @@ func composeFuncs(f Value, fTipe *ast.FuncTipe, g Value, gTipe *ast.FuncTipe) *F
 	funcPiece.Code = "let {\n" + fAtGAtArg.Code + "\n}"
 	funcPiece.SetFinalTipe(fTipe.Range)
 
-	return &Func{Env: env, FuncPieceExprs: []*ast.LetExpr{funcPiece}}
+	return &UserFunc{Env: env, FuncPieceExprs: []*ast.LetExpr{funcPiece}}
 }
 
 func isNil(i interface{}) bool {

@@ -33,6 +33,7 @@ func TestExprs(t *testing.T) {
 		{"!true ", "(! @ true)"},
 		{"!false", "(! @ false)"},
 		{"!foo  ", "(! @ foo)"},
+		{"5.0 + 5.0a  ", "(5.0 + (5 . 0a))"},
 
 		{"x+1", "(x + 1)"},
 		{"a+b+c", "((a + b) + c)"},
