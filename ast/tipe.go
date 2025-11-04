@@ -8,7 +8,7 @@ import (
 // returns array of error messages
 func CheckTipes(exprs []Expr) []string {
 	tc := &TipeChecker{
-		typeSchemes: make(map[Expr]*TypeScheme),
+		typeSchemes: make(map[*TipeVar]*TypeScheme),
 	}
 
 	// We assign tipe variables recursively to all expressions.
@@ -17,14 +17,9 @@ func CheckTipes(exprs []Expr) []string {
 	// additional information about the various tipes. It calls `unify()` which attempts
 	// integrates all of that tipe information. Hopefully every expression will have a
 	// known tipe by the end.
+	// NOTE: Generalization happens DURING inference in the LetExpr case
 	for _, expr := range exprs {
 		tc.inferTipes(expr)
-	}
-
-	// Generalize top-level let bindings to create polymorphic types
-	// This must happen after type inference but before finalization
-	for _, expr := range exprs {
-		tc.generalizeLetBindings(expr)
 	}
 
 	// Now we try to handle polymorphic functions. Every function call expression
@@ -38,7 +33,8 @@ func CheckTipes(exprs []Expr) []string {
 		// If so, we should have already handled it via instantiation in LookupExpr
 		// Skip further processing to avoid breaking the polymorphism
 		funcExpr := funcApplication.LExpr
-		if _, hasScheme := tc.typeSchemes[funcExpr]; hasScheme {
+		funcTV := derefTipeVar(funcExpr.TipeVar(tc))
+		if _, hasScheme := tc.typeSchemes[funcTV]; hasScheme {
 			// This function was generalized, instantiation already happened at lookup
 			continue
 		}
@@ -92,7 +88,7 @@ func (tc *TipeChecker) deferUnifyPoly(funcApplication *BinopExpr) {
 type TipeChecker struct {
 	tcErrors         []string
 	funcApplications []*BinopExpr
-	typeSchemes      map[Expr]*TypeScheme // Maps let-bound expressions to their type schemes
+	typeSchemes      map[*TipeVar]*TypeScheme // Maps type variables to their type schemes
 }
 
 func (tc *TipeChecker) error(err string, a ...interface{}) {
@@ -419,6 +415,20 @@ func (tc *TipeChecker) applySubstitution(tv *TipeVar, substitution map[int]*Tipe
 	return newTV
 }
 
+// Check if an expression is a syntactic value (safe to generalize)
+// This implements the "value restriction" from ML
+func (tc *TipeChecker) isSyntacticValue(expr Expr) bool {
+	switch expr.(type) {
+	case *UserFuncExpr, *NativeFuncExpr:
+		// Only generalize functions, not other values
+		// This allows functions to be polymorphic while keeping literals
+		// and constructors monomorphic (constrained by their uses)
+		return true
+	default:
+		return false
+	}
+}
+
 // Traverse the AST and generalize top-level let bindings
 func (tc *TipeChecker) generalizeLetBindings(someExpr Expr) {
 	switch expr := someExpr.(type) {
@@ -429,8 +439,9 @@ func (tc *TipeChecker) generalizeLetBindings(someExpr Expr) {
 		if !isFunctionPiece {
 			// Generalize top-level bindings
 			for _, b := range expr.Env.Bindings {
-				scheme := tc.generalize(b.Expr.TipeVar(tc))
-				tc.typeSchemes[b.Expr] = scheme
+				exprTV := b.Expr.TipeVar(tc)
+				scheme := tc.generalize(exprTV)
+				tc.typeSchemes[exprTV] = scheme
 			}
 		}
 
@@ -519,15 +530,19 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 
 	case *LookupExpr:
 		boundExpr := expr.Env.Get(expr.Depth, expr.Index)
+		boundTV := boundExpr.TipeVar(tc)
 
-		// Check if this expression has a type scheme (polymorphic)
-		if scheme, hasScheme := tc.typeSchemes[boundExpr]; hasScheme {
+		// Check if this type variable has a type scheme (polymorphic)
+		// NOTE: We check with the non-dereferenced type variable because that's
+		// how we store it in the type schemes map during generalization
+		if scheme, hasScheme := tc.typeSchemes[boundTV]; hasScheme {
 			// Instantiate with fresh type variables
 			freshTV := tc.instantiate(scheme)
 			tc.unify(tv, freshTV)
 		} else {
-			// Not polymorphic, use the type variable directly
-			tc.unify(tv, boundExpr.TipeVar(tc))
+			// Not polymorphic, use the type variable directly (dereferenced)
+			boundTVDeref := derefTipeVar(boundTV)
+			tc.unify(tv, boundTVDeref)
 		}
 
 	case *ArgExpr:
@@ -551,8 +566,8 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 		switch expr.Token.Type {
 		case token.At:
 			fTipe := &FuncTipe{
-				Domain: tc.newTipeVar(),
-				Range:  tc.newTipeVar(),
+				Domain: rtv,
+				Range:  tv,
 			}
 			tc.unify(ltv, fTipe)
 			// after tipes are otherwise checked, ensure this function
@@ -758,8 +773,22 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 			tc.inferTipes(a)
 		}
 
+		// Infer and generalize bindings one at a time
+		// This allows later bindings to use polymorphic versions of earlier bindings
+		//
+		// Value Restriction: Only generalize syntactic values (functions),
+		// not computed values (applications, etc). This prevents over-generalization.
+		isFunctionPiece := len(expr.Env.Bindings) > 0 && expr.Env.Bindings[0].Name == ArgName
 		for _, b := range expr.Env.Bindings {
 			tc.inferTipes(b.Expr)
+
+			// Generalize immediately after inference if it's a syntactic value
+			// and not a function parameter
+			if !isFunctionPiece && tc.isSyntacticValue(b.Expr) {
+				exprTV := b.Expr.TipeVar(tc)
+				scheme := tc.generalize(exprTV)
+				tc.typeSchemes[exprTV] = scheme
+			}
 		}
 
 		tc.unify(tv, expr.Expr.TipeVar(tc))
