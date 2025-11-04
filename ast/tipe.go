@@ -7,7 +7,9 @@ import (
 
 // returns array of error messages
 func CheckTipes(exprs []Expr) []string {
-	tc := &TipeChecker{}
+	tc := &TipeChecker{
+		typeSchemes: make(map[Expr]*TypeScheme),
+	}
 
 	// We assign tipe variables recursively to all expressions.
 
@@ -19,6 +21,12 @@ func CheckTipes(exprs []Expr) []string {
 		tc.inferTipes(expr)
 	}
 
+	// Generalize top-level let bindings to create polymorphic types
+	// This must happen after type inference but before finalization
+	for _, expr := range exprs {
+		tc.generalizeLetBindings(expr)
+	}
+
 	// Now we try to handle polymorphic functions. Every function call expression
 	// has a type, and a function expression in that call might have a different
 	// type than the function on its own. For example, the type of `len` is ([$A…] -> Int)
@@ -26,7 +34,16 @@ func CheckTipes(exprs []Expr) []string {
 	// So what we do here is copy the function type with fresh type variables and
 	// unify it with the types we know to be the domain and range for this call.
 	for _, funcApplication := range tc.funcApplications {
-		polyTipe := derefTipeVar(funcApplication.LExpr.TipeVar(tc))
+		// First check if the function has been generalized (has a TypeScheme)
+		// If so, we should have already handled it via instantiation in LookupExpr
+		// Skip further processing to avoid breaking the polymorphism
+		funcExpr := funcApplication.LExpr
+		if _, hasScheme := tc.typeSchemes[funcExpr]; hasScheme {
+			// This function was generalized, instantiation already happened at lookup
+			continue
+		}
+
+		polyTipe := derefTipeVar(funcExpr.TipeVar(tc))
 		domainTV := funcApplication.RExpr.TipeVar(tc)
 		rangeTV := funcApplication.TipeVar(tc)
 
@@ -75,10 +92,18 @@ func (tc *TipeChecker) deferUnifyPoly(funcApplication *BinopExpr) {
 type TipeChecker struct {
 	tcErrors         []string
 	funcApplications []*BinopExpr
+	typeSchemes      map[Expr]*TypeScheme // Maps let-bound expressions to their type schemes
 }
 
 func (tc *TipeChecker) error(err string, a ...interface{}) {
 	tc.tcErrors = append(tc.tcErrors, fmt.Sprintf("Crisp type error: "+err+"\n", a...))
+}
+
+// TypeScheme represents a polymorphic type (∀a.τ)
+// It tracks which type variables should be instantiated with fresh variables
+type TypeScheme struct {
+	BoundVars []*TipeVar // Type variables that are universally quantified
+	Type      *TipeVar   // The type expression
 }
 
 // the Tipe interface
@@ -276,6 +301,193 @@ func (tc *TipeChecker) hasOmega(someTipe Tipe) bool {
 	}
 }
 
+// Generalize creates a type scheme from a type by finding all free type variables
+// A type variable is "free" if it's still Omega or contains Omega
+func (tc *TipeChecker) generalize(tv *TipeVar) *TypeScheme {
+	freeVars := make(map[int]*TipeVar)
+	tc.collectFreeVars(tv, freeVars)
+
+	boundVars := make([]*TipeVar, 0, len(freeVars))
+	for _, v := range freeVars {
+		boundVars = append(boundVars, v)
+	}
+
+	return &TypeScheme{
+		BoundVars: boundVars,
+		Type:      tv,
+	}
+}
+
+// Collect all type variables that contain Omega (are not fully determined)
+func (tc *TipeChecker) collectFreeVars(tv *TipeVar, freeVars map[int]*TipeVar) {
+	tv = derefTipeVar(tv)
+
+	// If we've already seen this type variable, skip it
+	if _, seen := freeVars[tv.ID]; seen {
+		return
+	}
+
+	switch tipe := tv.ref.(type) {
+	case *OmegaTipe:
+		// This is a free type variable
+		freeVars[tv.ID] = tv
+
+	case *EmptyTipe, *SimpleTipe:
+		// Fully determined, no free variables
+
+	case *TupleTipe:
+		for _, elemTV := range tipe.TipeVars {
+			tc.collectFreeVars(elemTV, freeVars)
+		}
+
+	case *ListTipe:
+		tc.collectFreeVars(tipe.TipeVar, freeVars)
+
+	case *RecordTipe:
+		for _, field := range tipe.Fields {
+			tc.collectFreeVars(field.TipeVar, freeVars)
+		}
+
+	case *FuncTipe:
+		tc.collectFreeVars(tipe.Domain, freeVars)
+		tc.collectFreeVars(tipe.Range, freeVars)
+	}
+}
+
+// Instantiate creates a fresh instance of a type scheme by replacing bound variables
+func (tc *TipeChecker) instantiate(scheme *TypeScheme) *TipeVar {
+	if len(scheme.BoundVars) == 0 {
+		// No bound variables, return the type as-is
+		return scheme.Type
+	}
+
+	// Create fresh type variables for each bound variable
+	substitution := make(map[int]*TipeVar)
+	for _, boundVar := range scheme.BoundVars {
+		substitution[boundVar.ID] = tc.newTipeVar()
+	}
+
+	// Apply the substitution to create a fresh copy
+	return tc.applySubstitution(scheme.Type, substitution)
+}
+
+// Apply a substitution to a type variable, creating a fresh copy
+func (tc *TipeChecker) applySubstitution(tv *TipeVar, substitution map[int]*TipeVar) *TipeVar {
+	tv = derefTipeVar(tv)
+
+	// If this type variable should be substituted, return the fresh variable
+	if freshTV, found := substitution[tv.ID]; found {
+		return freshTV
+	}
+
+	// Otherwise, create a new type variable and recursively substitute its contents
+	newTV := tc.newTipeVar()
+
+	switch tipe := tv.ref.(type) {
+	case *OmegaTipe, *EmptyTipe, *SimpleTipe:
+		newTV.ref = tipe
+
+	case *TupleTipe:
+		newTuple := &TupleTipe{}
+		for _, elemTV := range tipe.TipeVars {
+			newTuple.TipeVars = append(newTuple.TipeVars, tc.applySubstitution(elemTV, substitution))
+		}
+		newTV.ref = newTuple
+
+	case *ListTipe:
+		newTV.ref = &ListTipe{
+			TipeVar: tc.applySubstitution(tipe.TipeVar, substitution),
+		}
+
+	case *RecordTipe:
+		newRecord := &RecordTipe{Partial: tipe.Partial}
+		for _, field := range tipe.Fields {
+			newRecord.Fields = append(newRecord.Fields, RecordFieldTipe{
+				Name:    field.Name,
+				TipeVar: tc.applySubstitution(field.TipeVar, substitution),
+			})
+		}
+		newTV.ref = newRecord
+
+	case *FuncTipe:
+		newTV.ref = &FuncTipe{
+			Domain: tc.applySubstitution(tipe.Domain, substitution),
+			Range:  tc.applySubstitution(tipe.Range, substitution),
+		}
+	}
+
+	return newTV
+}
+
+// Traverse the AST and generalize top-level let bindings
+func (tc *TipeChecker) generalizeLetBindings(someExpr Expr) {
+	switch expr := someExpr.(type) {
+	case *LetExpr:
+		// Check if this is a function piece (first binding is 'arg')
+		isFunctionPiece := len(expr.Env.Bindings) > 0 && expr.Env.Bindings[0].Name == ArgName
+
+		if !isFunctionPiece {
+			// Generalize top-level bindings
+			for _, b := range expr.Env.Bindings {
+				scheme := tc.generalize(b.Expr.TipeVar(tc))
+				tc.typeSchemes[b.Expr] = scheme
+			}
+		}
+
+		// Recursively generalize nested expressions
+		for _, b := range expr.Env.Bindings {
+			tc.generalizeLetBindings(b.Expr)
+		}
+		tc.generalizeLetBindings(expr.Expr)
+
+	case *UserFuncExpr:
+		for _, fp := range expr.FuncPieceExprs {
+			tc.generalizeLetBindings(fp)
+		}
+
+	case *BinopExpr:
+		tc.generalizeLetBindings(expr.LExpr)
+		tc.generalizeLetBindings(expr.RExpr)
+
+	case *UnopExpr:
+		tc.generalizeLetBindings(expr.Expr)
+
+	case *TupleExpr:
+		for _, e := range expr.Exprs {
+			tc.generalizeLetBindings(e)
+		}
+
+	case *RecordExpr:
+		for _, field := range expr.Fields {
+			tc.generalizeLetBindings(field.Expr)
+		}
+
+	case *ConsExpr:
+		if !expr.IsNilList() {
+			tc.generalizeLetBindings(expr.Head)
+			tc.generalizeLetBindings(expr.Tail)
+		}
+
+	case *RecordLookupExpr:
+		tc.generalizeLetBindings(expr.Record)
+
+	case *AssertAnyOfTheseSets:
+		for _, set := range expr.AssertSets {
+			for _, assert := range set {
+				tc.generalizeLetBindings(assert)
+			}
+		}
+
+	// Base cases - no nested expressions to traverse
+	case *IntExpr, *FloatExpr, *BoolExpr, *UnitExpr, *LookupExpr, *ArgExpr, *NativeFuncExpr:
+		// Nothing to do
+
+	default:
+		// For any other expression types (destructuring patterns, etc.), just skip
+		// This is safer than panicking during generalization
+	}
+}
+
 // Type Checking
 
 func (tc *TipeChecker) inferTipes(someExpr Expr) {
@@ -307,7 +519,16 @@ func (tc *TipeChecker) inferTipes(someExpr Expr) {
 
 	case *LookupExpr:
 		boundExpr := expr.Env.Get(expr.Depth, expr.Index)
-		tc.unify(tv, boundExpr.TipeVar(tc))
+
+		// Check if this expression has a type scheme (polymorphic)
+		if scheme, hasScheme := tc.typeSchemes[boundExpr]; hasScheme {
+			// Instantiate with fresh type variables
+			freshTV := tc.instantiate(scheme)
+			tc.unify(tv, freshTV)
+		} else {
+			// Not polymorphic, use the type variable directly
+			tc.unify(tv, boundExpr.TipeVar(tc))
+		}
 
 	case *ArgExpr:
 		// nothing to do, as the associated FuncExpr handles it
