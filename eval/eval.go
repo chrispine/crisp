@@ -3,7 +3,6 @@ package eval
 import (
 	"crisp/ast"
 	"crisp/token"
-	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -91,8 +90,7 @@ func eval(env *Env, someExpr ast.Expr) Value {
 			panic("Runtime Error: failed assertion in `let` expression")
 		}
 	default:
-		panic(errors.New(fmt.Sprintf(
-			"Runtime Error: unhandled expression %v of type %T", someExpr, someExpr)))
+		panic(fmt.Errorf("Runtime Error: unhandled expression %v of type %T", someExpr, someExpr))
 	}
 
 	return val
@@ -188,7 +186,6 @@ func evalRecordLookupExpr(env *Env, expr *ast.RecordLookupExpr) Value {
 	}
 
 	panic("illegal record name")
-	return nil
 }
 
 func evalTupleDestructure(env *Env, expr *ast.TupleDestructureExpr) Value {
@@ -271,7 +268,6 @@ func evalUnopExpr(env *Env, expr *ast.UnopExpr) Value {
 	}
 
 	panic(fmt.Sprintf("RuntimeError: illegal unop expr: %v", expr))
-	return nil
 }
 
 func evalBinopExpr(env *Env, expr *ast.BinopExpr) Value {
@@ -471,7 +467,6 @@ func evalBinopExpr(env *Env, expr *ast.BinopExpr) Value {
 		switch binopType {
 		case token.Equal:
 			panic("functions equality is undefined")
-			return nil
 		case token.At:
 			leftVal := force(eval(env, expr.LExpr))
 			rightVal := &Thunk{Env: env, Expr: expr.RExpr}
@@ -542,7 +537,6 @@ func evalBinopExpr(env *Env, expr *ast.BinopExpr) Value {
 	}
 
 	panic(fmt.Sprintf("RuntimeError: illegal binop expr: %v", binopType))
-	return nil
 }
 
 func evalLetExpr(env *Env, expr *ast.LetExpr, maybeArg Value) (Value, bool) {
@@ -667,7 +661,6 @@ func equal(aVal Value, bVal Value) bool {
 	// it means we were trying to compare values of different tipes,
 	// which should have been a type error.
 	panic("runtime error: unhandled value in equality check")
-	return false
 }
 
 var fName = "@f"

@@ -1219,7 +1219,6 @@ func (tc *TipeChecker) union(tipe0 Tipe, tipe1 Tipe) Tipe {
 	}
 
 	panic("Unhandled type in tc.union()")
-	return Empty
 }
 
 /*

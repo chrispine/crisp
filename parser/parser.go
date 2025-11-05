@@ -4,7 +4,6 @@ import (
 	"crisp/lexer"
 	"crisp/parse_tree"
 	"crisp/token"
-	"errors"
 	"fmt"
 	"strconv"
 )
@@ -171,7 +170,7 @@ func (p *Parser) curTokenIs(t token.TokType) bool {
 }
 
 func (p *Parser) error(err string, a ...interface{}) {
-	panic(errors.New(fmt.Sprintf("Crisp parse error: "+err+"\n", a...)))
+	panic(fmt.Errorf("Crisp parse error: "+err+"\n", a))
 }
 
 /*

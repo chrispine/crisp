@@ -169,43 +169,38 @@ nums = [1,2,3]
 
 
 `},
-		/*
-			{"([$A…] -> (($A -> $B) -> [$B…]))", `
+		{"([$A…] -> (($A -> $B) -> [$B…]))", `
 
 
-			map[   ] _ -> [               ]
-			map[h;t] f -> [f(h) ; t.map(f)]
+map[   ] _ -> [               ]
+map[h;t] f -> [f(h) ; t.map(f)]
 
-			map
+map
 
-
-			`},
-				{"([Int…], ([$A…] -> (($A -> $B) -> [$B…])))", `
-
-
-			map[   ] _ -> [               ]
-			map[h;t] f -> [f(h) ; t.map(f)]
-
-			nums = [1,2,3].map(x -> x+1)
-
-			(nums, map)
+`},
+		{"([Int…], ([$A…] -> (($A -> $B) -> [$B…])))", `
 
 
-			`},
-			{"([$A…] -> (($A -> Bool) -> [$A…]))", `
+map[   ] _ -> [               ]
+map[h;t] f -> [f(h) ; t.map(f)]
+
+nums = [1,2,3].map(x -> x+1)
+
+(nums, map)
+
+`},
+		{"([$A…] -> (($A -> Bool) -> [$A…]))", `
 
 
-			filter[   ] _ -> []
-			filter[h;t] f ->
-				case f(h)
-					true  -> [h ; t.filter(f)]
-					false ->      t.filter(f)
+filter[   ] _ -> []
+filter[h;t] f ->
+	case f(h)
+		true  -> [h ; t.filter(f)]
+		false ->      t.filter(f)
 
-			filter
+filter
 
-
-			`},
-		*/
+`},
 	}
 
 	for _, tt := range tests {
